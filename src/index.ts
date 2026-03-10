@@ -18,6 +18,9 @@ const main = defineCommand({
   subCommands: {
     config: () => import("./commands/config/index").then((m) => m.default),
     wallet: () => import("./commands/wallet/index").then((m) => m.default),
+    market: () => import("./commands/market/index").then((m) => m.default),
+    portfolio: () =>
+      import("./commands/portfolio/index").then((m) => m.default),
     ...protocolCommands,
   },
   run() {
