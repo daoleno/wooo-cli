@@ -10,6 +10,7 @@ const main = defineCommand({
   args: globalArgs,
   subCommands: {
     config: () => import("./commands/config/index").then((m) => m.default),
+    wallet: () => import("./commands/wallet/index").then((m) => m.default),
   },
   run() {
     console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
