@@ -29,8 +29,8 @@ export class CurveClient {
     const outUpper = tokenOut.toUpperCase();
 
     for (const [key, pool] of Object.entries(CURVE_POOLS)) {
-      const iIdx = pool.tokens.indexOf(inUpper);
-      const jIdx = pool.tokens.indexOf(outUpper);
+      const iIdx = pool.tokens.findIndex((t) => t.toUpperCase() === inUpper);
+      const jIdx = pool.tokens.findIndex((t) => t.toUpperCase() === outUpper);
       if (iIdx !== -1 && jIdx !== -1) {
         return {
           key,
