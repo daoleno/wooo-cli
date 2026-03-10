@@ -1,11 +1,32 @@
 import type { SubCommandsDef } from "citty";
 import { defineCommand, runMain } from "citty";
 import { globalArgs } from "./core/globals";
-import { listProtocols } from "./protocols/registry";
+import { listProtocolsByGroup } from "./protocols/registry";
+import {
+  PROTOCOL_GROUP_DESCRIPTIONS,
+  type ProtocolGroup,
+} from "./protocols/types";
 
-const protocolCommands: SubCommandsDef = {};
-for (const protocol of listProtocols()) {
-  protocolCommands[protocol.name] = () => protocol.setup();
+// Build group commands: wooo cex okx ..., wooo perps hyperliquid ..., etc.
+const groupCommands: SubCommandsDef = {};
+const groups = listProtocolsByGroup();
+
+for (const [group, protocols] of Object.entries(groups)) {
+  if (protocols.length === 0) continue;
+
+  const subCommands: SubCommandsDef = {};
+  for (const protocol of protocols) {
+    subCommands[protocol.name] = () => protocol.setup();
+  }
+
+  groupCommands[group] = () =>
+    defineCommand({
+      meta: {
+        name: group,
+        description: PROTOCOL_GROUP_DESCRIPTIONS[group as ProtocolGroup],
+      },
+      subCommands,
+    });
 }
 
 const main = defineCommand({
@@ -21,7 +42,7 @@ const main = defineCommand({
     market: () => import("./commands/market/index").then((m) => m.default),
     portfolio: () =>
       import("./commands/portfolio/index").then((m) => m.default),
-    ...protocolCommands,
+    ...groupCommands,
   },
   run() {
     console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");

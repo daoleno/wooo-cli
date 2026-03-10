@@ -12,7 +12,7 @@
 
 ## Architecture
 
-Crypto all-in-one CLI using Citty (unjs). Each exchange/DeFi protocol is its own command group under `src/protocols/`.
+Crypto all-in-one CLI using Citty (unjs). Protocols are grouped by type under `src/protocols/` and exposed as `wooo <group> <protocol> <action>` (e.g. `wooo cex okx buy`, `wooo perps hyperliquid long`).
 
 ### Key Directories
 - `src/core/` - Config (c12), output engine, keystore (AES-256-GCM), logger, error handling
@@ -21,11 +21,24 @@ Crypto all-in-one CLI using Citty (unjs). Each exchange/DeFi protocol is its own
 - `src/commands/` - Universal commands (wallet, config, market, portfolio)
 - `tests/` - Mirrors src structure
 
+### Command Structure
+```
+wooo
+├── config, wallet, market, portfolio   # Universal commands
+├── cex <exchange>                      # CEX: okx, binance, bybit
+├── dex <protocol>                      # DEX: uniswap, jupiter
+├── defi <protocol>                     # DeFi: aave, lido, curve
+├── perps <protocol>                    # Perps DEX: hyperliquid, gmx
+└── bridge <protocol>                   # Bridges: stargate
+```
+Grouping is automatic via `ProtocolDefinition.type` → `PROTOCOL_TYPE_TO_GROUP` mapping in `src/protocols/types.ts`.
+
 ### Adding a Protocol
 1. Create `src/protocols/<name>/types.ts` (protocol-specific types)
 2. Create `src/protocols/<name>/client.ts` (API wrapper)
-3. Create `src/protocols/<name>/commands.ts` (define ProtocolDefinition + CLI commands)
+3. Create `src/protocols/<name>/commands.ts` (define ProtocolDefinition with correct `type`)
 4. Add to `src/protocols/registry.ts`
+Protocol auto-appears under its group (cex/dex/defi/perps/bridge) — no changes to index.ts needed.
 
 ### Global Flags
 All commands support: `--json`, `--format`, `--chain`, `--wallet`, `--yes`, `--dry-run`, `--verbose`, `--quiet`
@@ -54,6 +67,6 @@ For CCXT-supported exchanges, even simpler:
 
 ## Design Principles
 - No premature abstraction — direct implementations
-- Protocol-as-command-group architecture (`wooo <protocol> <action>`)
+- Grouped protocol architecture (`wooo <group> <protocol> <action>`)
 - Dual-mode output: TTY auto-detect + `--json` for agents
 - Use Bun for runtime and testing

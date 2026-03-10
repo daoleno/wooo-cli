@@ -2,30 +2,58 @@ import { describe, expect, test } from "bun:test";
 import { $ } from "bun";
 
 describe("wooo-cli smoke tests", () => {
-  test("shows help with all command groups", async () => {
+  test("shows help with grouped command structure", async () => {
     const result = await $`bun run src/index.ts --help`.text();
     expect(result).toContain("wooo");
     expect(result).toContain("config");
     expect(result).toContain("wallet");
     expect(result).toContain("market");
     expect(result).toContain("portfolio");
-    expect(result).toContain("hyperliquid");
+    // Protocol groups instead of individual protocols
+    expect(result).toContain("cex");
+    expect(result).toContain("perps");
+  });
+
+  test("cex group shows exchanges", async () => {
+    const result = await $`bun run src/index.ts cex --help`.text();
     expect(result).toContain("okx");
     expect(result).toContain("binance");
     expect(result).toContain("bybit");
   });
 
-  test("config list returns defaults", async () => {
-    const result = await $`bun run src/index.ts config list`.text();
-    expect(result).toContain("ethereum");
+  test("perps group shows protocols", async () => {
+    const result = await $`bun run src/index.ts perps --help`.text();
+    expect(result).toContain("hyperliquid");
   });
 
-  test("hyperliquid help shows subcommands", async () => {
-    const result = await $`bun run src/index.ts hyperliquid --help`.text();
+  test("cex okx shows subcommands", async () => {
+    const result = await $`bun run src/index.ts cex okx --help`.text();
+    expect(result).toContain("buy");
+    expect(result).toContain("sell");
+    expect(result).toContain("long");
+    expect(result).toContain("short");
+    expect(result).toContain("balance");
+    expect(result).toContain("positions");
+  });
+
+  test("cex binance shows subcommands", async () => {
+    const result = await $`bun run src/index.ts cex binance --help`.text();
+    expect(result).toContain("buy");
+    expect(result).toContain("sell");
+  });
+
+  test("perps hyperliquid shows subcommands", async () => {
+    const result =
+      await $`bun run src/index.ts perps hyperliquid --help`.text();
     expect(result).toContain("long");
     expect(result).toContain("short");
     expect(result).toContain("positions");
     expect(result).toContain("funding");
+  });
+
+  test("config list returns defaults", async () => {
+    const result = await $`bun run src/index.ts config list`.text();
+    expect(result).toContain("ethereum");
   });
 
   test("wallet help shows subcommands", async () => {
@@ -36,22 +64,6 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("balance");
     expect(result).toContain("export");
     expect(result).toContain("switch");
-  });
-
-  test("okx help shows subcommands", async () => {
-    const result = await $`bun run src/index.ts okx --help`.text();
-    expect(result).toContain("buy");
-    expect(result).toContain("sell");
-    expect(result).toContain("long");
-    expect(result).toContain("short");
-    expect(result).toContain("balance");
-    expect(result).toContain("positions");
-  });
-
-  test("binance help shows subcommands", async () => {
-    const result = await $`bun run src/index.ts binance --help`.text();
-    expect(result).toContain("buy");
-    expect(result).toContain("sell");
   });
 
   test("market help shows subcommands", async () => {
