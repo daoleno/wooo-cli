@@ -16,6 +16,8 @@ describe("protocol registry", () => {
     expect(names).toContain("uniswap");
     expect(names).toContain("aave");
     expect(names).toContain("lido");
+    expect(names).toContain("gmx");
+    expect(names).toContain("stargate");
   });
 
   test("getProtocol returns protocol by name", () => {
@@ -38,15 +40,18 @@ describe("protocol registry", () => {
     expect(getProtocol("uniswap")!.type).toBe("dex");
     expect(getProtocol("aave")!.type).toBe("lending");
     expect(getProtocol("lido")!.type).toBe("staking");
+    expect(getProtocol("gmx")!.type).toBe("perps");
+    expect(getProtocol("stargate")!.type).toBe("bridge");
   });
 
   test("listProtocolsByGroup groups correctly", () => {
     const groups = listProtocolsByGroup();
     expect(groups.cex.map((p) => p.name)).toEqual(["okx", "binance", "bybit"]);
-    expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid"]);
+    expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid", "gmx"]);
     expect(groups.dex.map((p) => p.name)).toEqual(["uniswap"]);
     expect(groups.defi.map((p) => p.name)).toContain("aave");
     expect(groups.defi.map((p) => p.name)).toContain("lido");
+    expect(groups.bridge.map((p) => p.name)).toEqual(["stargate"]);
   });
 
   test("getProtocol returns undefined for unknown", () => {
