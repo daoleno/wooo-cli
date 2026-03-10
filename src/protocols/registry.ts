@@ -1,6 +1,7 @@
 import { aaveProtocol } from "./aave/commands";
 import { binanceProtocol } from "./binance/commands";
 import { bybitProtocol } from "./bybit/commands";
+import { curveProtocol } from "./curve/commands";
 import { gmxProtocol } from "./gmx/commands";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
 import { lidoProtocol } from "./lido/commands";
@@ -23,6 +24,7 @@ const protocols: ProtocolDefinition[] = [
   gmxProtocol,
   // DEX
   uniswapProtocol,
+  curveProtocol,
   // DeFi (lending + staking)
   aaveProtocol,
   lidoProtocol,

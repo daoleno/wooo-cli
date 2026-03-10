@@ -42,6 +42,7 @@ const main = defineCommand({
     market: () => import("./commands/market/index").then((m) => m.default),
     portfolio: () =>
       import("./commands/portfolio/index").then((m) => m.default),
+    chain: () => import("./commands/chain/index").then((m) => m.default),
     ...groupCommands,
   },
   run() {
