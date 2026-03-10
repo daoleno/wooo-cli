@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { AAVE_POOL, AAVE_POOL_DATA_PROVIDER } from "../../src/protocols/aave/constants";
 import { STETH_ADDRESS, WSTETH_ADDRESS } from "../../src/protocols/lido/constants";
 import { GMX_MARKETS } from "../../src/protocols/gmx/constants";
-import { LZ_ENDPOINT_IDS, STARGATE_POOLS } from "../../src/protocols/stargate/constants";
+import { LZ_ENDPOINT_IDS, STARGATE_POOLS, STARGATE_ROUTER } from "../../src/protocols/stargate/constants";
+import { SWAP_ROUTER, QUOTER_V2, getSwapRouterAddress, getQuoterAddress } from "../../src/protocols/uniswap/constants";
 
 describe("Aave V3 contract addresses", () => {
   test("pool address exists for all supported chains", () => {
@@ -111,21 +112,64 @@ describe("Stargate bridge routes", () => {
   test("all pool addresses are valid hex", () => {
     for (const [chain, pools] of Object.entries(STARGATE_POOLS)) {
       for (const [token, info] of Object.entries(pools)) {
-        // EIP-55 checksummed addresses have mixed case
         expect(info.poolAddress.toLowerCase()).toMatch(/^0x[0-9a-f]{40}$/);
         expect(info.decimals).toBeGreaterThanOrEqual(0);
       }
     }
   });
 
+  test("every chain in STARGATE_ROUTER has pool data", () => {
+    for (const chain of Object.keys(STARGATE_ROUTER)) {
+      expect(STARGATE_POOLS[chain]).toBeDefined();
+      expect(Object.keys(STARGATE_POOLS[chain]).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("polygon has pool data matching router config", () => {
+    expect(STARGATE_POOLS.polygon).toBeDefined();
+    expect(STARGATE_POOLS.polygon.USDC).toBeDefined();
+    expect(STARGATE_POOLS.polygon.USDT).toBeDefined();
+  });
+
   test("StargateClient.supportedRoutes returns all tokens", () => {
     const { StargateClient } = require("../../src/protocols/stargate/client");
     const client = new StargateClient();
     const routes = client.supportedRoutes();
-    expect(routes.length).toBeGreaterThanOrEqual(2); // At least USDC and ETH
+    expect(routes.length).toBeGreaterThanOrEqual(2);
     for (const route of routes) {
       expect(route.token).toBeTruthy();
       expect(route.chains.length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe("Uniswap V3 per-chain addresses", () => {
+  const chains = ["ethereum", "arbitrum", "optimism", "polygon", "base"];
+
+  test("swap router exists for all supported chains", () => {
+    for (const chain of chains) {
+      expect(SWAP_ROUTER[chain]).toBeDefined();
+      expect(SWAP_ROUTER[chain]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    }
+  });
+
+  test("quoter exists for all supported chains", () => {
+    for (const chain of chains) {
+      expect(QUOTER_V2[chain]).toBeDefined();
+      expect(QUOTER_V2[chain]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    }
+  });
+
+  test("base has different router/quoter than ethereum", () => {
+    expect(SWAP_ROUTER.base).not.toBe(SWAP_ROUTER.ethereum);
+    expect(QUOTER_V2.base).not.toBe(QUOTER_V2.ethereum);
+  });
+
+  test("getSwapRouterAddress throws for unsupported chain", () => {
+    expect(() => getSwapRouterAddress("solana")).toThrow("Uniswap not deployed on solana");
+  });
+
+  test("getQuoterAddress throws for unsupported chain", () => {
+    expect(() => getQuoterAddress("solana")).toThrow("Uniswap not deployed on solana");
   });
 });

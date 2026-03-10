@@ -5,6 +5,7 @@ import {
   getWalletClient,
 } from "../../core/evm";
 import {
+  type CurvePoolConfig,
   CURVE_POOLS,
   CURVE_POOL_ABI,
   ERC20_ABI,
@@ -23,12 +24,19 @@ export class CurveClient {
     this.chain = chain;
   }
 
-  /** Find which pool contains both tokens and return pool info + indices */
+  /** Find which pool on this chain contains both tokens and return pool info + indices */
   private resolvePool(tokenIn: string, tokenOut: string) {
     const inUpper = tokenIn.toUpperCase();
     const outUpper = tokenOut.toUpperCase();
+    const chainPools = CURVE_POOLS[this.chain];
 
-    for (const [key, pool] of Object.entries(CURVE_POOLS)) {
+    if (!chainPools || Object.keys(chainPools).length === 0) {
+      throw new Error(
+        `No Curve pools configured for ${this.chain}. Available chains: ${Object.keys(CURVE_POOLS).join(", ")}`,
+      );
+    }
+
+    for (const [key, pool] of Object.entries(chainPools)) {
       const iIdx = pool.tokens.findIndex((t) => t.toUpperCase() === inUpper);
       const jIdx = pool.tokens.findIndex((t) => t.toUpperCase() === outUpper);
       if (iIdx !== -1 && jIdx !== -1) {
@@ -43,10 +51,9 @@ export class CurveClient {
       }
     }
 
+    const poolNames = Object.values(chainPools).map((p) => p.name).join(", ");
     throw new Error(
-      `No Curve pool found for ${inUpper}/${outUpper}. Available pools: ${Object.values(CURVE_POOLS)
-        .map((p) => p.name)
-        .join(", ")}`,
+      `No Curve pool found for ${inUpper}/${outUpper} on ${this.chain}. Available pools: ${poolNames}`,
     );
   }
 
@@ -129,7 +136,8 @@ export class CurveClient {
   }
 
   pools(): CurvePool[] {
-    return Object.entries(CURVE_POOLS).map(([, pool]) => ({
+    const chainPools = CURVE_POOLS[this.chain] || {};
+    return Object.entries(chainPools).map(([, pool]) => ({
       name: pool.name,
       address: pool.address,
       tokens: pool.tokens,

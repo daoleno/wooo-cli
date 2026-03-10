@@ -1,12 +1,34 @@
 import type { Address } from "viem";
 
-// Uniswap V3 SwapRouter02 — same address on all major EVM chains
-export const SWAP_ROUTER_ADDRESS: Address =
-  "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
+// Uniswap V3 SwapRouter02 per chain
+export const SWAP_ROUTER: Record<string, Address> = {
+  ethereum: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+  arbitrum: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+  optimism: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+  polygon: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+  base: "0x2626664c2603336E57B271c5C0b26F421741e481",
+};
 
-// Uniswap V3 Quoter V2 — same address on all major EVM chains
-export const QUOTER_V2_ADDRESS: Address =
-  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+// Uniswap V3 Quoter V2 per chain
+export const QUOTER_V2: Record<string, Address> = {
+  ethereum: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  arbitrum: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  optimism: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  polygon: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  base: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+};
+
+export function getSwapRouterAddress(chain: string): Address {
+  const addr = SWAP_ROUTER[chain];
+  if (!addr) throw new Error(`Uniswap not deployed on ${chain}. Supported: ${Object.keys(SWAP_ROUTER).join(", ")}`);
+  return addr;
+}
+
+export function getQuoterAddress(chain: string): Address {
+  const addr = QUOTER_V2[chain];
+  if (!addr) throw new Error(`Uniswap not deployed on ${chain}. Supported: ${Object.keys(QUOTER_V2).join(", ")}`);
+  return addr;
+}
 
 // Common ERC-20 tokens per chain
 export const TOKENS: Record<string, Record<string, { address: Address; decimals: number }>> = {

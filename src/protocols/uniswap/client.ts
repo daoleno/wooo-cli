@@ -3,9 +3,9 @@ import { getAccountAddress, getPublicClient, getWalletClient } from "../../core/
 import {
   ERC20_ABI,
   QUOTER_V2_ABI,
-  QUOTER_V2_ADDRESS,
   SWAP_ROUTER_ABI,
-  SWAP_ROUTER_ADDRESS,
+  getQuoterAddress,
+  getSwapRouterAddress,
   resolveToken,
 } from "./constants";
 import type { UniswapQuote, UniswapSwapResult } from "./types";
@@ -33,7 +33,7 @@ export class UniswapClient {
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
 
     const result = await publicClient.simulateContract({
-      address: QUOTER_V2_ADDRESS,
+      address: getQuoterAddress(this.chain),
       abi: QUOTER_V2_ABI,
       functionName: "quoteExactInputSingle",
       args: [
@@ -90,7 +90,7 @@ export class UniswapClient {
 
     // Execute swap
     const { request } = await publicClient.simulateContract({
-      address: SWAP_ROUTER_ADDRESS,
+      address: getSwapRouterAddress(this.chain),
       abi: SWAP_ROUTER_ABI,
       functionName: "exactInputSingle",
       args: [
@@ -131,7 +131,7 @@ export class UniswapClient {
       address: token,
       abi: ERC20_ABI,
       functionName: "allowance",
-      args: [owner, SWAP_ROUTER_ADDRESS],
+      args: [owner, getSwapRouterAddress(this.chain)],
     });
 
     if ((allowance as bigint) < amount) {
@@ -139,7 +139,7 @@ export class UniswapClient {
         address: token,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [SWAP_ROUTER_ADDRESS, amount],
+        args: [getSwapRouterAddress(this.chain), amount],
         account: owner,
       });
       const hash = await walletClient.writeContract(request as any);
