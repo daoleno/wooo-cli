@@ -43,6 +43,7 @@ const main = defineCommand({
     portfolio: () =>
       import("./commands/portfolio/index").then((m) => m.default),
     chain: () => import("./commands/chain/index").then((m) => m.default),
+    swap: () => import("./commands/swap/index").then((m) => m.default),
     ...groupCommands,
   },
   run() {

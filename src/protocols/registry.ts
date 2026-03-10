@@ -4,6 +4,7 @@ import { bybitProtocol } from "./bybit/commands";
 import { curveProtocol } from "./curve/commands";
 import { gmxProtocol } from "./gmx/commands";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
+import { jupiterProtocol } from "./jupiter/commands";
 import { lidoProtocol } from "./lido/commands";
 import { okxProtocol } from "./okx/commands";
 import { stargateProtocol } from "./stargate/commands";
@@ -25,6 +26,7 @@ const protocols: ProtocolDefinition[] = [
   // DEX
   uniswapProtocol,
   curveProtocol,
+  jupiterProtocol,
   // DeFi (lending + staking)
   aaveProtocol,
   lidoProtocol,

@@ -18,6 +18,7 @@ describe("protocol registry", () => {
     expect(names).toContain("lido");
     expect(names).toContain("gmx");
     expect(names).toContain("curve");
+    expect(names).toContain("jupiter");
     expect(names).toContain("stargate");
   });
 
@@ -49,7 +50,7 @@ describe("protocol registry", () => {
     const groups = listProtocolsByGroup();
     expect(groups.cex.map((p) => p.name)).toEqual(["okx", "binance", "bybit"]);
     expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid", "gmx"]);
-    expect(groups.dex.map((p) => p.name)).toEqual(["uniswap", "curve"]);
+    expect(groups.dex.map((p) => p.name)).toEqual(["uniswap", "curve", "jupiter"]);
     expect(groups.defi.map((p) => p.name)).toContain("aave");
     expect(groups.defi.map((p) => p.name)).toContain("lido");
     expect(groups.bridge.map((p) => p.name)).toEqual(["stargate"]);

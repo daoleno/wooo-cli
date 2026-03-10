@@ -16,6 +16,7 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("defi");
     expect(result).toContain("bridge");
     expect(result).toContain("chain");
+    expect(result).toContain("swap");
   });
 
   test("cex group shows exchanges", async () => {
@@ -65,6 +66,7 @@ describe("wooo-cli smoke tests", () => {
     const result = await $`bun run src/index.ts dex --help`.text();
     expect(result).toContain("uniswap");
     expect(result).toContain("curve");
+    expect(result).toContain("jupiter");
   });
 
   test("defi group shows protocols", async () => {
@@ -123,6 +125,21 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("balance");
     expect(result).toContain("ens");
     expect(result).toContain("call");
+  });
+
+  test("dex jupiter shows subcommands", async () => {
+    const result = await $`bun run src/index.ts dex jupiter --help`.text();
+    expect(result).toContain("swap");
+    expect(result).toContain("quote");
+    expect(result).toContain("tokens");
+  });
+
+  test("swap aggregator shows help", async () => {
+    const result = await $`bun run src/index.ts swap --help`.text();
+    expect(result).toContain("TOKENIN");
+    expect(result).toContain("TOKENOUT");
+    expect(result).toContain("AMOUNT");
+    expect(result).toContain("chain");
   });
 
   test("config list returns defaults", async () => {
