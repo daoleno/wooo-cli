@@ -1,5 +1,12 @@
 import { defineCommand, runMain } from "citty";
+import type { SubCommandsDef } from "citty";
 import { globalArgs } from "./core/globals";
+import { listProtocols } from "./protocols/registry";
+
+const protocolCommands: SubCommandsDef = {};
+for (const protocol of listProtocols()) {
+  protocolCommands[protocol.name] = () => protocol.setup();
+}
 
 const main = defineCommand({
   meta: {
@@ -11,6 +18,7 @@ const main = defineCommand({
   subCommands: {
     config: () => import("./commands/config/index").then((m) => m.default),
     wallet: () => import("./commands/wallet/index").then((m) => m.default),
+    ...protocolCommands,
   },
   run() {
     console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
