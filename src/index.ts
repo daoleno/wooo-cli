@@ -1,4 +1,5 @@
 import { defineCommand, runMain } from "citty";
+import { globalArgs } from "./core/globals";
 
 const main = defineCommand({
   meta: {
@@ -6,6 +7,7 @@ const main = defineCommand({
     version: "0.1.0",
     description: "Crypto All-in-One CLI",
   },
+  args: globalArgs,
   run() {
     console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
   },
