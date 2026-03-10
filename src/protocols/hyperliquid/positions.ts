@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
-import { HyperliquidClient } from "./client";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { HyperliquidClient } from "./client";
 
 export default defineCommand({
   meta: { name: "positions", description: "View open positions" },

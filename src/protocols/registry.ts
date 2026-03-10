@@ -1,5 +1,5 @@
-import type { ProtocolDefinition } from "./types";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
+import type { ProtocolDefinition } from "./types";
 
 const protocols: ProtocolDefinition[] = [hyperliquidProtocol];
 

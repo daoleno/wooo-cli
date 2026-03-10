@@ -1,15 +1,27 @@
+import ansis from "ansis";
 import { defineCommand } from "citty";
-import { HyperliquidClient } from "./client";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import ansis from "ansis";
+import { HyperliquidClient } from "./client";
 
 export default defineCommand({
   meta: { name: "short", description: "Open a short position" },
   args: {
-    symbol: { type: "positional", description: "Trading symbol (e.g. BTC)", required: true },
-    size: { type: "positional", description: "Position size in USD", required: true },
-    leverage: { type: "string", description: "Leverage (default: 1)", default: "1" },
+    symbol: {
+      type: "positional",
+      description: "Trading symbol (e.g. BTC)",
+      required: true,
+    },
+    size: {
+      type: "positional",
+      description: "Position size in USD",
+      required: true,
+    },
+    leverage: {
+      type: "string",
+      description: "Leverage (default: 1)",
+      default: "1",
+    },
     yes: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
     json: { type: "boolean", default: false },

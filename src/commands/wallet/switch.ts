@@ -5,7 +5,11 @@ import { createOutput, resolveOutputOptions } from "../../core/output";
 export default defineCommand({
   meta: { name: "switch", description: "Switch active wallet" },
   args: {
-    name: { type: "positional", description: "Wallet name to activate", required: true },
+    name: {
+      type: "positional",
+      description: "Wallet name to activate",
+      required: true,
+    },
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },

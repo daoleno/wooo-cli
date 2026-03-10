@@ -12,10 +12,18 @@ export default defineCommand({
     const store = getWalletStore();
     const wallets = await store.list();
     const out = createOutput(resolveOutputOptions(args));
-    if (wallets.length === 0) { out.warn("No wallets found. Run `wooo wallet generate` to create one."); return; }
+    if (wallets.length === 0) {
+      out.warn("No wallets found. Run `wooo wallet generate` to create one.");
+      return;
+    }
     out.table(
-      wallets.map((w) => ({ name: w.name, address: w.address, chain: w.chain, active: w.active ? "✓" : "" })),
-      { columns: ["name", "address", "chain", "active"], title: "Wallets" }
+      wallets.map((w) => ({
+        name: w.name,
+        address: w.address,
+        chain: w.chain,
+        active: w.active ? "✓" : "",
+      })),
+      { columns: ["name", "address", "chain", "active"], title: "Wallets" },
     );
   },
 });

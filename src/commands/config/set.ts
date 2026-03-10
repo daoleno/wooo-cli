@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { defineCommand } from "citty";
 import { getConfigDir } from "../../core/config";
 
 export default defineCommand({
@@ -9,7 +9,11 @@ export default defineCommand({
     description: "Set a configuration value",
   },
   args: {
-    key: { type: "positional", description: "Config key (e.g. default.chain)", required: true },
+    key: {
+      type: "positional",
+      description: "Config key (e.g. default.chain)",
+      required: true,
+    },
     value: { type: "positional", description: "Config value", required: true },
   },
   run({ args }) {

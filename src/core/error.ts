@@ -17,7 +17,7 @@ export class WoooError extends Error {
   constructor(
     message: string,
     exitCode: ExitCodeValue = ExitCode.GENERAL_ERROR,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "WoooError";

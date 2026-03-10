@@ -1,6 +1,6 @@
-import { WalletStore } from "./wallet-store";
-import { getConfigDir } from "./config";
 import { join } from "node:path";
+import { getConfigDir } from "./config";
+import { WalletStore } from "./wallet-store";
 
 export function getWalletStore(): WalletStore {
   const password = process.env.WOOO_MASTER_PASSWORD;

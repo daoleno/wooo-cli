@@ -6,7 +6,11 @@ export default defineCommand({
   meta: { name: "generate", description: "Generate a new wallet" },
   args: {
     name: { type: "positional", description: "Wallet name", required: false },
-    chain: { type: "string", description: "Chain type: evm, solana", default: "evm" },
+    chain: {
+      type: "string",
+      description: "Chain type: evm, solana",
+      default: "evm",
+    },
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
@@ -15,6 +19,11 @@ export default defineCommand({
     const store = getWalletStore();
     const wallet = await store.generate(name, args.chain);
     const out = createOutput(resolveOutputOptions(args));
-    out.data({ name: wallet.name, address: wallet.address, chain: wallet.chain, active: wallet.active });
+    out.data({
+      name: wallet.name,
+      address: wallet.address,
+      chain: wallet.chain,
+      active: wallet.active,
+    });
   },
 });

@@ -42,7 +42,11 @@ export class WalletStore {
     return this.importKey(name, pk, chain);
   }
 
-  async importKey(name: string, privateKey: string, chain: string): Promise<WalletInfo> {
+  async importKey(
+    name: string,
+    privateKey: string,
+    chain: string,
+  ): Promise<WalletInfo> {
     const account = privateKeyToAccount(privateKey as `0x${string}`);
     await this.keystore.set(`wallet:${name}`, privateKey);
     const manifest = this.loadManifest();
@@ -50,12 +54,20 @@ export class WalletStore {
     manifest.wallets.push({ name, address: account.address, chain });
     if (!manifest.active) manifest.active = name;
     this.saveManifest(manifest);
-    return { name, address: account.address, chain, active: manifest.active === name };
+    return {
+      name,
+      address: account.address,
+      chain,
+      active: manifest.active === name,
+    };
   }
 
   async list(): Promise<WalletInfo[]> {
     const manifest = this.loadManifest();
-    return manifest.wallets.map((w) => ({ ...w, active: manifest.active === w.name }));
+    return manifest.wallets.map((w) => ({
+      ...w,
+      active: manifest.active === w.name,
+    }));
   }
 
   async exportKey(name: string): Promise<string | null> {
@@ -64,7 +76,8 @@ export class WalletStore {
 
   async setActive(name: string): Promise<void> {
     const manifest = this.loadManifest();
-    if (!manifest.wallets.some((w) => w.name === name)) throw new Error(`Wallet "${name}" not found`);
+    if (!manifest.wallets.some((w) => w.name === name))
+      throw new Error(`Wallet "${name}" not found`);
     manifest.active = name;
     this.saveManifest(manifest);
   }

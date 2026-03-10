@@ -1,5 +1,5 @@
-import { defineCommand, runMain } from "citty";
 import type { SubCommandsDef } from "citty";
+import { defineCommand, runMain } from "citty";
 import { globalArgs } from "./core/globals";
 import { listProtocols } from "./protocols/registry";
 

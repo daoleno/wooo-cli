@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { defineCommand } from "citty";
 import { getConfigDir } from "../../core/config";
 
 export default defineCommand({

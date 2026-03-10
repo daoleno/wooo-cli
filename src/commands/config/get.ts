@@ -7,7 +7,11 @@ export default defineCommand({
     description: "Get a configuration value",
   },
   args: {
-    key: { type: "positional", description: "Config key (e.g. default.chain)", required: true },
+    key: {
+      type: "positional",
+      description: "Config key (e.g. default.chain)",
+      required: true,
+    },
   },
   async run({ args }) {
     const config = await loadWoooConfig();
@@ -21,6 +25,10 @@ export default defineCommand({
         return;
       }
     }
-    console.log(typeof current === "object" ? JSON.stringify(current, null, 2) : String(current));
+    console.log(
+      typeof current === "object"
+        ? JSON.stringify(current, null, 2)
+        : String(current),
+    );
   },
 });

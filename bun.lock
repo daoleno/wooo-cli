@@ -8,6 +8,7 @@
         "@clack/prompts": "^1.1.0",
         "ansis": "^4.2.0",
         "c12": "^4.0.0-beta.3",
+        "ccxt": "^4.5.42",
         "citty": "^0.2.1",
         "console-table-printer": "^2.15.0",
         "viem": "^2.47.1",
@@ -146,6 +147,8 @@
     "c12": ["c12@4.0.0-beta.3", "https://registry.npmmirror.com/c12/-/c12-4.0.0-beta.3.tgz", { "dependencies": { "confbox": "^0.2.4", "defu": "^6.1.4", "exsolve": "^1.0.8", "pathe": "^2.0.3", "pkg-types": "^2.3.0", "rc9": "^3.0.0" }, "peerDependencies": { "chokidar": "^5", "dotenv": "*", "giget": "*", "jiti": "*", "magicast": "*" }, "optionalPeers": ["chokidar", "dotenv", "giget", "jiti", "magicast"] }, "sha512-15pHxeM4kKKnF1zPgvXq/ETPhf9DRLGg0Id3GAyQhQqYxt8WkUCbo0NipHjQUUNC5VPP8TQA32pGPDUZmAi/3g=="],
 
     "cac": ["cac@7.0.0", "https://registry.npmmirror.com/cac/-/cac-7.0.0.tgz", {}, "sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ=="],
+
+    "ccxt": ["ccxt@4.5.42", "https://registry.npmmirror.com/ccxt/-/ccxt-4.5.42.tgz", { "dependencies": { "ws": "^8.8.1" } }, "sha512-7TKtOOnAheWzNtZHSBjuGKIbt5CRDJAyybyrYnj6moZsK9TXBmxPJbQIBAWKCmcOCkddIZRf1K6gKKFMQO9eyA=="],
 
     "citty": ["citty@0.2.1", "https://registry.npmmirror.com/citty/-/citty-0.2.1.tgz", {}, "sha512-kEV95lFBhQgtogAPlQfJJ0WGVSokvLr/UEoFPiKKOXF7pl98HfUVUD0ejsuTCld/9xH9vogSywZ5KqHzXrZpqg=="],
 

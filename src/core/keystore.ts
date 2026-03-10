@@ -7,10 +7,10 @@ import {
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
-  writeFileSync,
-  unlinkSync,
   readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 
@@ -64,14 +64,20 @@ export class Keystore {
     const raw = Buffer.from(readFileSync(filePath, "utf-8"), "base64");
     const salt = raw.subarray(0, SALT_LENGTH);
     const iv = raw.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-    const tag = raw.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
+    const tag = raw.subarray(
+      SALT_LENGTH + IV_LENGTH,
+      SALT_LENGTH + IV_LENGTH + TAG_LENGTH,
+    );
     const encrypted = raw.subarray(SALT_LENGTH + IV_LENGTH + TAG_LENGTH);
 
     const derivedKey = deriveKey(this.password, salt);
     const decipher = createDecipheriv(ALGORITHM, derivedKey, iv);
     decipher.setAuthTag(tag);
 
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    const decrypted = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]);
     return decrypted.toString("utf-8");
   }
 

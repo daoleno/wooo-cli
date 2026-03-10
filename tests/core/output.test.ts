@@ -1,4 +1,4 @@
-import { describe, expect, test, spyOn } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { createOutput } from "../../src/core/output";
 
 describe("createOutput", () => {
@@ -15,7 +15,9 @@ describe("createOutput", () => {
   test("table mode outputs formatted table to stdout", () => {
     const spy = spyOn(process.stdout, "write").mockImplementation(() => true);
     const out = createOutput({ json: false, format: "table" });
-    out.table([{ symbol: "BTC", price: 65000 }], { columns: ["symbol", "price"] });
+    out.table([{ symbol: "BTC", price: 65000 }], {
+      columns: ["symbol", "price"],
+    });
     expect(spy).toHaveBeenCalled();
     const output = spy.mock.calls[0][0] as string;
     expect(output).toContain("BTC");
@@ -27,10 +29,13 @@ describe("createOutput", () => {
     const spy = spyOn(process.stdout, "write").mockImplementation(() => true);
     const out = createOutput({ json: false, format: "csv" });
     out.table(
-      [{ symbol: "BTC", price: 65000 }, { symbol: "ETH", price: 3500 }],
-      { columns: ["symbol", "price"] }
+      [
+        { symbol: "BTC", price: 65000 },
+        { symbol: "ETH", price: 3500 },
+      ],
+      { columns: ["symbol", "price"] },
     );
-    const output = spy.mock.calls.map(c => c[0]).join("");
+    const output = spy.mock.calls.map((c) => c[0]).join("");
     expect(output).toContain("symbol,price");
     expect(output).toContain("BTC,65000");
     spy.mockRestore();

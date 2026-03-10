@@ -1,13 +1,13 @@
-import ccxt from "ccxt";
+import ccxt, { type hyperliquid } from "ccxt";
 import type {
-  HyperliquidTicker,
-  HyperliquidPosition,
   HyperliquidFunding,
   HyperliquidOrderResult,
+  HyperliquidPosition,
+  HyperliquidTicker,
 } from "./types";
 
 export class HyperliquidClient {
-  private exchange: ccxt.hyperliquid;
+  private exchange: hyperliquid;
 
   constructor(privateKey?: string) {
     if (privateKey) {
@@ -75,10 +75,10 @@ export class HyperliquidClient {
     return {
       orderId: order.id,
       symbol: order.symbol,
-      side: order.side,
+      side: String(order.side),
       size: order.amount,
       price: order.average ?? order.price ?? 0,
-      status: order.status,
+      status: String(order.status),
     };
   }
 }

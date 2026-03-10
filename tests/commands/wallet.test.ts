@@ -1,7 +1,7 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { WalletStore } from "../../src/core/wallet-store";
 
 const TEST_PASSWORD = "test-master-password-32-chars-ok!";
@@ -36,7 +36,9 @@ describe("WalletStore", () => {
   });
 
   test("imports a wallet from private key", async () => {
-    const { generatePrivateKey, privateKeyToAccount } = await import("viem/accounts");
+    const { generatePrivateKey, privateKeyToAccount } = await import(
+      "viem/accounts"
+    );
     const pk = generatePrivateKey();
     const account = privateKeyToAccount(pk);
     const wallet = await store.importKey("imported", pk, "evm");

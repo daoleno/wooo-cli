@@ -1,8 +1,8 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadWoooConfig, getConfigDir } from "../../src/core/config";
+import { join } from "node:path";
+import { getConfigDir, loadWoooConfig } from "../../src/core/config";
 
 describe("getConfigDir", () => {
   const originalEnv = process.env.WOOO_CONFIG_DIR;
@@ -41,7 +41,7 @@ describe("loadWoooConfig", () => {
   test("loads config from directory", async () => {
     writeFileSync(
       join(tempDir, "wooo.config.json"),
-      JSON.stringify({ default: { chain: "ethereum", wallet: "main" } })
+      JSON.stringify({ default: { chain: "ethereum", wallet: "main" } }),
     );
     const config = await loadWoooConfig(tempDir);
     expect(config.default?.chain).toBe("ethereum");

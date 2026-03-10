@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { WoooError, ExitCode, formatError } from "../../src/core/error";
+import { ExitCode, formatError, WoooError } from "../../src/core/error";
 
 describe("WoooError", () => {
   test("creates error with exit code", () => {
@@ -27,7 +27,9 @@ describe("formatError", () => {
   });
 
   test("returns JSON with details when present", () => {
-    const err = new WoooError("bad balance", ExitCode.TRADE_REJECTED, { required: 1000 });
+    const err = new WoooError("bad balance", ExitCode.TRADE_REJECTED, {
+      required: 1000,
+    });
     const result = formatError(err, true);
     const parsed = JSON.parse(result);
     expect(parsed.details).toEqual({ required: 1000 });

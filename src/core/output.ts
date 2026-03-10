@@ -1,5 +1,5 @@
-import { Table } from "console-table-printer";
 import ansis from "ansis";
+import { Table } from "console-table-printer";
 
 export interface OutputOptions {
   json: boolean;
@@ -77,7 +77,10 @@ export function createOutput(opts: OutputOptions): Output {
   };
 }
 
-export function resolveOutputOptions(args: { json?: boolean; format?: string }): OutputOptions {
+export function resolveOutputOptions(args: {
+  json?: boolean;
+  format?: string;
+}): OutputOptions {
   if (args.json) return { json: true, format: "json" };
   const format = (args.format as OutputOptions["format"]) || "table";
   return { json: false, format };
