@@ -1,7 +1,10 @@
+import { aaveProtocol } from "./aave/commands";
 import { binanceProtocol } from "./binance/commands";
 import { bybitProtocol } from "./bybit/commands";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
+import { lidoProtocol } from "./lido/commands";
 import { okxProtocol } from "./okx/commands";
+import { uniswapProtocol } from "./uniswap/commands";
 import {
   PROTOCOL_TYPE_TO_GROUP,
   type ProtocolDefinition,
@@ -9,10 +12,17 @@ import {
 } from "./types";
 
 const protocols: ProtocolDefinition[] = [
-  hyperliquidProtocol,
+  // CEX
   okxProtocol,
   binanceProtocol,
   bybitProtocol,
+  // Perps DEX
+  hyperliquidProtocol,
+  // DEX
+  uniswapProtocol,
+  // DeFi (lending + staking)
+  aaveProtocol,
+  lidoProtocol,
 ];
 
 export function registerProtocol(protocol: ProtocolDefinition): void {

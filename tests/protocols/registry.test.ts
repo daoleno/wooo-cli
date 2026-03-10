@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { getProtocol, listProtocols } from "../../src/protocols/registry";
+import {
+  getProtocol,
+  listProtocols,
+  listProtocolsByGroup,
+} from "../../src/protocols/registry";
 
 describe("protocol registry", () => {
   test("listProtocols returns all registered protocols", () => {
@@ -9,6 +13,9 @@ describe("protocol registry", () => {
     expect(names).toContain("okx");
     expect(names).toContain("binance");
     expect(names).toContain("bybit");
+    expect(names).toContain("uniswap");
+    expect(names).toContain("aave");
+    expect(names).toContain("lido");
   });
 
   test("getProtocol returns protocol by name", () => {
@@ -25,6 +32,21 @@ describe("protocol registry", () => {
       expect(protocol!.type).toBe("cex");
       expect(protocol!.requiresAuth).toBe(true);
     }
+  });
+
+  test("DeFi protocols have correct types", () => {
+    expect(getProtocol("uniswap")!.type).toBe("dex");
+    expect(getProtocol("aave")!.type).toBe("lending");
+    expect(getProtocol("lido")!.type).toBe("staking");
+  });
+
+  test("listProtocolsByGroup groups correctly", () => {
+    const groups = listProtocolsByGroup();
+    expect(groups.cex.map((p) => p.name)).toEqual(["okx", "binance", "bybit"]);
+    expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid"]);
+    expect(groups.dex.map((p) => p.name)).toEqual(["uniswap"]);
+    expect(groups.defi.map((p) => p.name)).toContain("aave");
+    expect(groups.defi.map((p) => p.name)).toContain("lido");
   });
 
   test("getProtocol returns undefined for unknown", () => {

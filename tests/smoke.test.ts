@@ -12,6 +12,8 @@ describe("wooo-cli smoke tests", () => {
     // Protocol groups instead of individual protocols
     expect(result).toContain("cex");
     expect(result).toContain("perps");
+    expect(result).toContain("dex");
+    expect(result).toContain("defi");
   });
 
   test("cex group shows exchanges", async () => {
@@ -49,6 +51,39 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("short");
     expect(result).toContain("positions");
     expect(result).toContain("funding");
+  });
+
+  test("dex group shows protocols", async () => {
+    const result = await $`bun run src/index.ts dex --help`.text();
+    expect(result).toContain("uniswap");
+  });
+
+  test("defi group shows protocols", async () => {
+    const result = await $`bun run src/index.ts defi --help`.text();
+    expect(result).toContain("aave");
+    expect(result).toContain("lido");
+  });
+
+  test("dex uniswap shows subcommands", async () => {
+    const result = await $`bun run src/index.ts dex uniswap --help`.text();
+    expect(result).toContain("swap");
+    expect(result).toContain("quote");
+    expect(result).toContain("tokens");
+  });
+
+  test("defi aave shows subcommands", async () => {
+    const result = await $`bun run src/index.ts defi aave --help`.text();
+    expect(result).toContain("supply");
+    expect(result).toContain("borrow");
+    expect(result).toContain("positions");
+    expect(result).toContain("rates");
+  });
+
+  test("defi lido shows subcommands", async () => {
+    const result = await $`bun run src/index.ts defi lido --help`.text();
+    expect(result).toContain("stake");
+    expect(result).toContain("rewards");
+    expect(result).toContain("balance");
   });
 
   test("config list returns defaults", async () => {
