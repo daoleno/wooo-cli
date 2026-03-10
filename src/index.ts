@@ -8,6 +8,9 @@ const main = defineCommand({
     description: "Crypto All-in-One CLI",
   },
   args: globalArgs,
+  subCommands: {
+    config: () => import("./commands/config/index").then((m) => m.default),
+  },
   run() {
     console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
   },
