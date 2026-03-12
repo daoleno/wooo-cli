@@ -1,7 +1,4 @@
-import {
-  type Connection,
-  VersionedTransaction,
-} from "@solana/web3.js";
+import { type Connection, VersionedTransaction } from "@solana/web3.js";
 import { getSolanaConnection, getSolanaKeypair } from "../../core/solana";
 import { JUPITER_API, resolveTokenMint } from "./constants";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
@@ -44,11 +41,14 @@ export class JupiterClient {
       inputMint: tokenIn.mint,
       outputMint: tokenOut.mint,
       inAmount: amountIn.toString(),
-      outAmount: outAmount.toFixed(tokenOut.decimals > 8 ? 8 : tokenOut.decimals),
+      outAmount: outAmount.toFixed(
+        tokenOut.decimals > 8 ? 8 : tokenOut.decimals,
+      ),
       priceImpact: `${(Number(data.priceImpactPct) * 100).toFixed(4)}%`,
-      routePlan: data.routePlan
-        ?.map((r: any) => r.swapInfo?.label || "unknown")
-        .join(" → ") || "direct",
+      routePlan:
+        data.routePlan
+          ?.map((r: any) => r.swapInfo?.label || "unknown")
+          .join(" → ") || "direct",
     };
   }
 
@@ -76,7 +76,8 @@ export class JupiterClient {
     });
 
     const quoteResponse = await fetch(`${JUPITER_API}/quote?${quoteParams}`);
-    if (!quoteResponse.ok) throw new Error(`Quote failed: ${quoteResponse.statusText}`);
+    if (!quoteResponse.ok)
+      throw new Error(`Quote failed: ${quoteResponse.statusText}`);
     const quoteData = await quoteResponse.json();
 
     // 2. Get swap transaction
@@ -90,7 +91,8 @@ export class JupiterClient {
       }),
     });
 
-    if (!swapResponse.ok) throw new Error(`Swap failed: ${swapResponse.statusText}`);
+    if (!swapResponse.ok)
+      throw new Error(`Swap failed: ${swapResponse.statusText}`);
     const swapData = (await swapResponse.json()) as any;
 
     // 3. Deserialize, sign, and send
@@ -111,14 +113,17 @@ export class JupiterClient {
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     });
 
-    const outAmount = Number((quoteData as any).outAmount) / 10 ** tokenOut.decimals;
+    const outAmount =
+      Number((quoteData as any).outAmount) / 10 ** tokenOut.decimals;
 
     return {
       txHash,
       tokenIn: tokenInSymbol.toUpperCase(),
       tokenOut: tokenOutSymbol.toUpperCase(),
       amountIn: amountIn.toString(),
-      amountOut: outAmount.toFixed(tokenOut.decimals > 8 ? 8 : tokenOut.decimals),
+      amountOut: outAmount.toFixed(
+        tokenOut.decimals > 8 ? 8 : tokenOut.decimals,
+      ),
       status: "confirmed",
     };
   }

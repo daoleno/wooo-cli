@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   NATIVE_WRAPS,
-  TOKENS,
   resolveToken,
+  TOKENS,
 } from "../../../src/protocols/uniswap/constants";
 
 describe("Uniswap token resolution", () => {
@@ -24,9 +24,7 @@ describe("Uniswap token resolution", () => {
     const token = resolveToken("ETH", "ethereum");
     expect(token).toBeDefined();
     // ETH should resolve to WETH
-    expect(token!.address).toBe(
-      resolveToken("WETH", "ethereum")!.address,
-    );
+    expect(token!.address).toBe(resolveToken("WETH", "ethereum")!.address);
   });
 
   test("resolves MATIC to WMATIC via native wrap", () => {

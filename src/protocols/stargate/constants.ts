@@ -18,29 +18,86 @@ export const LZ_ENDPOINT_IDS: Record<string, number> = {
   base: 30184,
 };
 
-// Stargate pool IDs for common tokens
-export const STARGATE_POOLS: Record<string, Record<string, { poolAddress: Address; decimals: number }>> = {
+// Stargate pool configs: poolAddress is the Stargate OFT pool, tokenAddress is the underlying ERC-20
+export interface StargatePoolConfig {
+  poolAddress: Address;
+  tokenAddress: Address; // Underlying ERC-20 token to approve (not the pool itself)
+  decimals: number;
+}
+
+export const STARGATE_POOLS: Record<
+  string,
+  Record<string, StargatePoolConfig>
+> = {
   ethereum: {
-    USDC: { poolAddress: "0xc026395860Db2d07ee33e05fE50ed7bD583189C7", decimals: 6 },
-    USDT: { poolAddress: "0x933597a323Eb81cAe705C5bC29985172fd5A3973", decimals: 6 },
-    ETH: { poolAddress: "0x77b2043768d28E9C9aB44E1aBfC95944bcE57931", decimals: 18 },
+    USDC: {
+      poolAddress: "0xc026395860Db2d07ee33e05fE50ed7bD583189C7",
+      tokenAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      decimals: 6,
+    },
+    USDT: {
+      poolAddress: "0x933597a323Eb81cAe705C5bC29985172fd5A3973",
+      tokenAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      decimals: 6,
+    },
+    ETH: {
+      poolAddress: "0x77b2043768d28E9C9aB44E1aBfC95944bcE57931",
+      tokenAddress: "0x0000000000000000000000000000000000000000",
+      decimals: 18,
+    },
   },
   arbitrum: {
-    USDC: { poolAddress: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3", decimals: 6 },
-    USDT: { poolAddress: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0", decimals: 6 },
-    ETH: { poolAddress: "0xA45B5130f36CDcA45667738e2a258AB09f4A27F5", decimals: 18 },
+    USDC: {
+      poolAddress: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3",
+      tokenAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      decimals: 6,
+    },
+    USDT: {
+      poolAddress: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0",
+      tokenAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      decimals: 6,
+    },
+    ETH: {
+      poolAddress: "0xA45B5130f36CDcA45667738e2a258AB09f4A27F5",
+      tokenAddress: "0x0000000000000000000000000000000000000000",
+      decimals: 18,
+    },
   },
   optimism: {
-    USDC: { poolAddress: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0", decimals: 6 },
-    ETH: { poolAddress: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3", decimals: 18 },
+    USDC: {
+      poolAddress: "0xcE8CcA271Ebc0533920C83d39F417ED6A0abB7D0",
+      tokenAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+      decimals: 6,
+    },
+    ETH: {
+      poolAddress: "0xe8CDF27AcD73a434D661C84887215F7598e7d0d3",
+      tokenAddress: "0x0000000000000000000000000000000000000000",
+      decimals: 18,
+    },
   },
   base: {
-    USDC: { poolAddress: "0x27a16dc786820B16E5c9028b75B99F6f604b5d26", decimals: 6 },
-    ETH: { poolAddress: "0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C4", decimals: 18 },
+    USDC: {
+      poolAddress: "0x27a16dc786820B16E5c9028b75B99F6f604b5d26",
+      tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      decimals: 6,
+    },
+    ETH: {
+      poolAddress: "0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C4",
+      tokenAddress: "0x0000000000000000000000000000000000000000",
+      decimals: 18,
+    },
   },
   polygon: {
-    USDC: { poolAddress: "0x9Aa02D4Fae7F58b8E8f34c66E756cC734DAc7fe4", decimals: 6 },
-    USDT: { poolAddress: "0xd47b03ee6d86Cf251ee7860FB2ACf9f91B9fD4d7", decimals: 6 },
+    USDC: {
+      poolAddress: "0x9Aa02D4Fae7F58b8E8f34c66E756cC734DAc7fe4",
+      tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      decimals: 6,
+    },
+    USDT: {
+      poolAddress: "0xd47b03ee6d86Cf251ee7860FB2ACf9f91B9fD4d7",
+      tokenAddress: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      decimals: 6,
+    },
   },
 };
 

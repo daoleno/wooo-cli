@@ -9,7 +9,13 @@ export const CURVE_ROUTER: Record<string, Address> = {
   base: "0xd6681e74eEA20d196c824C7e6BC4b8a3e6e06F37",
 };
 
-export type CurvePoolConfig = { address: Address; name: string; tokens: string[]; tokenAddresses: Address[]; decimals: number[] };
+export type CurvePoolConfig = {
+  address: Address;
+  name: string;
+  tokens: string[];
+  tokenAddresses: Address[];
+  decimals: number[];
+};
 
 // Curve pools per chain
 export const CURVE_POOLS: Record<string, Record<string, CurvePoolConfig>> = {

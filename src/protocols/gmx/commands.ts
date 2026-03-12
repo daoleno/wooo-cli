@@ -1,7 +1,8 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { validateAmount, validateLeverage } from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { GmxClient } from "./client";
 
@@ -18,7 +19,11 @@ const long = defineCommand({
       description: "Position size in USD",
       required: true,
     },
-    leverage: { type: "string", description: "Leverage (default: 1)", default: "1" },
+    leverage: {
+      type: "string",
+      description: "Leverage (default: 1)",
+      default: "1",
+    },
     yes: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
     json: { type: "boolean", default: false },
@@ -26,34 +31,46 @@ const long = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const sizeUsd = Number.parseFloat(args.size);
-    const leverage = Number.parseInt(args.leverage, 10);
+    const sizeUsd = validateAmount(args.size, "Position size");
+    const leverage = validateLeverage(args.leverage);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "LONG",
-        symbol: args.symbol,
-        sizeUsd,
-        leverage,
-        protocol: "GMX V2",
-        chain: "arbitrum",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `LONG ${args.symbol} with $${sizeUsd} at ${leverage}x on GMX`,
+        details: {
+          symbol: args.symbol,
+          sizeUsd,
+          leverage: `${leverage}x`,
+          protocol: "GMX V2",
+          chain: "arbitrum",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "LONG",
+          symbol: args.symbol,
+          sizeUsd,
+          leverage,
+          protocol: "GMX V2",
+          chain: "arbitrum",
+          status: "dry-run",
+        });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to LONG ${args.symbol} with $${sizeUsd} at ${leverage}x on GMX. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();
     const client = new GmxClient(privateKey);
-    const result = await client.openPosition(args.symbol, "long", sizeUsd, leverage);
+    const result = await client.openPosition(
+      args.symbol,
+      "long",
+      sizeUsd,
+      leverage,
+    );
     out.data(result);
   },
 });
@@ -71,7 +88,11 @@ const short = defineCommand({
       description: "Position size in USD",
       required: true,
     },
-    leverage: { type: "string", description: "Leverage (default: 1)", default: "1" },
+    leverage: {
+      type: "string",
+      description: "Leverage (default: 1)",
+      default: "1",
+    },
     yes: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
     json: { type: "boolean", default: false },
@@ -79,34 +100,46 @@ const short = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const sizeUsd = Number.parseFloat(args.size);
-    const leverage = Number.parseInt(args.leverage, 10);
+    const sizeUsd = validateAmount(args.size, "Position size");
+    const leverage = validateLeverage(args.leverage);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SHORT",
-        symbol: args.symbol,
-        sizeUsd,
-        leverage,
-        protocol: "GMX V2",
-        chain: "arbitrum",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `SHORT ${args.symbol} with $${sizeUsd} at ${leverage}x on GMX`,
+        details: {
+          symbol: args.symbol,
+          sizeUsd,
+          leverage: `${leverage}x`,
+          protocol: "GMX V2",
+          chain: "arbitrum",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "SHORT",
+          symbol: args.symbol,
+          sizeUsd,
+          leverage,
+          protocol: "GMX V2",
+          chain: "arbitrum",
+          status: "dry-run",
+        });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to SHORT ${args.symbol} with $${sizeUsd} at ${leverage}x on GMX. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();
     const client = new GmxClient(privateKey);
-    const result = await client.openPosition(args.symbol, "short", sizeUsd, leverage);
+    const result = await client.openPosition(
+      args.symbol,
+      "short",
+      sizeUsd,
+      leverage,
+    );
     out.data(result);
   },
 });

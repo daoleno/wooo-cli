@@ -50,7 +50,11 @@ describe("protocol registry", () => {
     const groups = listProtocolsByGroup();
     expect(groups.cex.map((p) => p.name)).toEqual(["okx", "binance", "bybit"]);
     expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid", "gmx"]);
-    expect(groups.dex.map((p) => p.name)).toEqual(["uniswap", "curve", "jupiter"]);
+    expect(groups.dex.map((p) => p.name)).toEqual([
+      "uniswap",
+      "curve",
+      "jupiter",
+    ]);
     expect(groups.defi.map((p) => p.name)).toContain("aave");
     expect(groups.defi.map((p) => p.name)).toContain("lido");
     expect(groups.bridge.map((p) => p.name)).toEqual(["stargate"]);

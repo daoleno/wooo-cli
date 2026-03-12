@@ -1,10 +1,22 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
-import { loadWoooConfig } from "../../core/config";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import {
+  validateAmount,
+  validateChain,
+  validateTokenSymbol,
+} from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { UniswapClient } from "./client";
+
+const SUPPORTED_CHAINS = [
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+];
 
 const swap = defineCommand({
   meta: { name: "swap", description: "Swap tokens via Uniswap V3" },
@@ -36,34 +48,32 @@ const swap = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
-    const chain = args.chain;
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Swap amount");
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
     const client = new UniswapClient(chain);
-    const quote = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const quoteResult = await client.quote(tokenIn, tokenOut, amount);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SWAP",
-        ...quote,
-        chain,
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Swap ${amount} ${tokenIn} → ${quoteResult.amountOut} ${tokenOut} on Uniswap (${chain})`,
+        details: { ...quoteResult, chain, protocol: "Uniswap V3" },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({ action: "SWAP", ...quoteResult, chain, status: "dry-run" });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ Swap ${amount} ${args.tokenIn} → ${quote.amountOut} ${args.tokenOut} on ${chain}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();
     const authClient = new UniswapClient(chain, privateKey);
-    const result = await authClient.swap(args.tokenIn, args.tokenOut, amount);
+    const result = await authClient.swap(tokenIn, tokenOut, amount);
     out.data(result);
   },
 });
@@ -96,10 +106,13 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Quote amount");
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
-    const client = new UniswapClient(args.chain);
-    const result = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const client = new UniswapClient(chain);
+    const result = await client.quote(tokenIn, tokenOut, amount);
     out.data(result);
   },
 });

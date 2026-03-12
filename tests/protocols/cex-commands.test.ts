@@ -68,9 +68,7 @@ describe("CEX auth resolution", () => {
     for (const ex of exchanges) {
       const prefix = `WOOO_${ex.toUpperCase()}_`;
       expect(`${prefix}API_KEY`).toBe(`WOOO_${ex.toUpperCase()}_API_KEY`);
-      expect(`${prefix}API_SECRET`).toBe(
-        `WOOO_${ex.toUpperCase()}_API_SECRET`,
-      );
+      expect(`${prefix}API_SECRET`).toBe(`WOOO_${ex.toUpperCase()}_API_SECRET`);
     }
   });
 

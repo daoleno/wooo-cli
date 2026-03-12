@@ -1,9 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { AAVE_POOL, AAVE_POOL_DATA_PROVIDER } from "../../src/protocols/aave/constants";
-import { STETH_ADDRESS, WSTETH_ADDRESS } from "../../src/protocols/lido/constants";
+import {
+  AAVE_POOL,
+  AAVE_POOL_DATA_PROVIDER,
+} from "../../src/protocols/aave/constants";
 import { GMX_MARKETS } from "../../src/protocols/gmx/constants";
-import { LZ_ENDPOINT_IDS, STARGATE_POOLS, STARGATE_ROUTER } from "../../src/protocols/stargate/constants";
-import { SWAP_ROUTER, QUOTER_V2, getSwapRouterAddress, getQuoterAddress } from "../../src/protocols/uniswap/constants";
+import {
+  STETH_ADDRESS,
+  WSTETH_ADDRESS,
+} from "../../src/protocols/lido/constants";
+import {
+  LZ_ENDPOINT_IDS,
+  STARGATE_POOLS,
+  STARGATE_ROUTER,
+} from "../../src/protocols/stargate/constants";
+import {
+  getQuoterAddress,
+  getSwapRouterAddress,
+  QUOTER_V2,
+  SWAP_ROUTER,
+} from "../../src/protocols/uniswap/constants";
 
 describe("Aave V3 contract addresses", () => {
   test("pool address exists for all supported chains", () => {
@@ -60,9 +75,7 @@ describe("GMX V2 markets", () => {
   test("all markets use USDC as short token", () => {
     const usdcArbitrum = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
     for (const [name, market] of Object.entries(GMX_MARKETS)) {
-      expect(market.shortToken.toLowerCase()).toBe(
-        usdcArbitrum.toLowerCase(),
-      );
+      expect(market.shortToken.toLowerCase()).toBe(usdcArbitrum.toLowerCase());
     }
   });
 
@@ -121,7 +134,9 @@ describe("Stargate bridge routes", () => {
   test("every chain in STARGATE_ROUTER has pool data", () => {
     for (const chain of Object.keys(STARGATE_ROUTER)) {
       expect(STARGATE_POOLS[chain]).toBeDefined();
-      expect(Object.keys(STARGATE_POOLS[chain]).length).toBeGreaterThanOrEqual(1);
+      expect(Object.keys(STARGATE_POOLS[chain]).length).toBeGreaterThanOrEqual(
+        1,
+      );
     }
   });
 
@@ -166,10 +181,14 @@ describe("Uniswap V3 per-chain addresses", () => {
   });
 
   test("getSwapRouterAddress throws for unsupported chain", () => {
-    expect(() => getSwapRouterAddress("solana")).toThrow("Uniswap not deployed on solana");
+    expect(() => getSwapRouterAddress("solana")).toThrow(
+      "Uniswap not deployed on solana",
+    );
   });
 
   test("getQuoterAddress throws for unsupported chain", () => {
-    expect(() => getQuoterAddress("solana")).toThrow("Uniswap not deployed on solana");
+    expect(() => getQuoterAddress("solana")).toThrow(
+      "Uniswap not deployed on solana",
+    );
   });
 });

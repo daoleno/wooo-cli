@@ -1,20 +1,14 @@
 import {
   type Address,
   type Chain,
-  type PublicClient,
-  type WalletClient,
   createPublicClient,
   createWalletClient,
   http,
+  type PublicClient,
+  type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import {
-  arbitrum,
-  base,
-  mainnet,
-  optimism,
-  polygon,
-} from "viem/chains";
+import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 
 export const CHAIN_MAP: Record<string, Chain> = {
   ethereum: mainnet,

@@ -1,11 +1,24 @@
-import { formatUnits, parseUnits, zeroAddress, zeroHash } from "viem";
-import { getAccountAddress, getPublicClient, getWalletClient } from "../../core/evm";
 import {
+  type Address,
+  encodeFunctionData,
+  formatUnits,
+  parseUnits,
+  zeroAddress,
+  zeroHash,
+} from "viem";
+import {
+  getAccountAddress,
+  getPublicClient,
+  getWalletClient,
+} from "../../core/evm";
+import {
+  ERC20_ABI,
+  EXCHANGE_ROUTER_ABI,
   GMX_DATASTORE,
   GMX_EXCHANGE_ROUTER,
   GMX_MARKETS,
+  GMX_ORDER_VAULT,
   GMX_READER,
-  EXCHANGE_ROUTER_ABI,
   READER_ABI,
 } from "./constants";
 import type { GmxOrderResult, GmxPosition } from "./types";
@@ -40,8 +53,31 @@ export class GmxClient {
     const isLong = side === "long";
     const executionFee = parseUnits("0.001", 18); // ~0.001 ETH execution fee
 
-    const { request } = await publicClient.simulateContract({
-      address: GMX_EXCHANGE_ROUTER,
+    // Step 1: Approve USDC collateral to the GMX Router (spender for sendTokens)
+    await this.ensureAllowance(
+      market.shortToken, // USDC
+      collateralAmount,
+      account,
+      GMX_EXCHANGE_ROUTER,
+      publicClient,
+      walletClient,
+    );
+
+    // Step 2: Use multicall to atomically: sendTokens → sendWnt → createOrder
+    // GMX V2 requires collateral to be in the OrderVault before createOrder is called
+    const sendTokensData = encodeFunctionData({
+      abi: EXCHANGE_ROUTER_ABI,
+      functionName: "sendTokens",
+      args: [market.shortToken, GMX_ORDER_VAULT, collateralAmount],
+    });
+
+    const sendWntData = encodeFunctionData({
+      abi: EXCHANGE_ROUTER_ABI,
+      functionName: "sendWnt",
+      args: [GMX_ORDER_VAULT, executionFee],
+    });
+
+    const createOrderData = encodeFunctionData({
       abi: EXCHANGE_ROUTER_ABI,
       functionName: "createOrder",
       args: [
@@ -50,7 +86,7 @@ export class GmxClient {
           callbackContract: zeroAddress,
           uiFeeReceiver: zeroAddress,
           market: market.marketToken,
-          initialCollateralToken: market.shortToken, // USDC as collateral
+          initialCollateralToken: market.shortToken,
           swapPath: [],
           sizeDeltaUsd,
           initialCollateralDeltaAmount: collateralAmount,
@@ -68,12 +104,21 @@ export class GmxClient {
           referralCode: zeroHash,
         },
       ],
+    });
+
+    const { request } = await publicClient.simulateContract({
+      address: GMX_EXCHANGE_ROUTER,
+      abi: EXCHANGE_ROUTER_ABI,
+      functionName: "multicall",
+      args: [[sendWntData, sendTokensData, createOrderData]],
       value: executionFee,
       account,
     });
 
     const txHash = await walletClient.writeContract(request as any);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
 
     return {
       txHash,
@@ -109,8 +154,7 @@ export class GmxClient {
       .map((p: any) => {
         const sizeUsd = formatUnits(p.numbers.sizeInUsd, 30);
         const collateral = formatUnits(p.numbers.collateralAmount, 6);
-        const leverageNum =
-          Number(sizeUsd) / (Number(collateral) || 1);
+        const leverageNum = Number(sizeUsd) / (Number(collateral) || 1);
         const symbol =
           marketToSymbol[p.addresses.market.toLowerCase()] || "UNKNOWN";
 
@@ -119,7 +163,7 @@ export class GmxClient {
           side: (p.flags.isLong ? "LONG" : "SHORT") as "LONG" | "SHORT",
           size: sizeUsd,
           collateral,
-          entryPrice: "N/A", // Would need oracle prices
+          entryPrice: "N/A", // Requires oracle price feed
           markPrice: "N/A",
           pnl: "N/A",
           leverage: `${leverageNum.toFixed(1)}x`,
@@ -129,5 +173,33 @@ export class GmxClient {
 
   markets(): string[] {
     return Object.keys(GMX_MARKETS);
+  }
+
+  private async ensureAllowance(
+    token: Address,
+    amount: bigint,
+    owner: Address,
+    spender: Address,
+    publicClient: any,
+    walletClient: any,
+  ): Promise<void> {
+    const allowance = (await publicClient.readContract({
+      address: token,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [owner, spender],
+    })) as bigint;
+
+    if (allowance < amount) {
+      const { request } = await publicClient.simulateContract({
+        address: token,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [spender, amount],
+        account: owner,
+      });
+      const hash = await walletClient.writeContract(request as any);
+      await publicClient.waitForTransactionReceipt({ hash });
+    }
   }
 }

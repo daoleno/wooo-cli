@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  SOLANA_TOKENS,
   resolveTokenMint,
+  SOLANA_TOKENS,
 } from "../../../src/protocols/jupiter/constants";
 
 describe("Jupiter token resolution", () => {

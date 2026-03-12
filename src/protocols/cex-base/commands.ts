@@ -1,7 +1,13 @@
 import ansis from "ansis";
 import { defineCommand } from "citty";
 import { loadWoooConfig } from "../../core/config";
+import { confirmTransaction } from "../../core/confirm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import {
+  validateAmount,
+  validateLeverage,
+  validatePair,
+} from "../../core/validation";
 import type { CexClientOptions } from "./client";
 import { CexClient } from "./client";
 
@@ -35,33 +41,41 @@ export function createCexCommands(
     },
     async run({ args }) {
       const out = createOutput(resolveOutputOptions(args));
-      const amount = Number.parseFloat(args.amount);
+      const pair = validatePair(args.pair);
+      const amount = validateAmount(args.amount);
 
       const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(args.pair);
+      const ticker = await pubClient.fetchTicker(pair);
 
-      if (args["dry-run"]) {
-        out.data({
-          action: "BUY",
-          pair: args.pair,
-          amount,
-          estimatedPrice: ticker.last,
-          status: "dry-run",
-        });
+      const confirmed = await confirmTransaction(
+        {
+          action: `BUY ${amount} ${pair}`,
+          details: {
+            pair,
+            amount,
+            estimatedPrice: `$${ticker.last}`,
+            exchange: exchangeId,
+          },
+        },
+        args,
+      );
+
+      if (!confirmed) {
+        if (args["dry-run"]) {
+          out.data({
+            action: "BUY",
+            pair,
+            amount,
+            estimatedPrice: ticker.last,
+            status: "dry-run",
+          });
+        }
         return;
-      }
-      if (!args.yes) {
-        console.error(
-          ansis.yellow(
-            `⚠ About to BUY ${amount} ${args.pair} ~$${ticker.last}. Use --yes to confirm.`,
-          ),
-        );
-        process.exit(6);
       }
 
       const auth = await resolveAuth();
       const client = createClient(auth);
-      const result = await client.createSpotOrder(args.pair, "buy", amount);
+      const result = await client.createSpotOrder(pair, "buy", amount);
       out.data(result);
     },
   });
@@ -86,33 +100,41 @@ export function createCexCommands(
     },
     async run({ args }) {
       const out = createOutput(resolveOutputOptions(args));
-      const amount = Number.parseFloat(args.amount);
+      const pair = validatePair(args.pair);
+      const amount = validateAmount(args.amount);
 
       const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(args.pair);
+      const ticker = await pubClient.fetchTicker(pair);
 
-      if (args["dry-run"]) {
-        out.data({
-          action: "SELL",
-          pair: args.pair,
-          amount,
-          estimatedPrice: ticker.last,
-          status: "dry-run",
-        });
+      const confirmed = await confirmTransaction(
+        {
+          action: `SELL ${amount} ${pair}`,
+          details: {
+            pair,
+            amount,
+            estimatedPrice: `$${ticker.last}`,
+            exchange: exchangeId,
+          },
+        },
+        args,
+      );
+
+      if (!confirmed) {
+        if (args["dry-run"]) {
+          out.data({
+            action: "SELL",
+            pair,
+            amount,
+            estimatedPrice: ticker.last,
+            status: "dry-run",
+          });
+        }
         return;
-      }
-      if (!args.yes) {
-        console.error(
-          ansis.yellow(
-            `⚠ About to SELL ${amount} ${args.pair} ~$${ticker.last}. Use --yes to confirm.`,
-          ),
-        );
-        process.exit(6);
       }
 
       const auth = await resolveAuth();
       const client = createClient(auth);
-      const result = await client.createSpotOrder(args.pair, "sell", amount);
+      const result = await client.createSpotOrder(pair, "sell", amount);
       out.data(result);
     },
   });
@@ -142,32 +164,41 @@ export function createCexCommands(
     },
     async run({ args }) {
       const out = createOutput(resolveOutputOptions(args));
-      const sizeUsd = Number.parseFloat(args.size);
-      const leverage = Number.parseInt(args.leverage, 10);
+      const sizeUsd = validateAmount(args.size, "Position size");
+      const leverage = validateLeverage(args.leverage);
 
       const pubClient = createClient();
       const ticker = await pubClient.fetchTicker(args.symbol);
       const amount = sizeUsd / ticker.last;
 
-      if (args["dry-run"]) {
-        out.data({
-          action: "LONG",
-          symbol: args.symbol,
-          sizeUsd,
-          amount: amount.toFixed(6),
-          estimatedPrice: ticker.last,
-          leverage,
-          status: "dry-run",
-        });
+      const confirmed = await confirmTransaction(
+        {
+          action: `LONG ${args.symbol} with $${sizeUsd} at ${leverage}x`,
+          details: {
+            symbol: args.symbol,
+            sizeUsd,
+            amount: amount.toFixed(6),
+            estimatedPrice: `$${ticker.last}`,
+            leverage: `${leverage}x`,
+            exchange: exchangeId,
+          },
+        },
+        args,
+      );
+
+      if (!confirmed) {
+        if (args["dry-run"]) {
+          out.data({
+            action: "LONG",
+            symbol: args.symbol,
+            sizeUsd,
+            amount: amount.toFixed(6),
+            estimatedPrice: ticker.last,
+            leverage,
+            status: "dry-run",
+          });
+        }
         return;
-      }
-      if (!args.yes) {
-        console.error(
-          ansis.yellow(
-            `⚠ About to LONG ${args.symbol} with $${sizeUsd} at ${leverage}x ~$${ticker.last}. Use --yes to confirm.`,
-          ),
-        );
-        process.exit(6);
       }
 
       const auth = await resolveAuth();
@@ -207,32 +238,41 @@ export function createCexCommands(
     },
     async run({ args }) {
       const out = createOutput(resolveOutputOptions(args));
-      const sizeUsd = Number.parseFloat(args.size);
-      const leverage = Number.parseInt(args.leverage, 10);
+      const sizeUsd = validateAmount(args.size, "Position size");
+      const leverage = validateLeverage(args.leverage);
 
       const pubClient = createClient();
       const ticker = await pubClient.fetchTicker(args.symbol);
       const amount = sizeUsd / ticker.last;
 
-      if (args["dry-run"]) {
-        out.data({
-          action: "SHORT",
-          symbol: args.symbol,
-          sizeUsd,
-          amount: amount.toFixed(6),
-          estimatedPrice: ticker.last,
-          leverage,
-          status: "dry-run",
-        });
+      const confirmed = await confirmTransaction(
+        {
+          action: `SHORT ${args.symbol} with $${sizeUsd} at ${leverage}x`,
+          details: {
+            symbol: args.symbol,
+            sizeUsd,
+            amount: amount.toFixed(6),
+            estimatedPrice: `$${ticker.last}`,
+            leverage: `${leverage}x`,
+            exchange: exchangeId,
+          },
+        },
+        args,
+      );
+
+      if (!confirmed) {
+        if (args["dry-run"]) {
+          out.data({
+            action: "SHORT",
+            symbol: args.symbol,
+            sizeUsd,
+            amount: amount.toFixed(6),
+            estimatedPrice: ticker.last,
+            leverage,
+            status: "dry-run",
+          });
+        }
         return;
-      }
-      if (!args.yes) {
-        console.error(
-          ansis.yellow(
-            `⚠ About to SHORT ${args.symbol} with $${sizeUsd} at ${leverage}x ~$${ticker.last}. Use --yes to confirm.`,
-          ),
-        );
-        process.exit(6);
       }
 
       const auth = await resolveAuth();

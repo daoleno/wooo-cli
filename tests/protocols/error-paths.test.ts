@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { resolveToken } from "../../src/protocols/uniswap/constants";
 import { resolveTokenMint } from "../../src/protocols/jupiter/constants";
+import { resolveToken } from "../../src/protocols/uniswap/constants";
 
 describe("error paths: token resolution failures", () => {
   test("Uniswap: unknown token returns undefined, not throws", () => {
@@ -135,15 +135,16 @@ describe("error paths: invalid inputs to clients", () => {
     }
   });
 
-  test("CurveClient rejects pair with no pool", async () => {
-    const { CurveClient } = require("../../src/protocols/curve/client");
-    const client = new CurveClient("ethereum");
-    try {
-      await client.quote("USDC", "WBTC", 100);
-      expect(true).toBe(false);
-    } catch (e: any) {
-      // USDC and WBTC are not in the same direct pool
-      expect(e.message).toContain("No Curve pool found");
-    }
-  });
+  test(
+    "CurveClient rejects invalid token pair",
+    async () => {
+      const { CurveClient } = require("../../src/protocols/curve/client");
+      const client = new CurveClient("ethereum");
+      // @curvefi/api throws its own error for unknown tokens
+      await expect(
+        client.quote("USDC", "FAKECOIN123", 100),
+      ).rejects.toThrow();
+    },
+    { timeout: 30000 },
+  );
 });

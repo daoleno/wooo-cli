@@ -7,8 +7,8 @@ import {
 import {
   ERC20_ABI,
   LZ_ENDPOINT_IDS,
-  STARGATE_POOLS,
   STARGATE_POOL_ABI,
+  STARGATE_POOLS,
 } from "./constants";
 import type { StargateBridgeResult } from "./types";
 
@@ -22,7 +22,13 @@ export class StargateClient {
     amount: number,
     fromChain: string,
     toChain: string,
-  ): Promise<{ nativeFee: string; token: string; amount: string; fromChain: string; toChain: string }> {
+  ): Promise<{
+    nativeFee: string;
+    token: string;
+    amount: string;
+    fromChain: string;
+    toChain: string;
+  }> {
     const pool = this.resolvePool(token, fromChain);
     const dstEid = this.resolveDstEid(toChain);
     const publicClient = getPublicClient(fromChain);
@@ -30,7 +36,10 @@ export class StargateClient {
     const minAmountLD = (amountLD * BigInt(10000 - SLIPPAGE_BPS)) / 10000n;
 
     // Need a valid recipient for quote — use zero-padded placeholder
-    const toBytes32 = pad("0x0000000000000000000000000000000000000001" as Address, { size: 32 });
+    const toBytes32 = pad(
+      "0x0000000000000000000000000000000000000001" as Address,
+      { size: 32 },
+    );
 
     const fee = await publicClient.readContract({
       address: pool.poolAddress,
@@ -98,12 +107,15 @@ export class StargateClient {
       ],
     });
 
-    const fee = feeResult as unknown as { nativeFee: bigint; lzTokenFee: bigint };
+    const fee = feeResult as unknown as {
+      nativeFee: bigint;
+      lzTokenFee: bigint;
+    };
 
-    // Approve token spend if not ETH
+    // Approve underlying token spend (pool is the spender, tokenAddress is what gets approved)
     if (token.toUpperCase() !== "ETH") {
       await this.ensureAllowance(
-        pool.poolAddress, // Stargate pool is the spender
+        pool.tokenAddress,
         amountLD,
         account,
         pool.poolAddress,
@@ -130,12 +142,17 @@ export class StargateClient {
         { nativeFee: fee.nativeFee, lzTokenFee: 0n },
         account,
       ],
-      value: token.toUpperCase() === "ETH" ? amountLD + fee.nativeFee : fee.nativeFee,
+      value:
+        token.toUpperCase() === "ETH"
+          ? amountLD + fee.nativeFee
+          : fee.nativeFee,
       account,
     });
 
     const txHash = await walletClient.writeContract(request as any);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
 
     return {
       txHash,
@@ -176,7 +193,9 @@ export class StargateClient {
     const eid = LZ_ENDPOINT_IDS[chain];
     if (!eid) {
       const supported = Object.keys(LZ_ENDPOINT_IDS).join(", ");
-      throw new Error(`Chain ${chain} not supported by Stargate. Available: ${supported}`);
+      throw new Error(
+        `Chain ${chain} not supported by Stargate. Available: ${supported}`,
+      );
     }
     return eid;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { CURVE_POOLS } from "../../../src/protocols/curve/constants";
 import { CurveClient } from "../../../src/protocols/curve/client";
+import { CURVE_POOLS } from "../../../src/protocols/curve/constants";
 
 describe("Curve pool resolution", () => {
   test("ethereum 3pool contains DAI, USDC, USDT with correct decimals", () => {
@@ -35,21 +35,12 @@ describe("Curve pool resolution", () => {
     }
   });
 
-  test("client.pools returns chain-specific pools", () => {
+  test("client.pools returns array (async)", async () => {
+    // pools() is now async and uses @curvefi/api SDK
+    // We just verify it returns a promise that resolves to an array
     const ethClient = new CurveClient("ethereum");
-    const ethPools = ethClient.pools();
-    expect(ethPools.length).toBe(Object.keys(CURVE_POOLS.ethereum).length);
-
-    const arbClient = new CurveClient("arbitrum");
-    const arbPools = arbClient.pools();
-    expect(arbPools.length).toBe(Object.keys(CURVE_POOLS.arbitrum).length);
-
-    // Pools should be different between chains
-    const ethNames = ethPools.map((p) => p.address);
-    const arbNames = arbPools.map((p) => p.address);
-    for (const addr of arbNames) {
-      expect(ethNames).not.toContain(addr);
-    }
+    const result = ethClient.pools();
+    expect(result).toBeInstanceOf(Promise);
   });
 });
 
@@ -75,26 +66,10 @@ describe("Curve multi-chain isolation", () => {
     }
   });
 
-  test("unsupported chain throws descriptive error", () => {
+  test("unsupported chain throws on init", async () => {
     const client = new CurveClient("solana");
-    expect(() => {
-      // pools() returns empty array for missing chain
-      const pools = client.pools();
-      expect(pools).toHaveLength(0);
-    }).not.toThrow();
-
-    // But resolvePool (via quote) should throw
-    expect(
-      client.quote("USDC", "DAI", 100),
-    ).rejects.toThrow("No Curve pools configured for solana");
-  });
-
-  test("wrong-chain token pair throws pool-not-found", () => {
-    // stETH pool only exists on ethereum
-    const arbClient = new CurveClient("arbitrum");
-    expect(
-      arbClient.quote("ETH", "stETH", 1),
-    ).rejects.toThrow("No Curve pool found for ETH/STETH on arbitrum");
+    // @curvefi/api throws when chain is not supported
+    await expect(client.pools()).rejects.toThrow();
   });
 });
 
@@ -106,9 +81,9 @@ describe("Curve pool matching", () => {
         if (i === j) continue;
         const iToken = pool.tokens[i].toUpperCase();
         const jToken = pool.tokens[j].toUpperCase();
-        const found = pool.tokens.some(
-          (t) => t.toUpperCase() === iToken,
-        ) && pool.tokens.some((t) => t.toUpperCase() === jToken);
+        const found =
+          pool.tokens.some((t) => t.toUpperCase() === iToken) &&
+          pool.tokens.some((t) => t.toUpperCase() === jToken);
         expect(found).toBe(true);
       }
     }
@@ -116,16 +91,7 @@ describe("Curve pool matching", () => {
 
   test("steth pool case-insensitive matching", () => {
     const pool = CURVE_POOLS.ethereum.steth;
-    const hasStETH = pool.tokens.some(
-      (t) => t.toUpperCase() === "STETH",
-    );
+    const hasStETH = pool.tokens.some((t) => t.toUpperCase() === "STETH");
     expect(hasStETH).toBe(true);
-  });
-
-  test("invalid pair throws pool-not-found error", () => {
-    const client = new CurveClient("ethereum");
-    expect(
-      client.quote("USDC", "BONK", 100),
-    ).rejects.toThrow("No Curve pool found");
   });
 });

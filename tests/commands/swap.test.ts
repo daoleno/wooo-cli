@@ -14,8 +14,7 @@ interface SwapQuote {
 // Extracted route selection logic (same as in src/commands/swap/index.ts)
 function selectBestRoute(quotes: SwapQuote[]): SwapQuote {
   quotes.sort(
-    (a, b) =>
-      Number.parseFloat(b.amountOut) - Number.parseFloat(a.amountOut),
+    (a, b) => Number.parseFloat(b.amountOut) - Number.parseFloat(a.amountOut),
   );
   return quotes[0];
 }

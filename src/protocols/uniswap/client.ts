@@ -1,16 +1,23 @@
 import { type Address, formatUnits, parseUnits } from "viem";
-import { getAccountAddress, getPublicClient, getWalletClient } from "../../core/evm";
+import {
+  getAccountAddress,
+  getPublicClient,
+  getWalletClient,
+} from "../../core/evm";
 import {
   ERC20_ABI,
-  QUOTER_V2_ABI,
-  SWAP_ROUTER_ABI,
   getQuoterAddress,
   getSwapRouterAddress,
+  NATIVE_WRAPS,
+  QUOTER_V2_ABI,
   resolveToken,
+  SWAP_ROUTER_ABI,
+  WETH9_ABI,
 } from "./constants";
 import type { UniswapQuote, UniswapSwapResult } from "./types";
 
-const DEFAULT_FEE = 3000; // 0.3% pool fee tier
+// Fee tiers to try in order of most common
+const FEE_TIERS = [3000, 500, 10000, 100] as const;
 const SLIPPAGE_BPS = 50; // 0.5% default slippage
 
 export class UniswapClient {
@@ -19,6 +26,9 @@ export class UniswapClient {
     private privateKey?: string,
   ) {}
 
+  /**
+   * Try multiple fee tiers and return the best quote.
+   */
   async quote(
     tokenInSymbol: string,
     tokenOutSymbol: string,
@@ -26,39 +36,67 @@ export class UniswapClient {
   ): Promise<UniswapQuote> {
     const tokenIn = resolveToken(tokenInSymbol, this.chain);
     const tokenOut = resolveToken(tokenOutSymbol, this.chain);
-    if (!tokenIn) throw new Error(`Unknown token: ${tokenInSymbol} on ${this.chain}`);
-    if (!tokenOut) throw new Error(`Unknown token: ${tokenOutSymbol} on ${this.chain}`);
+    if (!tokenIn)
+      throw new Error(`Unknown token: ${tokenInSymbol} on ${this.chain}`);
+    if (!tokenOut)
+      throw new Error(`Unknown token: ${tokenOutSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
 
-    const result = await publicClient.simulateContract({
-      address: getQuoterAddress(this.chain),
-      abi: QUOTER_V2_ABI,
-      functionName: "quoteExactInputSingle",
-      args: [
-        {
-          tokenIn: tokenIn.address,
-          tokenOut: tokenOut.address,
-          amountIn,
-          fee: DEFAULT_FEE,
-          sqrtPriceLimitX96: 0n,
-        },
-      ],
-    });
+    // Try all fee tiers and pick the best output
+    let bestAmountOut = 0n;
+    let bestFee: number = FEE_TIERS[0];
 
-    const amountOut = result.result[0];
-    const amountOutHuman = Number(formatUnits(amountOut, tokenOut.decimals));
+    for (const fee of FEE_TIERS) {
+      try {
+        const result = await publicClient.simulateContract({
+          address: getQuoterAddress(this.chain),
+          abi: QUOTER_V2_ABI,
+          functionName: "quoteExactInputSingle",
+          args: [
+            {
+              tokenIn: tokenIn.address,
+              tokenOut: tokenOut.address,
+              amountIn,
+              fee,
+              sqrtPriceLimitX96: 0n,
+            },
+          ],
+        });
+
+        const amountOut = result.result[0];
+        if (amountOut > bestAmountOut) {
+          bestAmountOut = amountOut;
+          bestFee = fee;
+        }
+      } catch {
+        // This fee tier doesn't have a pool for this pair
+      }
+    }
+
+    if (bestAmountOut === 0n) {
+      throw new Error(
+        `No Uniswap V3 pool found for ${tokenInSymbol}/${tokenOutSymbol} on ${this.chain}`,
+      );
+    }
+
+    const amountOutHuman = Number(
+      formatUnits(bestAmountOut, tokenOut.decimals),
+    );
     const price = amountOutHuman / amountInHuman;
+    const feePct = bestFee / 10000;
 
     return {
       tokenIn: tokenInSymbol.toUpperCase(),
       tokenOut: tokenOutSymbol.toUpperCase(),
       amountIn: amountInHuman.toString(),
-      amountOut: amountOutHuman.toFixed(tokenOut.decimals > 8 ? 8 : tokenOut.decimals),
+      amountOut: amountOutHuman.toFixed(
+        tokenOut.decimals > 8 ? 8 : tokenOut.decimals,
+      ),
       price,
-      priceImpact: 0, // Simplified — full impl would compare vs pool price
-      route: `${tokenInSymbol} → ${tokenOutSymbol} (0.3%)`,
+      priceImpact: 0,
+      route: `${tokenInSymbol} → ${tokenOutSymbol} (${feePct}%)`,
     };
   }
 
@@ -71,22 +109,52 @@ export class UniswapClient {
 
     const tokenIn = resolveToken(tokenInSymbol, this.chain);
     const tokenOut = resolveToken(tokenOutSymbol, this.chain);
-    if (!tokenIn) throw new Error(`Unknown token: ${tokenInSymbol} on ${this.chain}`);
-    if (!tokenOut) throw new Error(`Unknown token: ${tokenOutSymbol} on ${this.chain}`);
+    if (!tokenIn)
+      throw new Error(`Unknown token: ${tokenInSymbol} on ${this.chain}`);
+    if (!tokenOut)
+      throw new Error(`Unknown token: ${tokenOutSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
+    const isNativeETH = this.isNativeToken(tokenInSymbol);
 
-    // Get quote for min output
-    const quoteResult = await this.quote(tokenInSymbol, tokenOutSymbol, amountInHuman);
+    // Get quote for min output (try all fee tiers)
+    const quoteResult = await this.quote(
+      tokenInSymbol,
+      tokenOutSymbol,
+      amountInHuman,
+    );
     const amountOutMin =
-      (parseUnits(quoteResult.amountOut, tokenOut.decimals) * BigInt(10000 - SLIPPAGE_BPS)) /
+      (parseUnits(quoteResult.amountOut, tokenOut.decimals) *
+        BigInt(10000 - SLIPPAGE_BPS)) /
       10000n;
 
-    // Check and set allowance
-    await this.ensureAllowance(tokenIn.address, amountIn, account, publicClient, walletClient);
+    // Determine the best fee from the route string
+    const feeMatch = quoteResult.route.match(/\((\d+\.?\d*)%\)/);
+    const fee = feeMatch ? Math.round(Number(feeMatch[1]) * 10000) : 3000;
+
+    if (isNativeETH) {
+      // Native ETH: wrap to WETH first, then swap
+      const wethAddress = tokenIn.address; // resolveToken maps ETH → WETH
+      await this.wrapETH(
+        wethAddress,
+        amountIn,
+        account,
+        publicClient,
+        walletClient,
+      );
+    }
+
+    // Approve router to spend tokens (including freshly wrapped WETH)
+    await this.ensureAllowance(
+      tokenIn.address,
+      amountIn,
+      account,
+      publicClient,
+      walletClient,
+    );
 
     // Execute swap
     const { request } = await publicClient.simulateContract({
@@ -97,7 +165,7 @@ export class UniswapClient {
         {
           tokenIn: tokenIn.address,
           tokenOut: tokenOut.address,
-          fee: DEFAULT_FEE,
+          fee,
           recipient: account,
           amountIn,
           amountOutMinimum: amountOutMin,
@@ -108,7 +176,9 @@ export class UniswapClient {
     });
 
     const txHash = await walletClient.writeContract(request as any);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
 
     return {
       txHash,
@@ -118,6 +188,29 @@ export class UniswapClient {
       amountOut: quoteResult.amountOut,
       status: receipt.status === "success" ? "confirmed" : "failed",
     };
+  }
+
+  private isNativeToken(symbol: string): boolean {
+    return symbol.toUpperCase() in NATIVE_WRAPS;
+  }
+
+  private async wrapETH(
+    wethAddress: Address,
+    amount: bigint,
+    account: Address,
+    publicClient: any,
+    walletClient: any,
+  ): Promise<void> {
+    const { request } = await publicClient.simulateContract({
+      address: wethAddress,
+      abi: WETH9_ABI,
+      functionName: "deposit",
+      args: [],
+      value: amount,
+      account,
+    });
+    const hash = await walletClient.writeContract(request as any);
+    await publicClient.waitForTransactionReceipt({ hash });
   }
 
   private async ensureAllowance(

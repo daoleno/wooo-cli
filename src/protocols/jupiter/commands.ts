@@ -1,7 +1,8 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { validateAmount, validateTokenSymbol } from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { JupiterClient } from "./client";
 
@@ -30,39 +31,50 @@ const swap = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Swap amount");
 
     const client = new JupiterClient();
-    const quoteResult = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const quoteResult = await client.quote(tokenIn, tokenOut, amount);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SWAP",
-        tokenIn: args.tokenIn.toUpperCase(),
-        tokenOut: args.tokenOut.toUpperCase(),
-        amountIn: amount,
-        amountOut: quoteResult.outAmount,
-        priceImpact: quoteResult.priceImpact,
-        route: quoteResult.routePlan,
-        chain: "solana",
-        protocol: "Jupiter",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Swap ${amount} ${tokenIn} → ${quoteResult.outAmount} ${tokenOut} via Jupiter (Solana)`,
+        details: {
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: quoteResult.outAmount,
+          priceImpact: quoteResult.priceImpact,
+          chain: "solana",
+          protocol: "Jupiter",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "SWAP",
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: quoteResult.outAmount,
+          priceImpact: quoteResult.priceImpact,
+          route: quoteResult.routePlan,
+          chain: "solana",
+          protocol: "Jupiter",
+          status: "dry-run",
+        });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ Swap ${amount} ${args.tokenIn} → ${quoteResult.outAmount} ${args.tokenOut} via Jupiter. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();
     const authClient = new JupiterClient(privateKey);
-    const result = await authClient.swap(args.tokenIn, args.tokenOut, amount);
+    const result = await authClient.swap(tokenIn, tokenOut, amount);
     out.data(result);
   },
 });
@@ -90,12 +102,15 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Quote amount");
+
     const client = new JupiterClient();
-    const result = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const result = await client.quote(tokenIn, tokenOut, amount);
     out.data({
-      tokenIn: args.tokenIn.toUpperCase(),
-      tokenOut: args.tokenOut.toUpperCase(),
+      tokenIn,
+      tokenOut,
       amountIn: amount,
       ...result,
     });

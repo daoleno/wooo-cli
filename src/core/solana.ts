@@ -1,8 +1,8 @@
 import {
   Connection,
+  clusterApiUrl,
   Keypair,
   type PublicKey,
-  clusterApiUrl,
 } from "@solana/web3.js";
 import bs58 from "bs58";
 
@@ -11,9 +11,7 @@ const RPC_URLS: Record<string, string> = {
   devnet: "https://api.devnet.solana.com",
 };
 
-export function getSolanaConnection(
-  network = "mainnet-beta",
-): Connection {
+export function getSolanaConnection(network = "mainnet-beta"): Connection {
   const url = RPC_URLS[network] || clusterApiUrl(network as any);
   return new Connection(url, "confirmed");
 }

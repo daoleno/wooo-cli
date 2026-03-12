@@ -1,12 +1,28 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import {
+  validateAmount,
+  validateChain,
+  validateTokenSymbol,
+} from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { StargateClient } from "./client";
 
+const SUPPORTED_CHAINS = [
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+];
+
 const bridge = defineCommand({
-  meta: { name: "bridge", description: "Bridge tokens across chains via Stargate" },
+  meta: {
+    name: "bridge",
+    description: "Bridge tokens across chains via Stargate",
+  },
   args: {
     token: {
       type: "positional",
@@ -35,33 +51,44 @@ const bridge = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const token = validateTokenSymbol(args.token);
+    const amount = validateAmount(args.amount);
+    const fromChain = validateChain(args.from, SUPPORTED_CHAINS);
+    const toChain = validateChain(args.to, SUPPORTED_CHAINS);
 
     const client = new StargateClient();
-    const quoteResult = await client.quote(args.token, amount, args.from, args.to);
+    const quoteResult = await client.quote(token, amount, fromChain, toChain);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "BRIDGE",
-        ...quoteResult,
-        protocol: "Stargate V2",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Bridge ${amount} ${token}: ${fromChain} → ${toChain}`,
+        details: {
+          token,
+          amount,
+          from: fromChain,
+          to: toChain,
+          nativeFee: `${quoteResult.nativeFee} ETH`,
+          protocol: "Stargate V2",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "BRIDGE",
+          ...quoteResult,
+          protocol: "Stargate V2",
+          status: "dry-run",
+        });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ Bridge ${amount} ${args.token}: ${args.from} → ${args.to} (fee: ${quoteResult.nativeFee} ETH). Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();
     const authClient = new StargateClient(privateKey);
-    const result = await authClient.bridge(args.token, amount, args.from, args.to);
+    const result = await authClient.bridge(token, amount, fromChain, toChain);
     out.data(result);
   },
 });
@@ -94,9 +121,12 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const token = validateTokenSymbol(args.token);
+    const amount = validateAmount(args.amount);
+    const fromChain = validateChain(args.from, SUPPORTED_CHAINS);
+    const toChain = validateChain(args.to, SUPPORTED_CHAINS);
     const client = new StargateClient();
-    const result = await client.quote(args.token, amount, args.from, args.to);
+    const result = await client.quote(token, amount, fromChain, toChain);
     out.data(result);
   },
 });
@@ -118,7 +148,7 @@ export const stargateProtocol: ProtocolDefinition = {
   name: "stargate",
   displayName: "Stargate V2",
   type: "bridge",
-  chains: ["ethereum", "arbitrum", "optimism", "polygon", "base"],
+  chains: SUPPORTED_CHAINS,
   requiresAuth: false,
   setup: () =>
     defineCommand({

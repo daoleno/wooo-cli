@@ -1,7 +1,8 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { validateAmount } from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { LidoClient } from "./client";
 
@@ -20,26 +21,32 @@ const stake = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const amount = validateAmount(args.amount, "Stake amount");
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "STAKE",
-        amountETH: amount,
-        estimatedStETH: amount,
-        protocol: "Lido",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Stake ${amount} ETH via Lido → ~${amount} stETH`,
+        details: {
+          amountETH: amount,
+          estimatedStETH: amount,
+          protocol: "Lido",
+          chain: "ethereum",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "STAKE",
+          amountETH: amount,
+          estimatedStETH: amount,
+          protocol: "Lido",
+          status: "dry-run",
+        });
+      }
       return;
-    }
-
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to stake ${amount} ETH via Lido → ~${amount} stETH. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
     }
 
     const privateKey = await getActivePrivateKey();

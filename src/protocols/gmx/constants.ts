@@ -1,36 +1,73 @@
 import type { Address } from "viem";
 
 // GMX V2 contracts on Arbitrum
-export const GMX_ROUTER: Address =
-  "0x7C68C7866A64FA2160F78EEaE12217FFbf871fa8";
+export const GMX_ROUTER: Address = "0x7C68C7866A64FA2160F78EEaE12217FFbf871fa8";
 
 export const GMX_EXCHANGE_ROUTER: Address =
   "0x69C527fC77291722b52649E45c838e41be8Bf5d5";
 
-export const GMX_READER: Address =
-  "0xf60becbba223EEA9495Da3f606753867eC10d139";
+export const GMX_ORDER_VAULT: Address =
+  "0x31eF83a530Fde1B38deDA89C0A6c72A85b8C3618";
+
+export const GMX_READER: Address = "0xf60becbba223EEA9495Da3f606753867eC10d139";
 
 export const GMX_DATASTORE: Address =
   "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8";
 
 // GMX V2 market tokens (Arbitrum)
-export const GMX_MARKETS: Record<string, { marketToken: Address; indexToken: Address; longToken: Address; shortToken: Address }> = {
+export const GMX_MARKETS: Record<
+  string,
+  {
+    marketToken: Address;
+    indexToken: Address;
+    longToken: Address;
+    shortToken: Address;
+  }
+> = {
   "BTC/USD": {
     marketToken: "0x47c031236e19d024b42f8AE6DA7A02FAdBd9f5a4",
     indexToken: "0x47904963fc8b2340414262125aF798B9655E58Cd", // WBTC
-    longToken: "0x47904963fc8b2340414262125aF798B9655E58Cd",  // WBTC
+    longToken: "0x47904963fc8b2340414262125aF798B9655E58Cd", // WBTC
     shortToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
   },
   "ETH/USD": {
     marketToken: "0x70d95587d40A2caf56bd97485aB3Eec10Bee6336",
     indexToken: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH
-    longToken: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",  // WETH
+    longToken: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH
     shortToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
   },
 };
 
 // Simplified ABIs for GMX V2
 export const EXCHANGE_ROUTER_ABI = [
+  {
+    inputs: [{ name: "data", type: "bytes[]" }],
+    name: "multicall",
+    outputs: [{ name: "results", type: "bytes[]" }],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "receiver", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "sendTokens",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "receiver", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "sendWnt",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
   {
     inputs: [
       {
@@ -65,6 +102,29 @@ export const EXCHANGE_ROUTER_ABI = [
   },
 ] as const;
 
+export const ERC20_ABI = [
+  {
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    name: "allowance",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 export const READER_ABI = [
   {
     inputs: [
@@ -93,8 +153,14 @@ export const READER_ABI = [
               { name: "collateralAmount", type: "uint256" },
               { name: "borrowingFactor", type: "uint256" },
               { name: "fundingFeeAmountPerSize", type: "uint256" },
-              { name: "longTokenClaimableFundingAmountPerSize", type: "uint256" },
-              { name: "shortTokenClaimableFundingAmountPerSize", type: "uint256" },
+              {
+                name: "longTokenClaimableFundingAmountPerSize",
+                type: "uint256",
+              },
+              {
+                name: "shortTokenClaimableFundingAmountPerSize",
+                type: "uint256",
+              },
               { name: "increasedAtBlock", type: "uint256" },
               { name: "decreasedAtBlock", type: "uint256" },
               { name: "increasedAtTime", type: "uint256" },

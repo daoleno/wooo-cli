@@ -8,12 +8,12 @@ import { jupiterProtocol } from "./jupiter/commands";
 import { lidoProtocol } from "./lido/commands";
 import { okxProtocol } from "./okx/commands";
 import { stargateProtocol } from "./stargate/commands";
-import { uniswapProtocol } from "./uniswap/commands";
 import {
   PROTOCOL_TYPE_TO_GROUP,
   type ProtocolDefinition,
   type ProtocolGroup,
 } from "./types";
+import { uniswapProtocol } from "./uniswap/commands";
 
 const protocols: ProtocolDefinition[] = [
   // CEX

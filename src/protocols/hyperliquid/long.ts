@@ -1,7 +1,8 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { validateAmount, validateLeverage } from "../../core/validation";
 import { HyperliquidClient } from "./client";
 
 export default defineCommand({
@@ -30,33 +31,40 @@ export default defineCommand({
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
     const symbol = `${args.symbol}/USDC:USDC`;
-    const sizeUsd = parseFloat(args.size);
-    const leverage = parseInt(args.leverage, 10);
+    const sizeUsd = validateAmount(args.size, "Position size");
+    const leverage = validateLeverage(args.leverage);
 
     const client = new HyperliquidClient();
     const ticker = await client.fetchTicker(symbol);
     const amount = sizeUsd / ticker.last;
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "LONG",
-        symbol,
-        sizeUsd,
-        amount: amount.toFixed(6),
-        estimatedPrice: ticker.last,
-        leverage,
-        status: "dry-run",
-      });
-      return;
-    }
+    const confirmed = await confirmTransaction(
+      {
+        action: `LONG ${args.symbol} on Hyperliquid`,
+        details: {
+          symbol,
+          sizeUsd,
+          amount: amount.toFixed(6),
+          estimatedPrice: `$${ticker.last}`,
+          leverage: `${leverage}x`,
+        },
+      },
+      args,
+    );
 
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to LONG ${args.symbol} with $${sizeUsd} at ${leverage}x leverage ~$${ticker.last}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "LONG",
+          symbol,
+          sizeUsd,
+          amount: amount.toFixed(6),
+          estimatedPrice: ticker.last,
+          leverage,
+          status: "dry-run",
+        });
+      }
+      return;
     }
 
     const pk = await getActivePrivateKey();

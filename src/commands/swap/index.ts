@@ -1,7 +1,9 @@
 import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { validateAmount, validateTokenSymbol } from "../../core/validation";
 
 interface SwapQuote {
   protocol: string;
@@ -42,47 +44,51 @@ export default defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn, "Input token");
+    const tokenOut = validateTokenSymbol(args.tokenOut, "Output token");
+    const amount = validateAmount(args.amount);
     const chain = args.chain;
 
     // Solana → Jupiter only
     if (chain === "solana") {
-      const { JupiterClient } = await import(
-        "../../protocols/jupiter/client"
-      );
+      const { JupiterClient } = await import("../../protocols/jupiter/client");
       const client = new JupiterClient();
-      const quote = await client.quote(args.tokenIn, args.tokenOut, amount);
+      const quote = await client.quote(tokenIn, tokenOut, amount);
 
-      if (args["dry-run"]) {
-        out.data({
-          action: "SWAP",
-          bestRoute: "jupiter",
-          tokenIn: args.tokenIn,
-          tokenOut: args.tokenOut,
-          amountIn: amount,
-          amountOut: quote.outAmount,
-          chain: "solana",
-          status: "dry-run",
-        });
+      const confirmed = await confirmTransaction(
+        {
+          action: `Swap ${amount} ${tokenIn} → ${tokenOut} via Jupiter`,
+          details: {
+            tokenIn,
+            tokenOut,
+            amountIn: amount,
+            amountOut: quote.outAmount,
+            chain: "solana",
+            route: "jupiter",
+          },
+        },
+        args,
+      );
+
+      if (!confirmed) {
+        if (args["dry-run"]) {
+          out.data({
+            action: "SWAP",
+            bestRoute: "jupiter",
+            tokenIn,
+            tokenOut,
+            amountIn: amount,
+            amountOut: quote.outAmount,
+            chain: "solana",
+            status: "dry-run",
+          });
+        }
         return;
-      }
-
-      if (!args.yes) {
-        console.error(
-          ansis.yellow(
-            `⚠ Best route: Jupiter — ${amount} ${args.tokenIn} → ${quote.outAmount} ${args.tokenOut}. Use --yes to confirm.`,
-          ),
-        );
-        process.exit(6);
       }
 
       const privateKey = await getActivePrivateKey();
       const authClient = new JupiterClient(privateKey);
-      const result = await authClient.swap(
-        args.tokenIn,
-        args.tokenOut,
-        amount,
-      );
+      const result = await authClient.swap(tokenIn, tokenOut, amount);
       out.data({ ...result, bestRoute: "jupiter" });
       return;
     }
@@ -92,15 +98,9 @@ export default defineCommand({
 
     // Try Uniswap
     try {
-      const { UniswapClient } = await import(
-        "../../protocols/uniswap/client"
-      );
+      const { UniswapClient } = await import("../../protocols/uniswap/client");
       const uniClient = new UniswapClient(chain);
-      const uniQuote = await uniClient.quote(
-        args.tokenIn,
-        args.tokenOut,
-        amount,
-      );
+      const uniQuote = await uniClient.quote(tokenIn, tokenOut, amount);
       quotes.push({
         protocol: "uniswap",
         amountOut: uniQuote.amountOut,
@@ -114,11 +114,7 @@ export default defineCommand({
     try {
       const { CurveClient } = await import("../../protocols/curve/client");
       const curveClient = new CurveClient(chain);
-      const curveQuote = await curveClient.quote(
-        args.tokenIn,
-        args.tokenOut,
-        amount,
-      );
+      const curveQuote = await curveClient.quote(tokenIn, tokenOut, amount);
       quotes.push({
         protocol: "curve",
         amountOut: curveQuote.amountOut,
@@ -130,7 +126,7 @@ export default defineCommand({
 
     if (quotes.length === 0) {
       console.error(
-        `No DEX route found for ${args.tokenIn} → ${args.tokenOut} on ${chain}`,
+        `No DEX route found for ${tokenIn} → ${tokenOut} on ${chain}`,
       );
       process.exit(1);
     }
@@ -141,55 +137,61 @@ export default defineCommand({
     );
     const best = quotes[0];
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SWAP",
-        bestRoute: best.protocol,
-        tokenIn: args.tokenIn,
-        tokenOut: args.tokenOut,
-        amountIn: amount,
-        amountOut: best.amountOut,
-        chain,
-        allQuotes: quotes,
-        status: "dry-run",
-      });
-      return;
-    }
-
     // Show comparison if multiple quotes
     if (quotes.length > 1) {
       console.error(ansis.dim("Route comparison:"));
       for (const q of quotes) {
         const marker = q === best ? ansis.green("★") : " ";
         console.error(
-          `  ${marker} ${q.protocol.padEnd(10)} → ${q.amountOut} ${args.tokenOut}`,
+          `  ${marker} ${q.protocol.padEnd(10)} → ${q.amountOut} ${tokenOut}`,
         );
       }
     }
 
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ Best route: ${best.protocol} — ${amount} ${args.tokenIn} → ${best.amountOut} ${args.tokenOut}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
+    const confirmed = await confirmTransaction(
+      {
+        action: `Swap ${amount} ${tokenIn} → ${best.amountOut} ${tokenOut} via ${best.protocol}`,
+        details: {
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: best.amountOut,
+          chain,
+          route: best.protocol,
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "SWAP",
+          bestRoute: best.protocol,
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: best.amountOut,
+          chain,
+          allQuotes: quotes,
+          status: "dry-run",
+        });
+      }
+      return;
     }
 
     const privateKey = await getActivePrivateKey();
 
     // Execute via best protocol
     if (best.protocol === "uniswap") {
-      const { UniswapClient } = await import(
-        "../../protocols/uniswap/client"
-      );
+      const { UniswapClient } = await import("../../protocols/uniswap/client");
       const client = new UniswapClient(chain, privateKey);
-      const result = await client.swap(args.tokenIn, args.tokenOut, amount);
+      const result = await client.swap(tokenIn, tokenOut, amount);
       out.data({ ...result, bestRoute: "uniswap" });
     } else {
       const { CurveClient } = await import("../../protocols/curve/client");
       const client = new CurveClient(chain, privateKey);
-      const result = await client.swap(args.tokenIn, args.tokenOut, amount);
+      const result = await client.swap(tokenIn, tokenOut, amount);
       out.data({ ...result, bestRoute: "curve" });
     }
   },

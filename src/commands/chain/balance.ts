@@ -28,7 +28,10 @@ const ERC20_BALANCE_ABI = [
 ] as const;
 
 export default defineCommand({
-  meta: { name: "balance", description: "Check native or token balance of an address" },
+  meta: {
+    name: "balance",
+    description: "Check native or token balance of an address",
+  },
   args: {
     address: {
       type: "positional",

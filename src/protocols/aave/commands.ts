@@ -1,9 +1,22 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import {
+  validateAmount,
+  validateChain,
+  validateTokenSymbol,
+} from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { AaveClient } from "./client";
+
+const SUPPORTED_CHAINS = [
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+];
 
 const supply = defineCommand({
   meta: { name: "supply", description: "Supply tokens to Aave" },
@@ -26,32 +39,35 @@ const supply = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const token = validateTokenSymbol(args.token);
+    const amount = validateAmount(args.amount);
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SUPPLY",
-        token: args.token,
-        amount,
-        chain: args.chain,
-        protocol: "Aave V3",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Supply ${amount} ${token} to Aave V3`,
+        details: { token, amount, chain, protocol: "Aave V3" },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "SUPPLY",
+          token,
+          amount,
+          chain,
+          protocol: "Aave V3",
+          status: "dry-run",
+        });
+      }
       return;
     }
 
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to supply ${amount} ${args.token} to Aave on ${args.chain}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
-    }
-
     const privateKey = await getActivePrivateKey();
-    const client = new AaveClient(args.chain, privateKey);
-    const result = await client.supply(args.token, amount);
+    const client = new AaveClient(chain, privateKey);
+    const result = await client.supply(token, amount);
     out.data(result);
   },
 });
@@ -77,33 +93,42 @@ const borrow = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const token = validateTokenSymbol(args.token);
+    const amount = validateAmount(args.amount);
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "BORROW",
-        token: args.token,
-        amount,
-        chain: args.chain,
-        protocol: "Aave V3",
-        interestRateMode: "variable",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Borrow ${amount} ${token} from Aave V3`,
+        details: {
+          token,
+          amount,
+          chain,
+          protocol: "Aave V3",
+          rateMode: "variable",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "BORROW",
+          token,
+          amount,
+          chain,
+          protocol: "Aave V3",
+          interestRateMode: "variable",
+          status: "dry-run",
+        });
+      }
       return;
     }
 
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ About to borrow ${amount} ${args.token} from Aave on ${args.chain}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
-    }
-
     const privateKey = await getActivePrivateKey();
-    const client = new AaveClient(args.chain, privateKey);
-    const result = await client.borrow(args.token, amount);
+    const client = new AaveClient(chain, privateKey);
+    const result = await client.borrow(token, amount);
     out.data(result);
   },
 });
@@ -117,8 +142,9 @@ const positions = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
     const privateKey = await getActivePrivateKey();
-    const client = new AaveClient(args.chain, privateKey);
+    const client = new AaveClient(chain, privateKey);
     const result = await client.positions();
     out.data(result);
   },
@@ -138,8 +164,10 @@ const rates = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const client = new AaveClient(args.chain);
-    const result = await client.rates(args.token);
+    const token = validateTokenSymbol(args.token);
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
+    const client = new AaveClient(chain);
+    const result = await client.rates(token);
     out.data(result);
   },
 });
@@ -148,7 +176,7 @@ export const aaveProtocol: ProtocolDefinition = {
   name: "aave",
   displayName: "Aave V3",
   type: "lending",
-  chains: ["ethereum", "arbitrum", "optimism", "polygon", "base"],
+  chains: SUPPORTED_CHAINS,
   requiresAuth: false,
   setup: () =>
     defineCommand({

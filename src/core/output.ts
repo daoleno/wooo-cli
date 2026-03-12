@@ -1,5 +1,6 @@
 import ansis from "ansis";
 import { Table } from "console-table-printer";
+import { safeJsonStringify } from "./validation";
 
 export interface OutputOptions {
   json: boolean;
@@ -28,9 +29,9 @@ export function createOutput(opts: OutputOptions): Output {
   return {
     data(obj: unknown) {
       if (isJson) {
-        write(JSON.stringify(obj, null, 2));
+        write(safeJsonStringify(obj));
       } else {
-        write(typeof obj === "string" ? obj : JSON.stringify(obj, null, 2));
+        write(typeof obj === "string" ? obj : safeJsonStringify(obj));
       }
     },
 

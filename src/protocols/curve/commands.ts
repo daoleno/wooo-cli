@@ -1,12 +1,28 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
+import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import {
+  validateAmount,
+  validateChain,
+  validateTokenSymbol,
+} from "../../core/validation";
 import type { ProtocolDefinition } from "../types";
 import { CurveClient } from "./client";
 
+const SUPPORTED_CHAINS = [
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+];
+
 const swap = defineCommand({
-  meta: { name: "swap", description: "Swap tokens via Curve (optimized for stablecoins)" },
+  meta: {
+    name: "swap",
+    description: "Swap tokens via Curve (optimized for stablecoins)",
+  },
   args: {
     tokenIn: {
       type: "positional",
@@ -31,38 +47,50 @@ const swap = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Swap amount");
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
-    const client = new CurveClient(args.chain);
-    const quoteResult = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const client = new CurveClient(chain);
+    const quoteResult = await client.quote(tokenIn, tokenOut, amount);
 
-    if (args["dry-run"]) {
-      out.data({
-        action: "SWAP",
-        tokenIn: args.tokenIn,
-        tokenOut: args.tokenOut,
-        amountIn: amount,
-        amountOut: quoteResult.amountOut,
-        pool: quoteResult.pool,
-        chain: args.chain,
-        protocol: "Curve",
-        status: "dry-run",
-      });
+    const confirmed = await confirmTransaction(
+      {
+        action: `Swap ${amount} ${tokenIn} → ${quoteResult.amountOut} ${tokenOut} via Curve (${chain})`,
+        details: {
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: quoteResult.amountOut,
+          pool: quoteResult.pool,
+          chain,
+          protocol: "Curve",
+        },
+      },
+      args,
+    );
+
+    if (!confirmed) {
+      if (args["dry-run"]) {
+        out.data({
+          action: "SWAP",
+          tokenIn,
+          tokenOut,
+          amountIn: amount,
+          amountOut: quoteResult.amountOut,
+          pool: quoteResult.pool,
+          chain,
+          protocol: "Curve",
+          status: "dry-run",
+        });
+      }
       return;
     }
 
-    if (!args.yes) {
-      console.error(
-        ansis.yellow(
-          `⚠ Swap ${amount} ${args.tokenIn} → ${quoteResult.amountOut} ${args.tokenOut} via ${quoteResult.pool}. Use --yes to confirm.`,
-        ),
-      );
-      process.exit(6);
-    }
-
     const privateKey = await getActivePrivateKey();
-    const authClient = new CurveClient(args.chain, privateKey);
-    const result = await authClient.swap(args.tokenIn, args.tokenOut, amount);
+    const authClient = new CurveClient(chain, privateKey);
+    const result = await authClient.swap(tokenIn, tokenOut, amount);
     out.data(result);
   },
 });
@@ -76,8 +104,9 @@ const pools = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const client = new CurveClient(args.chain);
-    const list = client.pools();
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
+    const client = new CurveClient(chain);
+    const list = await client.pools();
 
     out.table(
       list.map((p) => ({
@@ -117,12 +146,16 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const amount = Number.parseFloat(args.amount);
-    const client = new CurveClient(args.chain);
-    const result = await client.quote(args.tokenIn, args.tokenOut, amount);
+    const tokenIn = validateTokenSymbol(args.tokenIn);
+    const tokenOut = validateTokenSymbol(args.tokenOut);
+    const amount = validateAmount(args.amount, "Quote amount");
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
+
+    const client = new CurveClient(chain);
+    const result = await client.quote(tokenIn, tokenOut, amount);
     out.data({
-      tokenIn: args.tokenIn.toUpperCase(),
-      tokenOut: args.tokenOut.toUpperCase(),
+      tokenIn,
+      tokenOut,
       amountIn: amount,
       ...result,
     });

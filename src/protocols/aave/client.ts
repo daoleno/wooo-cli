@@ -45,7 +45,8 @@ export class AaveClient {
     if (!this.privateKey) throw new Error("Private key required");
 
     const token = resolveToken(tokenSymbol, this.chain);
-    if (!token) throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
+    if (!token)
+      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
@@ -54,7 +55,14 @@ export class AaveClient {
     const pool = this.getPoolAddress();
 
     // Approve pool to spend tokens
-    await this.ensureAllowance(token.address, amountWei, account, pool, publicClient, walletClient);
+    await this.ensureAllowance(
+      token.address,
+      amountWei,
+      account,
+      pool,
+      publicClient,
+      walletClient,
+    );
 
     // Supply to Aave
     const { request } = await publicClient.simulateContract({
@@ -66,7 +74,9 @@ export class AaveClient {
     });
 
     const txHash = await walletClient.writeContract(request as any);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
 
     return {
       txHash,
@@ -80,7 +90,8 @@ export class AaveClient {
     if (!this.privateKey) throw new Error("Private key required");
 
     const token = resolveToken(tokenSymbol, this.chain);
-    if (!token) throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
+    if (!token)
+      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
@@ -98,7 +109,9 @@ export class AaveClient {
     });
 
     const txHash = await walletClient.writeContract(request as any);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+    });
 
     return {
       txHash,
@@ -144,7 +157,8 @@ export class AaveClient {
 
   async rates(tokenSymbol: string): Promise<AaveRate> {
     const token = resolveToken(tokenSymbol, this.chain);
-    if (!token) throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
+    if (!token)
+      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
     const dataProvider = this.getDataProviderAddress();
