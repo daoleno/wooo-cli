@@ -1,7 +1,32 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { Keystore } from "./keystore";
+import { getSolanaKeypair } from "./solana";
+
+export type WalletType = "evm" | "solana";
+
+const EVM_WALLET_ALIASES = new Set([
+  "evm",
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+]);
+
+export function resolveWalletType(chain: string): WalletType | null {
+  const normalized = chain.trim().toLowerCase();
+  if (normalized === "solana") {
+    return "solana";
+  }
+  if (EVM_WALLET_ALIASES.has(normalized)) {
+    return "evm";
+  }
+  return null;
+}
 
 export interface WalletInfo {
   name: string;
@@ -38,8 +63,19 @@ export class WalletStore {
   }
 
   async generate(name: string, chain: string): Promise<WalletInfo> {
+    const walletType = resolveWalletType(chain);
+    if (!walletType) {
+      throw new Error(`Unsupported wallet type: ${chain}`);
+    }
+
+    if (walletType === "solana") {
+      const keypair = Keypair.generate();
+      const secretKey = bs58.encode(keypair.secretKey);
+      return this.importKey(name, secretKey, walletType);
+    }
+
     const pk = generatePrivateKey();
-    return this.importKey(name, pk, chain);
+    return this.importKey(name, pk, walletType);
   }
 
   async importKey(
@@ -47,17 +83,35 @@ export class WalletStore {
     privateKey: string,
     chain: string,
   ): Promise<WalletInfo> {
-    const account = privateKeyToAccount(privateKey as `0x${string}`);
-    await this.keystore.set(`wallet:${name}`, privateKey);
+    const walletType = resolveWalletType(chain);
+    if (!walletType) {
+      throw new Error(`Unsupported wallet type: ${chain}`);
+    }
+
+    const secret = privateKey.trim();
+    let address: string;
+    let storedSecret = secret;
+
+    if (walletType === "solana") {
+      const keypair = getSolanaKeypair(secret);
+      address = keypair.publicKey.toBase58();
+      storedSecret = bs58.encode(keypair.secretKey);
+    } else {
+      const account = privateKeyToAccount(secret as `0x${string}`);
+      address = account.address;
+    }
+
+    await this.keystore.set(`wallet:${name}`, storedSecret);
+
     const manifest = this.loadManifest();
     manifest.wallets = manifest.wallets.filter((w) => w.name !== name);
-    manifest.wallets.push({ name, address: account.address, chain });
+    manifest.wallets.push({ name, address, chain: walletType });
     if (!manifest.active) manifest.active = name;
     this.saveManifest(manifest);
     return {
       name,
-      address: account.address,
-      chain,
+      address,
+      chain: walletType,
       active: manifest.active === name,
     };
   }

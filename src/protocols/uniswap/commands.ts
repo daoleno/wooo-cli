@@ -71,7 +71,7 @@ const swap = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const authClient = new UniswapClient(chain, privateKey);
     const result = await authClient.swap(tokenIn, tokenOut, amount);
     out.data(result);

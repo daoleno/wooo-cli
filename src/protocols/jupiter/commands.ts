@@ -72,7 +72,7 @@ const swap = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("solana");
     const authClient = new JupiterClient(privateKey);
     const result = await authClient.swap(tokenIn, tokenOut, amount);
     out.data(result);

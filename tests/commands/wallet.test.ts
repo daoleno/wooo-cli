@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
 import { WalletStore } from "../../src/core/wallet-store";
 
 const TEST_PASSWORD = "test-master-password-32-chars-ok!";
@@ -26,6 +28,13 @@ describe("WalletStore", () => {
     expect(wallet.chain).toBe("evm");
   });
 
+  test("generates a new Solana wallet", async () => {
+    const wallet = await store.generate("sol-wallet", "solana");
+    expect(wallet.name).toBe("sol-wallet");
+    expect(() => new PublicKey(wallet.address)).not.toThrow();
+    expect(wallet.chain).toBe("solana");
+  });
+
   test("lists wallets", async () => {
     await store.generate("w1", "evm");
     await store.generate("w2", "evm");
@@ -43,6 +52,15 @@ describe("WalletStore", () => {
     const account = privateKeyToAccount(pk);
     const wallet = await store.importKey("imported", pk, "evm");
     expect(wallet.address).toBe(account.address);
+  });
+
+  test("imports a Solana wallet from secret key", async () => {
+    const { Keypair } = await import("@solana/web3.js");
+    const keypair = Keypair.generate();
+    const secret = bs58.encode(keypair.secretKey);
+    const wallet = await store.importKey("solana-imported", secret, "solana");
+    expect(wallet.address).toBe(keypair.publicKey.toBase58());
+    expect(wallet.chain).toBe("solana");
   });
 
   test("exports private key", async () => {

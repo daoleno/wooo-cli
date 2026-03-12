@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { getWalletStore } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { resolveWalletType } from "../../core/wallet-store";
 
 export default defineCommand({
   meta: { name: "generate", description: "Generate a new wallet" },
@@ -16,8 +17,15 @@ export default defineCommand({
   },
   async run({ args }) {
     const name = args.name || `wallet-${Date.now()}`;
+    const walletType = resolveWalletType(args.chain);
+    if (!walletType) {
+      console.error(
+        `Unsupported wallet type: ${args.chain}. Available: evm, solana`,
+      );
+      process.exit(1);
+    }
     const store = getWalletStore();
-    const wallet = await store.generate(name, args.chain);
+    const wallet = await store.generate(name, walletType);
     const out = createOutput(resolveOutputOptions(args));
     out.data({
       name: wallet.name,

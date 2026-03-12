@@ -167,4 +167,12 @@ describe("wooo-cli smoke tests", () => {
     const result = await $`bun run src/index.ts portfolio --help`.text();
     expect(result).toContain("overview");
   });
+
+  test("json subcommand output is not polluted by the root banner", async () => {
+    const result =
+      await $`bun run src/index.ts dex jupiter tokens --json`.text();
+    const parsed = JSON.parse(result) as { chain: string; tokens: string[] };
+    expect(parsed.chain).toBe("solana");
+    expect(parsed.tokens).toContain("SOL");
+  });
 });

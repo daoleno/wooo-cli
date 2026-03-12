@@ -86,7 +86,7 @@ export default defineCommand({
         return;
       }
 
-      const privateKey = await getActivePrivateKey();
+      const privateKey = await getActivePrivateKey("solana");
       const authClient = new JupiterClient(privateKey);
       const result = await authClient.swap(tokenIn, tokenOut, amount);
       out.data({ ...result, bestRoute: "jupiter" });
@@ -180,7 +180,7 @@ export default defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
 
     // Execute via best protocol
     if (best.protocol === "uniswap") {

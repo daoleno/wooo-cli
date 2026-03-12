@@ -49,7 +49,7 @@ const stake = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new LidoClient(privateKey);
     const result = await client.stake(amount);
     out.data(result);
@@ -64,7 +64,7 @@ const rewards = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new LidoClient(privateKey);
     const result = await client.rewards();
     out.data(result);
@@ -79,7 +79,7 @@ const balance = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new LidoClient(privateKey);
     const stethBalance = await client.balance();
     out.data({ stETH: stethBalance, protocol: "Lido" });

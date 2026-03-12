@@ -1,5 +1,23 @@
-import { describe, expect, test } from "bun:test";
-import { CHAIN_MAP, getAccountAddress, getChain } from "../../src/core/evm";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  CHAIN_MAP,
+  getAccountAddress,
+  getChain,
+  getRpcUrlForChain,
+} from "../../src/core/evm";
+
+const originalConfigDir = process.env.WOOO_CONFIG_DIR;
+
+afterEach(() => {
+  if (originalConfigDir === undefined) {
+    delete process.env.WOOO_CONFIG_DIR;
+  } else {
+    process.env.WOOO_CONFIG_DIR = originalConfigDir;
+  }
+});
 
 describe("EVM chain resolution", () => {
   test("resolves ethereum to mainnet chain", () => {
@@ -30,7 +48,7 @@ describe("EVM chain resolution", () => {
 
   test("all supported chains have unique IDs", () => {
     const ids = new Set<number>();
-    for (const [name, chain] of Object.entries(CHAIN_MAP)) {
+    for (const [_name, chain] of Object.entries(CHAIN_MAP)) {
       expect(ids.has(chain.id)).toBe(false);
       ids.add(chain.id);
     }
@@ -42,7 +60,7 @@ describe("EVM chain resolution", () => {
     process.exit = ((code?: number) => {
       exitCode = code;
       throw new Error("process.exit called");
-    }) as any;
+    }) as typeof process.exit;
 
     try {
       getChain("solana"); // Not an EVM chain
@@ -51,6 +69,26 @@ describe("EVM chain resolution", () => {
     }
     expect(exitCode).toBe(2);
     process.exit = originalExit;
+  });
+
+  test("uses configured RPC override when present", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "wooo-evm-config-"));
+    try {
+      writeFileSync(
+        join(tempDir, "wooo.config.json"),
+        JSON.stringify({
+          chains: {
+            arbitrum: { rpc: "https://example.invalid/arbitrum" },
+          },
+        }),
+      );
+      process.env.WOOO_CONFIG_DIR = tempDir;
+      expect(getRpcUrlForChain("arbitrum")).toBe(
+        "https://example.invalid/arbitrum",
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

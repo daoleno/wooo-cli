@@ -63,7 +63,7 @@ const long = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new GmxClient(privateKey);
     const result = await client.openPosition(
       args.symbol,
@@ -132,7 +132,7 @@ const short = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new GmxClient(privateKey);
     const result = await client.openPosition(
       args.symbol,
@@ -152,7 +152,7 @@ const positions = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new GmxClient(privateKey);
     const pos = await client.positions();
 

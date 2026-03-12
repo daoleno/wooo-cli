@@ -1,7 +1,11 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, writeFileSync } from "node:fs";
 import { defineCommand } from "citty";
-import { getConfigDir } from "../../core/config";
+import {
+  CONFIG_DEFAULTS,
+  ensureConfigDir,
+  getConfigDir,
+  getConfigPath,
+} from "../../core/config";
 
 export default defineCommand({
   meta: {
@@ -10,23 +14,13 @@ export default defineCommand({
   },
   run() {
     const configDir = getConfigDir();
-    if (!existsSync(configDir)) {
-      mkdirSync(configDir, { recursive: true });
-    }
-    const configPath = join(configDir, "wooo.config.json");
+    ensureConfigDir(configDir);
+    const configPath = getConfigPath(configDir);
     if (existsSync(configPath)) {
       console.log(`Config already exists at ${configPath}`);
       return;
     }
-    const defaultConfig = {
-      default: { chain: "ethereum", wallet: "main", format: "table" },
-      chains: {
-        ethereum: { rpc: "https://eth.llamarpc.com" },
-        arbitrum: { rpc: "https://arb1.arbitrum.io/rpc" },
-        base: { rpc: "https://mainnet.base.org" },
-      },
-    };
-    writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+    writeFileSync(configPath, JSON.stringify(CONFIG_DEFAULTS, null, 2));
     console.log(`Config created at ${configPath}`);
   },
 });

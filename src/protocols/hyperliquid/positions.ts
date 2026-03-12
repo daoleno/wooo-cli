@@ -10,7 +10,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const pk = await getActivePrivateKey();
+    const pk = await getActivePrivateKey("evm");
     const client = new HyperliquidClient(pk);
     const positions = await client.fetchPositions();
     const out = createOutput(resolveOutputOptions(args));

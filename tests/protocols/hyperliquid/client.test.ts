@@ -2,13 +2,54 @@ import { describe, expect, test } from "bun:test";
 import { HyperliquidClient } from "../../../src/protocols/hyperliquid/client";
 
 describe("HyperliquidClient", () => {
+  function createStubbedClient() {
+    const client = new HyperliquidClient() as HyperliquidClient & {
+      exchange: {
+        fetchMarkets: () => Promise<Array<{ symbol: string }>>;
+        fetchTicker: (symbol: string) => Promise<{
+          symbol: string;
+          last: number;
+          high: number;
+          low: number;
+          baseVolume: number;
+          percentage: number;
+        }>;
+        fetchFundingRate: (symbol: string) => Promise<{
+          symbol: string;
+          fundingRate: number;
+          fundingTimestamp: number;
+        }>;
+      };
+    };
+    client.exchange = {
+      fetchMarkets: async () => [
+        { symbol: "BTC/USDC:USDC" },
+        { symbol: "ETH/USDC:USDC" },
+      ],
+      fetchTicker: async (symbol: string) => ({
+        symbol,
+        last: 100000,
+        high: 101000,
+        low: 99000,
+        baseVolume: 1234,
+        percentage: 1.23,
+      }),
+      fetchFundingRate: async (symbol: string) => ({
+        symbol,
+        fundingRate: 0.0001,
+        fundingTimestamp: 1700000000000,
+      }),
+    };
+    return client;
+  }
+
   test("creates client without auth for public endpoints", () => {
     const client = new HyperliquidClient();
     expect(client).toBeDefined();
   });
 
   test("fetchMarkets returns market data", async () => {
-    const client = new HyperliquidClient();
+    const client = createStubbedClient();
     const markets = await client.fetchMarkets();
     expect(Array.isArray(markets)).toBe(true);
     expect(markets.length).toBeGreaterThan(0);
@@ -19,14 +60,14 @@ describe("HyperliquidClient", () => {
   });
 
   test("fetchTicker returns price data for BTC", async () => {
-    const client = new HyperliquidClient();
+    const client = createStubbedClient();
     const ticker = await client.fetchTicker("BTC/USDC:USDC");
     expect(ticker.symbol).toContain("BTC");
     expect(ticker.last).toBeGreaterThan(0);
   });
 
   test("fetchFundingRate returns funding data", async () => {
-    const client = new HyperliquidClient();
+    const client = createStubbedClient();
     const funding = await client.fetchFundingRate("BTC/USDC:USDC");
     expect(funding.symbol).toContain("BTC");
     expect(typeof funding.fundingRate).toBe("number");

@@ -86,7 +86,7 @@ const bridge = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const authClient = new StargateClient(privateKey);
     const result = await authClient.bridge(token, amount, fromChain, toChain);
     out.data(result);

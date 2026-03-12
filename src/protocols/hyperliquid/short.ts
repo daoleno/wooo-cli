@@ -67,7 +67,7 @@ export default defineCommand({
       return;
     }
 
-    const pk = await getActivePrivateKey();
+    const pk = await getActivePrivateKey("evm");
     const authClient = new HyperliquidClient(pk);
     await authClient.setLeverage(leverage, symbol);
     const result = await authClient.createMarketOrder(symbol, "sell", amount);

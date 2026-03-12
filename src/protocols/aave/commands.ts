@@ -65,7 +65,7 @@ const supply = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new AaveClient(chain, privateKey);
     const result = await client.supply(token, amount);
     out.data(result);
@@ -126,7 +126,7 @@ const borrow = defineCommand({
       return;
     }
 
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new AaveClient(chain, privateKey);
     const result = await client.borrow(token, amount);
     out.data(result);
@@ -143,7 +143,7 @@ const positions = defineCommand({
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
-    const privateKey = await getActivePrivateKey();
+    const privateKey = await getActivePrivateKey("evm");
     const client = new AaveClient(chain, privateKey);
     const result = await client.positions();
     out.data(result);

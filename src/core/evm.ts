@@ -9,6 +9,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
+import { loadWoooConfigSync } from "./config";
 
 export const CHAIN_MAP: Record<string, Chain> = {
   ethereum: mainnet,
@@ -28,9 +29,14 @@ export function getChain(name: string): Chain {
   return chain;
 }
 
+export function getRpcUrlForChain(chainName: string): string | undefined {
+  return loadWoooConfigSync().chains?.[chainName]?.rpc;
+}
+
 export function getPublicClient(chainName: string): PublicClient {
   const chain = getChain(chainName);
-  return createPublicClient({ chain, transport: http() });
+  const rpcUrl = getRpcUrlForChain(chainName);
+  return createPublicClient({ chain, transport: http(rpcUrl) });
 }
 
 export function getWalletClient(
@@ -39,7 +45,8 @@ export function getWalletClient(
 ): WalletClient {
   const chain = getChain(chainName);
   const account = privateKeyToAccount(privateKey as `0x${string}`);
-  return createWalletClient({ account, chain, transport: http() });
+  const rpcUrl = getRpcUrlForChain(chainName);
+  return createWalletClient({ account, chain, transport: http(rpcUrl) });
 }
 
 export function getAccountAddress(privateKey: string): Address {

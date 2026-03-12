@@ -1,10 +1,12 @@
 import {
+  type Cluster,
   Connection,
   clusterApiUrl,
   Keypair,
   type PublicKey,
 } from "@solana/web3.js";
 import bs58 from "bs58";
+import { loadWoooConfigSync } from "./config";
 
 const RPC_URLS: Record<string, string> = {
   "mainnet-beta": "https://api.mainnet-beta.solana.com",
@@ -12,7 +14,12 @@ const RPC_URLS: Record<string, string> = {
 };
 
 export function getSolanaConnection(network = "mainnet-beta"): Connection {
-  const url = RPC_URLS[network] || clusterApiUrl(network as any);
+  const config = loadWoooConfigSync();
+  const url =
+    config.chains?.[network]?.rpc ||
+    config.chains?.solana?.rpc ||
+    RPC_URLS[network] ||
+    clusterApiUrl(network as Cluster);
   return new Connection(url, "confirmed");
 }
 

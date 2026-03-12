@@ -2,6 +2,7 @@ import ansis from "ansis";
 import { defineCommand } from "citty";
 import { getWalletStore } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { resolveWalletType } from "../../core/wallet-store";
 
 export default defineCommand({
   meta: { name: "import", description: "Import a wallet from private key" },
@@ -44,9 +45,17 @@ export default defineCommand({
       }
       privateKey = Buffer.concat(chunks).toString("utf-8").trim();
     }
+
+    const walletType = resolveWalletType(args.chain);
+    if (!walletType) {
+      console.error(
+        `Unsupported wallet type: ${args.chain}. Available: evm, solana`,
+      );
+      process.exit(1);
+    }
     const name = args.name || `imported-${Date.now()}`;
     const store = getWalletStore();
-    const wallet = await store.importKey(name, privateKey, args.chain);
+    const wallet = await store.importKey(name, privateKey, walletType);
     const out = createOutput(resolveOutputOptions(args));
     out.data({
       name: wallet.name,

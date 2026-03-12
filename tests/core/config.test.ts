@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getConfigDir, loadWoooConfig } from "../../src/core/config";
+import {
+  ensureConfigDir,
+  getConfigDir,
+  getConfigPath,
+  loadWoooConfig,
+  loadWoooConfigSync,
+} from "../../src/core/config";
 
 describe("getConfigDir", () => {
   const originalEnv = process.env.WOOO_CONFIG_DIR;
@@ -52,5 +58,30 @@ describe("loadWoooConfig", () => {
     const config = await loadWoooConfig(tempDir);
     expect(config.default).toBeDefined();
     expect(config.default?.chain).toBe("ethereum");
+  });
+
+  test("sync loader returns defaults plus overrides", () => {
+    writeFileSync(
+      join(tempDir, "wooo.config.json"),
+      JSON.stringify({
+        default: { chain: "arbitrum" },
+        chains: { arbitrum: { rpc: "https://example.invalid/arb" } },
+      }),
+    );
+    const config = loadWoooConfigSync(tempDir);
+    expect(config.default?.chain).toBe("arbitrum");
+    expect(config.default?.wallet).toBe("main");
+    expect(config.chains?.arbitrum?.rpc).toBe("https://example.invalid/arb");
+    expect(config.chains?.ethereum?.rpc).toBe("https://eth.llamarpc.com");
+  });
+
+  test("ensureConfigDir creates the target directory", () => {
+    const missingDir = join(tempDir, "nested", "config");
+    expect(existsSync(missingDir)).toBe(false);
+    ensureConfigDir(missingDir);
+    expect(existsSync(missingDir)).toBe(true);
+    expect(getConfigPath(missingDir)).toBe(
+      join(missingDir, "wooo.config.json"),
+    );
   });
 });

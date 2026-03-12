@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { defineCommand } from "citty";
-import { getConfigDir } from "../../core/config";
+import { ensureConfigDir, getConfigPath } from "../../core/config";
 
 export default defineCommand({
   meta: {
@@ -17,7 +16,8 @@ export default defineCommand({
     value: { type: "positional", description: "Config value", required: true },
   },
   run({ args }) {
-    const configPath = join(getConfigDir(), "wooo.config.json");
+    ensureConfigDir();
+    const configPath = getConfigPath();
     let config: Record<string, unknown> = {};
     if (existsSync(configPath)) {
       config = JSON.parse(readFileSync(configPath, "utf-8"));

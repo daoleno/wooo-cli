@@ -20,6 +20,9 @@ import type { UniswapQuote, UniswapSwapResult } from "./types";
 const FEE_TIERS = [3000, 500, 10000, 100] as const;
 const SLIPPAGE_BPS = 50; // 0.5% default slippage
 
+type EvmPublicClient = ReturnType<typeof getPublicClient>;
+type EvmWalletClient = ReturnType<typeof getWalletClient>;
+
 export class UniswapClient {
   constructor(
     private chain: string,
@@ -118,7 +121,8 @@ export class UniswapClient {
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
-    const isNativeETH = this.isNativeToken(tokenInSymbol);
+    const isNativeIn = this.isNativeToken(tokenInSymbol);
+    const isNativeOut = this.isNativeToken(tokenOutSymbol);
 
     // Get quote for min output (try all fee tiers)
     const quoteResult = await this.quote(
@@ -135,7 +139,7 @@ export class UniswapClient {
     const feeMatch = quoteResult.route.match(/\((\d+\.?\d*)%\)/);
     const fee = feeMatch ? Math.round(Number(feeMatch[1]) * 10000) : 3000;
 
-    if (isNativeETH) {
+    if (isNativeIn) {
       // Native ETH: wrap to WETH first, then swap
       const wethAddress = tokenIn.address; // resolveToken maps ETH → WETH
       await this.wrapETH(
@@ -156,6 +160,15 @@ export class UniswapClient {
       walletClient,
     );
 
+    const wrappedBalanceBefore = isNativeOut
+      ? ((await publicClient.readContract({
+          address: tokenOut.address,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [account],
+        })) as bigint)
+      : 0n;
+
     // Execute swap
     const { request } = await publicClient.simulateContract({
       address: getSwapRouterAddress(this.chain),
@@ -175,17 +188,33 @@ export class UniswapClient {
       account,
     });
 
-    const txHash = await walletClient.writeContract(request as any);
+    const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
+
+    let amountOut = quoteResult.amountOut;
+    if (isNativeOut) {
+      const unwrappedAmount = await this.unwrapNativeOutput(
+        tokenOut.address,
+        account,
+        wrappedBalanceBefore,
+        publicClient,
+        walletClient,
+      );
+      if (unwrappedAmount > 0n) {
+        amountOut = Number(
+          formatUnits(unwrappedAmount, tokenOut.decimals),
+        ).toFixed(tokenOut.decimals > 8 ? 8 : tokenOut.decimals);
+      }
+    }
 
     return {
       txHash,
       tokenIn: tokenInSymbol.toUpperCase(),
       tokenOut: tokenOutSymbol.toUpperCase(),
       amountIn: amountInHuman.toString(),
-      amountOut: quoteResult.amountOut,
+      amountOut,
       status: receipt.status === "success" ? "confirmed" : "failed",
     };
   }
@@ -198,8 +227,8 @@ export class UniswapClient {
     wethAddress: Address,
     amount: bigint,
     account: Address,
-    publicClient: any,
-    walletClient: any,
+    publicClient: EvmPublicClient,
+    walletClient: EvmWalletClient,
   ): Promise<void> {
     const { request } = await publicClient.simulateContract({
       address: wethAddress,
@@ -209,16 +238,48 @@ export class UniswapClient {
       value: amount,
       account,
     });
-    const hash = await walletClient.writeContract(request as any);
+    const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
+  }
+
+  private async unwrapNativeOutput(
+    wrappedToken: Address,
+    account: Address,
+    balanceBefore: bigint,
+    publicClient: EvmPublicClient,
+    walletClient: EvmWalletClient,
+  ): Promise<bigint> {
+    const balanceAfter = (await publicClient.readContract({
+      address: wrappedToken,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [account],
+    })) as bigint;
+    const received =
+      balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0n;
+
+    if (received === 0n) {
+      return 0n;
+    }
+
+    const { request } = await publicClient.simulateContract({
+      address: wrappedToken,
+      abi: WETH9_ABI,
+      functionName: "withdraw",
+      args: [received],
+      account,
+    });
+    const hash = await walletClient.writeContract(request);
+    await publicClient.waitForTransactionReceipt({ hash });
+    return received;
   }
 
   private async ensureAllowance(
     token: Address,
     amount: bigint,
     owner: Address,
-    publicClient: any,
-    walletClient: any,
+    publicClient: EvmPublicClient,
+    walletClient: EvmWalletClient,
   ): Promise<void> {
     const allowance = await publicClient.readContract({
       address: token,
@@ -235,7 +296,7 @@ export class UniswapClient {
         args: [getSwapRouterAddress(this.chain), amount],
         account: owner,
       });
-      const hash = await walletClient.writeContract(request as any);
+      const hash = await walletClient.writeContract(request);
       await publicClient.waitForTransactionReceipt({ hash });
     }
   }

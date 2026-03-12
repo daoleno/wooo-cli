@@ -46,8 +46,11 @@ const main = defineCommand({
     swap: () => import("./commands/swap/index").then((m) => m.default),
     ...groupCommands,
   },
-  run() {
-    console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
+  run({ rawArgs }) {
+    const hasSubcommand = rawArgs.some((arg) => !arg.startsWith("-"));
+    if (!hasSubcommand) {
+      console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
+    }
   },
 });
 
