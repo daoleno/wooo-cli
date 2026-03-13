@@ -1,13 +1,13 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   AmountSchema,
-  LeverageSchema,
-  PairSchema,
-  TokenSymbolSchema,
   chainSchema,
   formatCrypto,
   formatUSD,
+  LeverageSchema,
+  PairSchema,
   safeJsonStringify,
+  TokenSymbolSchema,
 } from "../../src/core/validation";
 
 describe("AmountSchema", () => {
@@ -48,12 +48,18 @@ describe("LeverageSchema", () => {
   });
 
   test("rejects leverage below 1", () => {
-    expect(() => LeverageSchema.parse("0")).toThrow("must be between 1 and 200");
+    expect(() => LeverageSchema.parse("0")).toThrow(
+      "must be between 1 and 200",
+    );
   });
 
   test("rejects leverage above 200", () => {
-    expect(() => LeverageSchema.parse("201")).toThrow("must be between 1 and 200");
-    expect(() => LeverageSchema.parse("1000")).toThrow("must be between 1 and 200");
+    expect(() => LeverageSchema.parse("201")).toThrow(
+      "must be between 1 and 200",
+    );
+    expect(() => LeverageSchema.parse("1000")).toThrow(
+      "must be between 1 and 200",
+    );
   });
 
   test("rejects non-numeric strings", () => {
@@ -165,5 +171,10 @@ describe("safeJsonStringify", () => {
     const parsed = JSON.parse(result);
     expect(parsed.outer.inner).toBeNull();
     expect(parsed.outer.valid).toBe(42);
+  });
+
+  test("serializes bigint values as strings", () => {
+    const result = safeJsonStringify({ value: 42n });
+    expect(JSON.parse(result)).toEqual({ value: "42" });
   });
 });

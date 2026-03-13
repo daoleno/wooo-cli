@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { resolveTokenMint } from "../../src/protocols/jupiter/constants";
 import { resolveToken } from "../../src/protocols/uniswap/constants";
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 describe("error paths: token resolution failures", () => {
   test("Uniswap: unknown token returns undefined, not throws", () => {
     expect(resolveToken("FAKE", "ethereum")).toBeUndefined();
@@ -32,8 +36,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.swap("ETH", "USDC", 1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 
@@ -43,8 +47,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.stake(1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 
@@ -54,8 +58,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.supply("USDC", 100);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 
@@ -65,8 +69,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.openPosition("BTC/USD", "long", 1000, 1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 
@@ -76,8 +80,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.bridge("USDC", 100, "ethereum", "arbitrum");
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 
@@ -87,8 +91,8 @@ describe("error paths: client construction without auth", () => {
     try {
       await client.swap("SOL", "USDC", 1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Private key required");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Private key required");
     }
   });
 });
@@ -100,38 +104,27 @@ describe("error paths: invalid inputs to clients", () => {
     try {
       await client.quote("FAKECOIN", "USDC", 1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Unknown token");
-      expect(e.message).toContain("FAKECOIN");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Unknown token");
+      expect(getErrorMessage(error)).toContain("FAKECOIN");
     }
   });
 
-  test("AaveClient rejects unsupported chain", () => {
+  test("AaveClient rejects unsupported chain", async () => {
     const { AaveClient } = require("../../src/protocols/aave/client");
     const client = new AaveClient("fantom", "0xdeadbeef");
-    // The error happens when trying to get pool address
-    try {
-      // Access private method indirectly via supply
-      client.supply("USDC", 100).catch((e: any) => {
-        expect(
-          e.message.includes("not supported") ||
-            e.message.includes("Unknown token"),
-        ).toBe(true);
-      });
-    } catch (e: any) {
-      expect(e.message).toContain("not supported");
-    }
+    await expect(client.supply("USDC", 100)).rejects.toThrow("not supported");
   });
 
   test("GmxClient rejects unknown market", async () => {
     const { GmxClient } = require("../../src/protocols/gmx/client");
-    const client = new GmxClient("0x" + "ab".repeat(32));
+    const client = new GmxClient(`0x${"ab".repeat(32)}`);
     try {
       await client.openPosition("DOGE/USD", "long", 100, 1);
       expect(true).toBe(false);
-    } catch (e: any) {
-      expect(e.message).toContain("Unknown GMX market");
-      expect(e.message).toContain("DOGE/USD");
+    } catch (error) {
+      expect(getErrorMessage(error)).toContain("Unknown GMX market");
+      expect(getErrorMessage(error)).toContain("DOGE/USD");
     }
   });
 
@@ -141,9 +134,7 @@ describe("error paths: invalid inputs to clients", () => {
       const { CurveClient } = require("../../src/protocols/curve/client");
       const client = new CurveClient("ethereum");
       // @curvefi/api throws its own error for unknown tokens
-      await expect(
-        client.quote("USDC", "FAKECOIN123", 100),
-      ).rejects.toThrow();
+      await expect(client.quote("USDC", "FAKECOIN123", 100)).rejects.toThrow();
     },
     { timeout: 30000 },
   );

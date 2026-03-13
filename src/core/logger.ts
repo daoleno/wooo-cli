@@ -19,7 +19,7 @@ export interface Logger {
 
 export function createLogger(level: LogLevelValue = LogLevel.INFO): Logger {
   const write = (msg: string) => {
-    process.stderr.write(msg + "\n");
+    process.stderr.write(`${msg}\n`);
   };
 
   return {

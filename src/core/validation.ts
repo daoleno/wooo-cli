@@ -138,6 +138,7 @@ export function safeJsonStringify(obj: unknown, indent = 2): string {
   return JSON.stringify(
     obj,
     (_key, value) => {
+      if (typeof value === "bigint") return value.toString();
       if (typeof value === "number" && !Number.isFinite(value)) return null;
       return value;
     },

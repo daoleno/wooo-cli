@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { calculateFuturesOrderAmount } from "../../src/protocols/cex-base/client";
 
 /**
  * Tests CEX command parameter parsing and validation logic.
@@ -9,30 +10,67 @@ import { describe, expect, test } from "bun:test";
 describe("CEX futures position sizing", () => {
   test("USD size converts to token amount correctly", () => {
     // $1000 at BTC price $100,000 = 0.01 BTC
-    const sizeUsd = 1000;
-    const price = 100000;
-    const amount = sizeUsd / price;
+    const amount = calculateFuturesOrderAmount(1000, 100000, {
+      contract: false,
+      contractSize: 1,
+      inverse: false,
+    });
     expect(amount).toBe(0.01);
   });
 
   test("small USD size at high price", () => {
     // $100 at BTC $100,000 = 0.001 BTC
-    const amount = 100 / 100000;
+    const amount = calculateFuturesOrderAmount(100, 100000, {
+      contract: false,
+      contractSize: 1,
+      inverse: false,
+    });
     expect(amount).toBe(0.001);
   });
 
   test("large USD size at low price", () => {
     // $10000 at DOGE $0.10 = 100,000 DOGE
-    const amount = 10000 / 0.1;
+    const amount = calculateFuturesOrderAmount(10000, 0.1, {
+      contract: false,
+      contractSize: 1,
+      inverse: false,
+    });
     expect(amount).toBe(100000);
   });
 
   test("amount.toFixed(6) precision for display", () => {
-    const amount = 1000 / 100000; // 0.01
+    const amount = calculateFuturesOrderAmount(1000, 100000, {
+      contract: false,
+      contractSize: 1,
+      inverse: false,
+    });
     expect(amount.toFixed(6)).toBe("0.010000");
 
-    const small = 100 / 67890.12; // ~0.001473
+    const small = calculateFuturesOrderAmount(100, 67890.12, {
+      contract: false,
+      contractSize: 1,
+      inverse: false,
+    });
     expect(Number.parseFloat(small.toFixed(6))).toBeCloseTo(small, 6);
+  });
+
+  test("contract markets use contractSize when deriving order amount", () => {
+    const amount = calculateFuturesOrderAmount(1000, 100000, {
+      contract: true,
+      contractSize: 0.001,
+      inverse: false,
+    });
+    expect(amount).toBe(10);
+  });
+
+  test("inverse markets are rejected", () => {
+    expect(() =>
+      calculateFuturesOrderAmount(1000, 100000, {
+        contract: true,
+        contractSize: 100,
+        inverse: true,
+      }),
+    ).toThrow("Inverse futures markets are not supported");
   });
 });
 

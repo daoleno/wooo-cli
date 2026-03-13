@@ -13,6 +13,13 @@ import {
 import type { StargateBridgeResult } from "./types";
 
 const SLIPPAGE_BPS = 50; // 0.5%
+type EvmPublicClient = ReturnType<typeof getPublicClient>;
+type EvmWalletClient = ReturnType<typeof getWalletClient>;
+
+interface StargateFeeQuote {
+  lzTokenFee: bigint;
+  nativeFee: bigint;
+}
 
 export class StargateClient {
   constructor(private privateKey?: string) {}
@@ -59,7 +66,7 @@ export class StargateClient {
       ],
     });
 
-    const feeData = fee as unknown as { nativeFee: bigint; lzTokenFee: bigint };
+    const feeData = fee as StargateFeeQuote;
 
     return {
       nativeFee: formatEther(feeData.nativeFee),
@@ -107,10 +114,7 @@ export class StargateClient {
       ],
     });
 
-    const fee = feeResult as unknown as {
-      nativeFee: bigint;
-      lzTokenFee: bigint;
-    };
+    const fee = feeResult as StargateFeeQuote;
 
     // Approve underlying token spend (pool is the spender, tokenAddress is what gets approved)
     if (token.toUpperCase() !== "ETH") {
@@ -149,7 +153,7 @@ export class StargateClient {
       account,
     });
 
-    const txHash = await walletClient.writeContract(request as any);
+    const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
@@ -205,8 +209,8 @@ export class StargateClient {
     amount: bigint,
     owner: Address,
     spender: Address,
-    publicClient: any,
-    walletClient: any,
+    publicClient: EvmPublicClient,
+    walletClient: EvmWalletClient,
   ): Promise<void> {
     const allowance = (await publicClient.readContract({
       address: token,
@@ -223,7 +227,7 @@ export class StargateClient {
         args: [spender, amount],
         account: owner,
       });
-      const hash = await walletClient.writeContract(request as any);
+      const hash = await walletClient.writeContract(request);
       await publicClient.waitForTransactionReceipt({ hash });
     }
   }

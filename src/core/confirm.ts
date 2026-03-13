@@ -20,7 +20,7 @@ export async function confirmTransaction(
   const lines = [
     ansis.bold(`${preview.action}`),
     ...Object.entries(preview.details).map(
-      ([key, val]) => `  ${ansis.dim(key + ":")} ${val}`,
+      ([key, val]) => `  ${ansis.dim(`${key}:`)} ${val}`,
     ),
   ];
   console.error(lines.join("\n"));

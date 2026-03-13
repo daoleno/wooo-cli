@@ -20,7 +20,7 @@ export interface Output {
 }
 
 function write(str: string) {
-  process.stdout.write(str + "\n");
+  process.stdout.write(`${str}\n`);
 }
 
 export function createOutput(opts: OutputOptions): Output {
@@ -37,7 +37,7 @@ export function createOutput(opts: OutputOptions): Output {
 
     table(rows: Record<string, unknown>[], tableOpts: TableOptions) {
       if (isJson) {
-        write(JSON.stringify(rows, null, 2));
+        write(safeJsonStringify(rows));
         return;
       }
       if (opts.format === "csv") {

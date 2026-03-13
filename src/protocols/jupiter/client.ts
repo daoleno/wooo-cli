@@ -3,6 +3,22 @@ import { getSolanaConnection, getSolanaKeypair } from "../../core/solana";
 import { JUPITER_API, resolveTokenMint } from "./constants";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
 
+interface JupiterRoutePlanStep {
+  swapInfo?: {
+    label?: string;
+  };
+}
+
+interface JupiterQuoteResponse {
+  outAmount: string;
+  priceImpactPct?: string;
+  routePlan?: JupiterRoutePlanStep[];
+}
+
+interface JupiterSwapResponse {
+  swapTransaction: string;
+}
+
 export class JupiterClient {
   private connection: Connection;
 
@@ -34,7 +50,7 @@ export class JupiterClient {
       throw new Error(`Jupiter quote failed: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as any;
+    const data = (await response.json()) as JupiterQuoteResponse;
     const outAmount = Number(data.outAmount) / 10 ** tokenOut.decimals;
 
     return {
@@ -47,7 +63,7 @@ export class JupiterClient {
       priceImpact: `${(Number(data.priceImpactPct) * 100).toFixed(4)}%`,
       routePlan:
         data.routePlan
-          ?.map((r: any) => r.swapInfo?.label || "unknown")
+          ?.map((route) => route.swapInfo?.label || "unknown")
           .join(" → ") || "direct",
     };
   }
@@ -78,7 +94,7 @@ export class JupiterClient {
     const quoteResponse = await fetch(`${JUPITER_API}/quote?${quoteParams}`);
     if (!quoteResponse.ok)
       throw new Error(`Quote failed: ${quoteResponse.statusText}`);
-    const quoteData = await quoteResponse.json();
+    const quoteData = (await quoteResponse.json()) as JupiterQuoteResponse;
 
     // 2. Get swap transaction
     const swapResponse = await fetch(`${JUPITER_API}/swap`, {
@@ -93,7 +109,7 @@ export class JupiterClient {
 
     if (!swapResponse.ok)
       throw new Error(`Swap failed: ${swapResponse.statusText}`);
-    const swapData = (await swapResponse.json()) as any;
+    const swapData = (await swapResponse.json()) as JupiterSwapResponse;
 
     // 3. Deserialize, sign, and send
     const txBuf = Buffer.from(swapData.swapTransaction, "base64");
@@ -113,8 +129,7 @@ export class JupiterClient {
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     });
 
-    const outAmount =
-      Number((quoteData as any).outAmount) / 10 ** tokenOut.decimals;
+    const outAmount = Number(quoteData.outAmount) / 10 ** tokenOut.decimals;
 
     return {
       txHash,

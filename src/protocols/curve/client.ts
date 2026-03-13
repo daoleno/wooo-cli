@@ -2,6 +2,18 @@ import curve from "@curvefi/api";
 import { CHAIN_MAP } from "../../core/evm";
 import type { CurvePool, CurveSwapResult } from "./types";
 
+interface CurveRouteStep {
+  poolAddress?: string;
+  poolId?: string;
+}
+
+interface CurvePoolEntry {
+  address: string;
+  coins?: string[];
+  id?: string;
+  name?: string;
+}
+
 const CHAIN_ID_MAP: Record<string, number> = {
   ethereum: 1,
   arbitrum: 42161,
@@ -55,16 +67,17 @@ export class CurveClient {
   ): Promise<{ amountOut: string; pool: string; price: number }> {
     await this.init();
 
-    const { route, output } = await curve.router.getBestRouteAndOutput(
+    const { route, output } = (await curve.router.getBestRouteAndOutput(
       tokenIn.toUpperCase(),
       tokenOut.toUpperCase(),
       String(amountIn),
-    );
+    )) as { output: string; route: CurveRouteStep[] };
 
     const amountOut = Number(output);
     const routeName =
-      route.map((step: any) => step.poolId || step.poolAddress).join(" → ") ||
-      "direct";
+      route
+        .map((step) => step.poolId || step.poolAddress || "unknown")
+        .join(" → ") || "direct";
 
     return {
       amountOut: amountOut.toFixed(amountOut > 1 ? 6 : 8),
@@ -114,11 +127,11 @@ export class CurveClient {
   async pools(): Promise<CurvePool[]> {
     await this.init();
 
-    const poolList = (await curve.factory.fetchPools()) as any;
+    const poolList = (await curve.factory.fetchPools()) as unknown;
 
-    const pools = Array.isArray(poolList) ? poolList : [];
-    return pools.slice(0, 50).map((pool: any) => ({
-      name: pool.name || pool.id,
+    const pools = Array.isArray(poolList) ? (poolList as CurvePoolEntry[]) : [];
+    return pools.slice(0, 50).map((pool) => ({
+      name: pool.name || pool.id || pool.address,
       address: pool.address,
       tokens: pool.coins || [],
     }));

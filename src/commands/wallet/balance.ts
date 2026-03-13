@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { formatEther, isAddress } from "viem";
 import { loadWoooConfig } from "../../core/config";
 import { getActiveWallet } from "../../core/context";
-import { getPublicClient } from "../../core/evm";
+import { getChain, getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { getSolanaConnection } from "../../core/solana";
 import { resolveWalletType } from "../../core/wallet-store";
@@ -74,9 +74,15 @@ export default defineCommand({
         ? configuredDefaultChain
         : "ethereum");
     const client = getPublicClient(chain);
+    const nativeSymbol = getChain(chain).nativeCurrency.symbol;
     const balance = await client.getBalance({
       address: address as `0x${string}`,
     });
-    out.data({ address, balance: formatEther(balance), unit: "ETH", chain });
+    out.data({
+      address,
+      balance: formatEther(balance),
+      unit: nativeSymbol,
+      chain,
+    });
   },
 });

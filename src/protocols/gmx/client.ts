@@ -2,7 +2,9 @@ import {
   type Address,
   encodeFunctionData,
   formatUnits,
+  type PublicClient,
   parseUnits,
+  type WalletClient,
   zeroAddress,
   zeroHash,
 } from "viem";
@@ -22,6 +24,19 @@ import {
   READER_ABI,
 } from "./constants";
 import type { GmxOrderResult, GmxPosition } from "./types";
+
+interface GmxRawPosition {
+  addresses: {
+    market: Address;
+  };
+  flags: {
+    isLong: boolean;
+  };
+  numbers: {
+    collateralAmount: bigint;
+    sizeInUsd: bigint;
+  };
+}
 
 export class GmxClient {
   private chain = "arbitrum"; // GMX V2 is on Arbitrum
@@ -115,7 +130,7 @@ export class GmxClient {
       account,
     });
 
-    const txHash = await walletClient.writeContract(request as any);
+    const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
@@ -149,9 +164,9 @@ export class GmxClient {
       marketToSymbol[info.marketToken.toLowerCase()] = symbol;
     }
 
-    return (rawPositions as any[])
-      .filter((p: any) => p.numbers.sizeInUsd > 0n)
-      .map((p: any) => {
+    return (rawPositions as unknown as readonly GmxRawPosition[])
+      .filter((p) => p.numbers.sizeInUsd > 0n)
+      .map((p) => {
         const sizeUsd = formatUnits(p.numbers.sizeInUsd, 30);
         const collateral = formatUnits(p.numbers.collateralAmount, 6);
         const leverageNum = Number(sizeUsd) / (Number(collateral) || 1);
@@ -180,8 +195,8 @@ export class GmxClient {
     amount: bigint,
     owner: Address,
     spender: Address,
-    publicClient: any,
-    walletClient: any,
+    publicClient: PublicClient,
+    walletClient: WalletClient,
   ): Promise<void> {
     const allowance = (await publicClient.readContract({
       address: token,
@@ -198,7 +213,7 @@ export class GmxClient {
         args: [spender, amount],
         account: owner,
       });
-      const hash = await walletClient.writeContract(request as any);
+      const hash = await walletClient.writeContract(request);
       await publicClient.waitForTransactionReceipt({ hash });
     }
   }

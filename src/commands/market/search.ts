@@ -1,3 +1,4 @@
+import type { MarketInterface } from "ccxt";
 import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { CexClient } from "../../protocols/cex-base/client";
@@ -27,8 +28,11 @@ export default defineCommand({
     const matched = markets
       .filter((m) => m?.symbol?.toUpperCase().includes(keyword))
       .slice(0, 20);
+    const definedMarkets = matched.filter((market): market is MarketInterface =>
+      Boolean(market),
+    );
 
-    if (matched.length === 0) {
+    if (definedMarkets.length === 0) {
       out.warn(
         `No markets found matching "${args.keyword}" on ${args.exchange}`,
       );
@@ -36,12 +40,12 @@ export default defineCommand({
     }
 
     out.table(
-      matched.filter(Boolean).map((m) => ({
-        symbol: m!.symbol,
-        type: m!.type ?? "spot",
-        base: m!.base ?? "",
-        quote: m!.quote ?? "",
-        active: m!.active ? "✓" : "✗",
+      definedMarkets.map((market) => ({
+        symbol: market.symbol,
+        type: market.type ?? "spot",
+        base: market.base ?? "",
+        quote: market.quote ?? "",
+        active: market.active ? "✓" : "✗",
       })),
       {
         columns: ["symbol", "type", "base", "quote", "active"],

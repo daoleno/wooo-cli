@@ -25,7 +25,7 @@ function deriveKey(password: string, salt: Buffer): Buffer {
 }
 
 function safeFilename(key: string): string {
-  return key.replace(/[^a-zA-Z0-9_-]/g, "_") + ".enc";
+  return `${key.replace(/[^a-zA-Z0-9_-]/g, "_")}.enc`;
 }
 
 export class Keystore {

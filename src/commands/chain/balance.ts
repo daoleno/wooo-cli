@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { type Address, formatEther, formatUnits, isAddress } from "viem";
-import { getPublicClient } from "../../core/evm";
+import { getChain, getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
 const ERC20_BALANCE_ABI = [
@@ -90,10 +90,11 @@ export default defineCommand({
       const balance = await publicClient.getBalance({
         address: args.address as Address,
       });
+      const nativeSymbol = getChain(args.chain).nativeCurrency.symbol;
 
       out.data({
         address: args.address,
-        token: "ETH",
+        token: nativeSymbol,
         balance: formatEther(balance),
         chain: args.chain,
       });

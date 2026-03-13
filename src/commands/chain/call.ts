@@ -7,6 +7,7 @@ import {
   isAddress,
   parseAbi,
 } from "viem";
+import { parseAbiArguments } from "../../core/abi";
 import { getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
@@ -62,10 +63,14 @@ export default defineCommand({
     const abiStr = `function ${funcName}(${inputTypes}) view returns (${returnTypes})`;
     const abi = parseAbi([abiStr]) as unknown as Abi;
 
-    // Parse call arguments
-    const callArgs = args.callArgs
-      ? args.callArgs.split(",").map((a: string) => a.trim())
-      : [];
+    let callArgs: unknown[];
+    try {
+      callArgs = parseAbiArguments(inputTypes, args.callArgs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Invalid call arguments: ${message}`);
+      process.exit(2);
+    }
 
     const data = encodeFunctionData({
       abi,
@@ -92,7 +97,7 @@ export default defineCommand({
     out.data({
       contract: args.contract,
       function: funcName,
-      result: String(decoded),
+      result: decoded,
       chain: args.chain,
     });
   },

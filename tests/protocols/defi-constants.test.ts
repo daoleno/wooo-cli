@@ -74,7 +74,7 @@ describe("GMX V2 markets", () => {
 
   test("all markets use USDC as short token", () => {
     const usdcArbitrum = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
-    for (const [name, market] of Object.entries(GMX_MARKETS)) {
+    for (const [_name, market] of Object.entries(GMX_MARKETS)) {
       expect(market.shortToken.toLowerCase()).toBe(usdcArbitrum.toLowerCase());
     }
   });
@@ -100,7 +100,7 @@ describe("GMX V2 markets", () => {
 describe("Stargate bridge routes", () => {
   test("LayerZero endpoint IDs are unique per chain", () => {
     const ids = new Set<number>();
-    for (const [chain, eid] of Object.entries(LZ_ENDPOINT_IDS)) {
+    for (const [_chain, eid] of Object.entries(LZ_ENDPOINT_IDS)) {
       expect(ids.has(eid)).toBe(false);
       ids.add(eid);
     }
@@ -108,7 +108,7 @@ describe("Stargate bridge routes", () => {
 
   test("USDC supported on multiple chains", () => {
     let chainsWithUSDC = 0;
-    for (const [chain, pools] of Object.entries(STARGATE_POOLS)) {
+    for (const [_chain, pools] of Object.entries(STARGATE_POOLS)) {
       if (pools.USDC) chainsWithUSDC++;
     }
     expect(chainsWithUSDC).toBeGreaterThanOrEqual(3);
@@ -116,15 +116,15 @@ describe("Stargate bridge routes", () => {
 
   test("ETH supported on multiple chains", () => {
     let chainsWithETH = 0;
-    for (const [chain, pools] of Object.entries(STARGATE_POOLS)) {
+    for (const [_chain, pools] of Object.entries(STARGATE_POOLS)) {
       if (pools.ETH) chainsWithETH++;
     }
     expect(chainsWithETH).toBeGreaterThanOrEqual(3);
   });
 
   test("all pool addresses are valid hex", () => {
-    for (const [chain, pools] of Object.entries(STARGATE_POOLS)) {
-      for (const [token, info] of Object.entries(pools)) {
+    for (const [_chain, pools] of Object.entries(STARGATE_POOLS)) {
+      for (const [_token, info] of Object.entries(pools)) {
         expect(info.poolAddress.toLowerCase()).toMatch(/^0x[0-9a-f]{40}$/);
         expect(info.decimals).toBeGreaterThanOrEqual(0);
       }

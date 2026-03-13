@@ -1,3 +1,4 @@
+import type { LidoSDKCoreProps } from "@lidofinance/lido-ethereum-sdk";
 import { formatEther } from "viem";
 import { mainnet } from "viem/chains";
 import {
@@ -17,16 +18,17 @@ export class LidoClient {
 
     const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
 
-    const rpcProvider = getPublicClient(this.chain) as any;
-    const web3Provider = getWalletClient(this.privateKey, this.chain) as any;
+    const rpcProvider = getPublicClient(this.chain);
+    const web3Provider = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
 
-    const sdk = new LidoSDK({
+    const sdkConfig: LidoSDKCoreProps = {
       chainId: mainnet.id,
       rpcProvider,
       web3Provider,
       logMode: "none",
-    });
+    };
+    const sdk = new LidoSDK(sdkConfig);
 
     const value = String(amountETH);
 
@@ -48,14 +50,15 @@ export class LidoClient {
 
     const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
 
-    const rpcProvider = getPublicClient(this.chain) as any;
+    const rpcProvider = getPublicClient(this.chain);
     const account = getAccountAddress(this.privateKey);
 
-    const sdk = new LidoSDK({
+    const sdkConfig: LidoSDKCoreProps = {
       chainId: mainnet.id,
       rpcProvider,
       logMode: "none",
-    });
+    };
+    const sdk = new LidoSDK(sdkConfig);
 
     // Get stETH balance via SDK
     const stethBalance = await sdk.steth.balance(account);
@@ -94,14 +97,15 @@ export class LidoClient {
 
     const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
 
-    const rpcProvider = getPublicClient(this.chain) as any;
+    const rpcProvider = getPublicClient(this.chain);
     const account = getAccountAddress(this.privateKey);
 
-    const sdk = new LidoSDK({
+    const sdkConfig: LidoSDKCoreProps = {
       chainId: mainnet.id,
       rpcProvider,
       logMode: "none",
-    });
+    };
+    const sdk = new LidoSDK(sdkConfig);
 
     const stethBalance = await sdk.steth.balance(account);
     return formatEther(stethBalance);

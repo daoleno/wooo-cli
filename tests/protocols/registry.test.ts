@@ -25,25 +25,25 @@ describe("protocol registry", () => {
   test("getProtocol returns protocol by name", () => {
     const protocol = getProtocol("hyperliquid");
     expect(protocol).toBeDefined();
-    expect(protocol!.name).toBe("hyperliquid");
-    expect(protocol!.type).toBe("perps");
+    expect(protocol?.name).toBe("hyperliquid");
+    expect(protocol?.type).toBe("perps");
   });
 
   test("CEX protocols have correct type", () => {
     for (const name of ["okx", "binance", "bybit"]) {
       const protocol = getProtocol(name);
       expect(protocol).toBeDefined();
-      expect(protocol!.type).toBe("cex");
-      expect(protocol!.requiresAuth).toBe(true);
+      expect(protocol?.type).toBe("cex");
+      expect(protocol?.requiresAuth).toBe(true);
     }
   });
 
   test("DeFi protocols have correct types", () => {
-    expect(getProtocol("uniswap")!.type).toBe("dex");
-    expect(getProtocol("aave")!.type).toBe("lending");
-    expect(getProtocol("lido")!.type).toBe("staking");
-    expect(getProtocol("gmx")!.type).toBe("perps");
-    expect(getProtocol("stargate")!.type).toBe("bridge");
+    expect(getProtocol("uniswap")?.type).toBe("dex");
+    expect(getProtocol("aave")?.type).toBe("lending");
+    expect(getProtocol("lido")?.type).toBe("staking");
+    expect(getProtocol("gmx")?.type).toBe("perps");
+    expect(getProtocol("stargate")?.type).toBe("bridge");
   });
 
   test("listProtocolsByGroup groups correctly", () => {

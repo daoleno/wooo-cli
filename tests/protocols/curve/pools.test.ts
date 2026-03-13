@@ -26,8 +26,8 @@ describe("Curve pool resolution", () => {
   });
 
   test("all pool addresses are valid format across all chains", () => {
-    for (const [chain, pools] of Object.entries(CURVE_POOLS)) {
-      for (const [name, pool] of Object.entries(pools)) {
+    for (const [_chain, pools] of Object.entries(CURVE_POOLS)) {
+      for (const [_name, pool] of Object.entries(pools)) {
         expect(pool.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
         expect(pool.tokens.length).toBe(pool.tokenAddresses.length);
         expect(pool.tokens.length).toBe(pool.decimals.length);
@@ -57,7 +57,7 @@ describe("Curve multi-chain isolation", () => {
 
   test("each chain has unique pool addresses", () => {
     const allAddresses = new Set<string>();
-    for (const [chain, pools] of Object.entries(CURVE_POOLS)) {
+    for (const [_chain, pools] of Object.entries(CURVE_POOLS)) {
       for (const [, pool] of Object.entries(pools)) {
         // Same pool name on different chains should have different addresses
         expect(allAddresses.has(pool.address.toLowerCase())).toBe(false);

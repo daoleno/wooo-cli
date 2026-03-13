@@ -1,4 +1,4 @@
-import ccxt, { type Exchange, type Position } from "ccxt";
+import ccxt, { type Exchange, type MarketInterface, type Position } from "ccxt";
 import type {
   CexBalance,
   CexOrderResult,
@@ -11,6 +11,41 @@ export interface CexClientOptions {
   secret?: string;
   password?: string; // OKX passphrase
   sandbox?: boolean;
+}
+
+export interface FuturesOrderPreview {
+  amount: number;
+  contractSize: number;
+  isContract: boolean;
+  isLinear: boolean;
+  price: number;
+  symbol: string;
+}
+
+export function calculateFuturesOrderAmount(
+  sizeUsd: number,
+  price: number,
+  market: Pick<MarketInterface, "contract" | "contractSize" | "inverse">,
+): number {
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error(`Invalid market price: ${price}`);
+  }
+  if (market.contract && market.inverse) {
+    throw new Error(
+      "Inverse futures markets are not supported. Use a linear symbol such as BTC/USDT:USDT.",
+    );
+  }
+
+  const contractSize =
+    market.contract && (market.contractSize ?? 0) > 0
+      ? Number(market.contractSize)
+      : 1;
+
+  if (market.contract) {
+    return sizeUsd / (price * contractSize);
+  }
+
+  return sizeUsd / price;
 }
 
 export class CexClient {
@@ -100,13 +135,18 @@ export class CexClient {
   async createFuturesOrder(
     symbol: string,
     side: "buy" | "sell",
-    amount: number,
+    sizeUsd: number,
     leverage?: number,
   ): Promise<CexOrderResult> {
+    const preview = await this.getFuturesOrderPreview(symbol, sizeUsd);
     if (leverage) {
       await this.exchange.setLeverage(leverage, symbol);
     }
-    const order = await this.exchange.createMarketOrder(symbol, side, amount);
+    const order = await this.exchange.createMarketOrder(
+      symbol,
+      side,
+      preview.amount,
+    );
     return {
       orderId: order.id,
       symbol: order.symbol,
@@ -118,7 +158,39 @@ export class CexClient {
     };
   }
 
-  async fetchMarkets() {
-    return this.exchange.fetchMarkets();
+  async fetchMarkets(): Promise<MarketInterface[]> {
+    const markets = await this.exchange.fetchMarkets();
+    return markets.filter((market): market is MarketInterface =>
+      Boolean(market),
+    );
+  }
+
+  async getFuturesOrderPreview(
+    symbol: string,
+    sizeUsd: number,
+  ): Promise<FuturesOrderPreview> {
+    await this.exchange.loadMarkets();
+    const market = this.exchange.market(symbol);
+    const ticker = await this.fetchTicker(symbol);
+    const rawAmount = calculateFuturesOrderAmount(sizeUsd, ticker.last, market);
+    const amount = Number(this.exchange.amountToPrecision(symbol, rawAmount));
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error(
+        `Calculated order amount is invalid for ${symbol}. Try a larger position size.`,
+      );
+    }
+
+    return {
+      symbol,
+      amount,
+      contractSize:
+        market.contract && (market.contractSize ?? 0) > 0
+          ? Number(market.contractSize)
+          : 1,
+      isContract: market.contract,
+      isLinear: Boolean(market.linear),
+      price: ticker.last,
+    };
   }
 }

@@ -1,4 +1,3 @@
-import ansis from "ansis";
 import { defineCommand } from "citty";
 import { loadWoooConfig } from "../../core/config";
 import { confirmTransaction } from "../../core/confirm";
@@ -168,8 +167,10 @@ export function createCexCommands(
       const leverage = validateLeverage(args.leverage);
 
       const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(args.symbol);
-      const amount = sizeUsd / ticker.last;
+      const preview = await pubClient.getFuturesOrderPreview(
+        args.symbol,
+        sizeUsd,
+      );
 
       const confirmed = await confirmTransaction(
         {
@@ -177,8 +178,10 @@ export function createCexCommands(
           details: {
             symbol: args.symbol,
             sizeUsd,
-            amount: amount.toFixed(6),
-            estimatedPrice: `$${ticker.last}`,
+            amount: preview.amount.toString(),
+            estimatedPrice: `$${preview.price}`,
+            contractSize: preview.contractSize,
+            marketType: preview.isContract ? "contract" : "spot-like",
             leverage: `${leverage}x`,
             exchange: exchangeId,
           },
@@ -192,8 +195,10 @@ export function createCexCommands(
             action: "LONG",
             symbol: args.symbol,
             sizeUsd,
-            amount: amount.toFixed(6),
-            estimatedPrice: ticker.last,
+            amount: preview.amount.toString(),
+            estimatedPrice: preview.price,
+            contractSize: preview.contractSize,
+            marketType: preview.isContract ? "contract" : "spot-like",
             leverage,
             status: "dry-run",
           });
@@ -206,7 +211,7 @@ export function createCexCommands(
       const result = await client.createFuturesOrder(
         args.symbol,
         "buy",
-        amount,
+        sizeUsd,
         leverage,
       );
       out.data(result);
@@ -242,8 +247,10 @@ export function createCexCommands(
       const leverage = validateLeverage(args.leverage);
 
       const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(args.symbol);
-      const amount = sizeUsd / ticker.last;
+      const preview = await pubClient.getFuturesOrderPreview(
+        args.symbol,
+        sizeUsd,
+      );
 
       const confirmed = await confirmTransaction(
         {
@@ -251,8 +258,10 @@ export function createCexCommands(
           details: {
             symbol: args.symbol,
             sizeUsd,
-            amount: amount.toFixed(6),
-            estimatedPrice: `$${ticker.last}`,
+            amount: preview.amount.toString(),
+            estimatedPrice: `$${preview.price}`,
+            contractSize: preview.contractSize,
+            marketType: preview.isContract ? "contract" : "spot-like",
             leverage: `${leverage}x`,
             exchange: exchangeId,
           },
@@ -266,8 +275,10 @@ export function createCexCommands(
             action: "SHORT",
             symbol: args.symbol,
             sizeUsd,
-            amount: amount.toFixed(6),
-            estimatedPrice: ticker.last,
+            amount: preview.amount.toString(),
+            estimatedPrice: preview.price,
+            contractSize: preview.contractSize,
+            marketType: preview.isContract ? "contract" : "spot-like",
             leverage,
             status: "dry-run",
           });
@@ -280,7 +291,7 @@ export function createCexCommands(
       const result = await client.createFuturesOrder(
         args.symbol,
         "sell",
-        amount,
+        sizeUsd,
         leverage,
       );
       out.data(result);

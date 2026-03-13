@@ -16,6 +16,8 @@ import type { AaveBorrowResult, AaveRate, AaveSupplyResult } from "./types";
 
 // Aave rates are in RAY (1e27)
 const RAY = 10n ** 27n;
+type EvmPublicClient = ReturnType<typeof getPublicClient>;
+type EvmWalletClient = ReturnType<typeof getWalletClient>;
 
 function rayToPercent(ray: bigint): string {
   // Convert ray to percentage with 2 decimals
@@ -44,6 +46,7 @@ export class AaveClient {
   async supply(tokenSymbol: string, amount: number): Promise<AaveSupplyResult> {
     if (!this.privateKey) throw new Error("Private key required");
 
+    const pool = this.getPoolAddress();
     const token = resolveToken(tokenSymbol, this.chain);
     if (!token)
       throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
@@ -52,7 +55,6 @@ export class AaveClient {
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
     const amountWei = parseUnits(String(amount), token.decimals);
-    const pool = this.getPoolAddress();
 
     // Approve pool to spend tokens
     await this.ensureAllowance(
@@ -73,7 +75,7 @@ export class AaveClient {
       account,
     });
 
-    const txHash = await walletClient.writeContract(request as any);
+    const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
@@ -89,6 +91,7 @@ export class AaveClient {
   async borrow(tokenSymbol: string, amount: number): Promise<AaveBorrowResult> {
     if (!this.privateKey) throw new Error("Private key required");
 
+    const pool = this.getPoolAddress();
     const token = resolveToken(tokenSymbol, this.chain);
     if (!token)
       throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
@@ -97,7 +100,6 @@ export class AaveClient {
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
     const amountWei = parseUnits(String(amount), token.decimals);
-    const pool = this.getPoolAddress();
 
     // Borrow with variable rate (2)
     const { request } = await publicClient.simulateContract({
@@ -108,7 +110,7 @@ export class AaveClient {
       account,
     });
 
-    const txHash = await walletClient.writeContract(request as any);
+    const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash: txHash,
     });
@@ -156,12 +158,12 @@ export class AaveClient {
   }
 
   async rates(tokenSymbol: string): Promise<AaveRate> {
+    const dataProvider = this.getDataProviderAddress();
     const token = resolveToken(tokenSymbol, this.chain);
     if (!token)
       throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
-    const dataProvider = this.getDataProviderAddress();
 
     const data = await publicClient.readContract({
       address: dataProvider,
@@ -185,8 +187,8 @@ export class AaveClient {
     amount: bigint,
     owner: Address,
     spender: Address,
-    publicClient: any,
-    walletClient: any,
+    publicClient: EvmPublicClient,
+    walletClient: EvmWalletClient,
   ): Promise<void> {
     const allowance = (await publicClient.readContract({
       address: token,
@@ -203,7 +205,7 @@ export class AaveClient {
         args: [spender, amount],
         account: owner,
       });
-      const hash = await walletClient.writeContract(request as any);
+      const hash = await walletClient.writeContract(request);
       await publicClient.waitForTransactionReceipt({ hash });
     }
   }
