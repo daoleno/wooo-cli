@@ -1,21 +1,21 @@
-import type { Address } from "viem";
+import { type Address, getAddress } from "viem";
 
 // Aave V3 Pool addresses per chain
 export const AAVE_POOL: Record<string, Address> = {
-  ethereum: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
-  arbitrum: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-  optimism: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-  polygon: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-  base: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
+  ethereum: getAddress("0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2"),
+  arbitrum: getAddress("0x794a61358d6845594f94dc1db02a252b5b4814ad"),
+  optimism: getAddress("0x794a61358d6845594f94dc1db02a252b5b4814ad"),
+  polygon: getAddress("0x794a61358d6845594f94dc1db02a252b5b4814ad"),
+  base: getAddress("0xa238dd80c259a72e81d7e4664a9801593f98d1c5"),
 };
 
-// Aave V3 Pool Data Provider addresses
+// Aave V3 protocol data provider addresses used by getReserveData(...)
 export const AAVE_POOL_DATA_PROVIDER: Record<string, Address> = {
-  ethereum: "0x7B4EB56E7CD4b454BA8ff71E4518426c3767aFF8",
-  arbitrum: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654",
-  optimism: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654",
-  polygon: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654",
-  base: "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac",
+  ethereum: getAddress("0x0a16f2fcc0d44fae41cc54e079281d84a363becd"),
+  arbitrum: getAddress("0x243aa95cac2a25651eda86e80bee66114413c43b"),
+  optimism: getAddress("0x243aa95cac2a25651eda86e80bee66114413c43b"),
+  polygon: getAddress("0x243aa95cac2a25651eda86e80bee66114413c43b"),
+  base: getAddress("0x0f43731eb8d45a581f4a36dd74f5f358bc90c73a"),
 };
 
 // Common aTokens / underlying tokens mapping (using same token list as uniswap)

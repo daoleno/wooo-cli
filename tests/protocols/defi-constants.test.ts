@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { isAddress } from "viem";
 import {
   AAVE_POOL,
   AAVE_POOL_DATA_PROVIDER,
@@ -21,11 +22,21 @@ import {
 } from "../../src/protocols/uniswap/constants";
 
 describe("Aave V3 contract addresses", () => {
+  test("data provider matches the current Aave address book", () => {
+    expect(AAVE_POOL_DATA_PROVIDER).toEqual({
+      ethereum: "0x0a16f2FCC0D44FaE41cc54e079281D84A363bECD",
+      arbitrum: "0x243Aa95cAC2a25651eda86e80bEe66114413c43b",
+      optimism: "0x243Aa95cAC2a25651eda86e80bEe66114413c43b",
+      polygon: "0x243Aa95cAC2a25651eda86e80bEe66114413c43b",
+      base: "0x0F43731EB8d45A581f4a36DD74F5f358bc90C73A",
+    });
+  });
+
   test("pool address exists for all supported chains", () => {
     const chains = ["ethereum", "arbitrum", "optimism", "polygon", "base"];
     for (const chain of chains) {
       expect(AAVE_POOL[chain]).toBeDefined();
-      expect(AAVE_POOL[chain]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      expect(isAddress(AAVE_POOL[chain])).toBe(true);
     }
   });
 
@@ -33,7 +44,7 @@ describe("Aave V3 contract addresses", () => {
     const chains = ["ethereum", "arbitrum", "optimism", "polygon", "base"];
     for (const chain of chains) {
       expect(AAVE_POOL_DATA_PROVIDER[chain]).toBeDefined();
-      expect(AAVE_POOL_DATA_PROVIDER[chain]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      expect(isAddress(AAVE_POOL_DATA_PROVIDER[chain])).toBe(true);
     }
   });
 
