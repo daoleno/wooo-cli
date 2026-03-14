@@ -152,7 +152,7 @@ export class AaveClient {
       totalCollateralUSD: formatUnits(totalCollateral, 8),
       totalDebtUSD: formatUnits(totalDebt, 8),
       availableBorrowsUSD: formatUnits(availableBorrows, 8),
-      healthFactor: healthFactor > 0n ? formatUnits(healthFactor, 18) : "∞",
+      healthFactor: totalDebt === 0n ? "∞" : formatUnits(healthFactor, 18),
       ltv: `${Number(ltv) / 100}%`,
     };
   }

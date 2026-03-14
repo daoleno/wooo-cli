@@ -194,12 +194,23 @@ bun run build
 # Test
 bun test
 
+# EVM fork e2e via anvil
+bun run test:e2e:anvil
+
+# Optional: pin a custom upstream RPC / block number
+ANVIL_FORK_URL_ETHEREUM=https://ethereum.publicnode.com \
+ANVIL_FORK_BLOCK_NUMBER=24652791 \
+bun run test:e2e:anvil
+
 # Type check
 bun run type-check
 
 # Lint & format
 bun run lint:fix
 ```
+
+The anvil e2e flow uses a local Ethereum fork and an ephemeral wallet, so it exercises
+real EVM write paths for `chain`, `dex uniswap`, and `defi aave` without using real funds.
 
 ## Architecture
 
