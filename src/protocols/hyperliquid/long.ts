@@ -1,9 +1,7 @@
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
-import { getActivePrivateKey } from "../../core/context";
-import { createOutput, resolveOutputOptions } from "../../core/output";
 import { validateAmount, validateLeverage } from "../../core/validation";
-import { HyperliquidClient } from "./client";
+import { runWriteOperation } from "../../core/write-operation";
+import { createHyperliquidOrderOperation } from "./operations";
 
 export default defineCommand({
   meta: { name: "long", description: "Open a long position" },
@@ -29,48 +27,16 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
-    const symbol = `${args.symbol}/USDC:USDC`;
     const sizeUsd = validateAmount(args.size, "Position size");
     const leverage = validateLeverage(args.leverage);
-
-    const client = new HyperliquidClient();
-    const ticker = await client.fetchTicker(symbol);
-    const amount = sizeUsd / ticker.last;
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `LONG ${args.symbol} on Hyperliquid`,
-        details: {
-          symbol,
-          sizeUsd,
-          amount: amount.toFixed(6),
-          estimatedPrice: `$${ticker.last}`,
-          leverage: `${leverage}x`,
-        },
-      },
+    await runWriteOperation(
       args,
+      createHyperliquidOrderOperation({
+        asset: args.symbol,
+        leverage,
+        side: "long",
+        sizeUsd,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "LONG",
-          symbol,
-          sizeUsd,
-          amount: amount.toFixed(6),
-          estimatedPrice: ticker.last,
-          leverage,
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const pk = await getActivePrivateKey("evm");
-    const authClient = new HyperliquidClient(pk);
-    await authClient.setLeverage(leverage, symbol);
-    const result = await authClient.createMarketOrder(symbol, "buy", amount);
-    out.data(result);
   },
 });

@@ -4,6 +4,7 @@ import {
   getPublicClient,
   getWalletClient,
 } from "../../core/evm";
+import { TxGateway } from "../../core/tx-gateway";
 import {
   ERC20_ABI,
   getQuoterAddress,
@@ -120,6 +121,7 @@ export class UniswapClient {
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
+    const txGateway = new TxGateway(publicClient, walletClient, account);
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
     const isNativeIn = this.isNativeToken(tokenInSymbol);
     const isNativeOut = this.isNativeToken(tokenOutSymbol);
@@ -142,22 +144,15 @@ export class UniswapClient {
     if (isNativeIn) {
       // Native ETH: wrap to WETH first, then swap
       const wethAddress = tokenIn.address; // resolveToken maps ETH → WETH
-      await this.wrapETH(
-        wethAddress,
-        amountIn,
-        account,
-        publicClient,
-        walletClient,
-      );
+      await this.wrapETH(wethAddress, amountIn, txGateway);
     }
 
     // Approve router to spend tokens (including freshly wrapped WETH)
-    await this.ensureAllowance(
+    await txGateway.ensureAllowance(
       tokenIn.address,
+      getSwapRouterAddress(this.chain),
       amountIn,
-      account,
-      publicClient,
-      walletClient,
+      ERC20_ABI,
     );
 
     const wrappedBalanceBefore = isNativeOut
@@ -170,7 +165,7 @@ export class UniswapClient {
       : 0n;
 
     // Execute swap
-    const { request } = await publicClient.simulateContract({
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
       address: getSwapRouterAddress(this.chain),
       abi: SWAP_ROUTER_ABI,
       functionName: "exactInputSingle",
@@ -185,12 +180,6 @@ export class UniswapClient {
           sqrtPriceLimitX96: 0n,
         },
       ],
-      account,
-    });
-
-    const txHash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
     });
 
     let amountOut = quoteResult.amountOut;
@@ -226,20 +215,15 @@ export class UniswapClient {
   private async wrapETH(
     wethAddress: Address,
     amount: bigint,
-    account: Address,
-    publicClient: EvmPublicClient,
-    walletClient: EvmWalletClient,
+    txGateway: TxGateway,
   ): Promise<void> {
-    const { request } = await publicClient.simulateContract({
+    await txGateway.simulateAndWriteContract({
       address: wethAddress,
       abi: WETH9_ABI,
       functionName: "deposit",
       args: [],
       value: amount,
-      account,
     });
-    const hash = await walletClient.writeContract(request);
-    await publicClient.waitForTransactionReceipt({ hash });
   }
 
   private async unwrapNativeOutput(
@@ -272,33 +256,6 @@ export class UniswapClient {
     const hash = await walletClient.writeContract(request);
     await publicClient.waitForTransactionReceipt({ hash });
     return received;
-  }
-
-  private async ensureAllowance(
-    token: Address,
-    amount: bigint,
-    owner: Address,
-    publicClient: EvmPublicClient,
-    walletClient: EvmWalletClient,
-  ): Promise<void> {
-    const allowance = await publicClient.readContract({
-      address: token,
-      abi: ERC20_ABI,
-      functionName: "allowance",
-      args: [owner, getSwapRouterAddress(this.chain)],
-    });
-
-    if ((allowance as bigint) < amount) {
-      const { request } = await publicClient.simulateContract({
-        address: token,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [getSwapRouterAddress(this.chain), amount],
-        account: owner,
-      });
-      const hash = await walletClient.writeContract(request);
-      await publicClient.waitForTransactionReceipt({ hash });
-    }
   }
 
   async tokens(): Promise<string[]> {

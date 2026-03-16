@@ -1,10 +1,10 @@
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
-import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { validateAmount, validateTokenSymbol } from "../../core/validation";
+import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";
 import { JupiterClient } from "./client";
+import { createJupiterSwapOperation } from "./operations";
 
 const swap = defineCommand({
   meta: { name: "swap", description: "Swap tokens on Solana via Jupiter" },
@@ -30,52 +30,17 @@ const swap = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const tokenIn = validateTokenSymbol(args.tokenIn);
     const tokenOut = validateTokenSymbol(args.tokenOut);
     const amount = validateAmount(args.amount, "Swap amount");
-
-    const client = new JupiterClient();
-    const quoteResult = await client.quote(tokenIn, tokenOut, amount);
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `Swap ${amount} ${tokenIn} → ${quoteResult.outAmount} ${tokenOut} via Jupiter (Solana)`,
-        details: {
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: quoteResult.outAmount,
-          priceImpact: quoteResult.priceImpact,
-          chain: "solana",
-          protocol: "Jupiter",
-        },
-      },
+    await runWriteOperation(
       args,
+      createJupiterSwapOperation({
+        tokenIn,
+        tokenOut,
+        amount,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "SWAP",
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: quoteResult.outAmount,
-          priceImpact: quoteResult.priceImpact,
-          route: quoteResult.routePlan,
-          chain: "solana",
-          protocol: "Jupiter",
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("solana");
-    const authClient = new JupiterClient(privateKey);
-    const result = await authClient.swap(tokenIn, tokenOut, amount);
-    out.data(result);
   },
 });
 
@@ -135,7 +100,7 @@ export const jupiterProtocol: ProtocolDefinition = {
   displayName: "Jupiter",
   type: "dex",
   chains: ["solana"],
-  requiresAuth: false,
+  writeAccountType: "solana",
   setup: () =>
     defineCommand({
       meta: { name: "jupiter", description: "Jupiter Solana DEX aggregator" },

@@ -63,28 +63,6 @@ describe("error paths: client construction without auth", () => {
     }
   });
 
-  test("GmxClient.openPosition throws without private key", async () => {
-    const { GmxClient } = require("../../src/protocols/gmx/client");
-    const client = new GmxClient();
-    try {
-      await client.openPosition("BTC/USD", "long", 1000, 1);
-      expect(true).toBe(false);
-    } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
-    }
-  });
-
-  test("StargateClient.bridge throws without private key", async () => {
-    const { StargateClient } = require("../../src/protocols/stargate/client");
-    const client = new StargateClient();
-    try {
-      await client.bridge("USDC", 100, "ethereum", "arbitrum");
-      expect(true).toBe(false);
-    } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
-    }
-  });
-
   test("JupiterClient.swap throws without private key", async () => {
     const { JupiterClient } = require("../../src/protocols/jupiter/client");
     const client = new JupiterClient();
@@ -114,18 +92,6 @@ describe("error paths: invalid inputs to clients", () => {
     const { AaveClient } = require("../../src/protocols/aave/client");
     const client = new AaveClient("fantom", "0xdeadbeef");
     await expect(client.supply("USDC", 100)).rejects.toThrow("not supported");
-  });
-
-  test("GmxClient rejects unknown market", async () => {
-    const { GmxClient } = require("../../src/protocols/gmx/client");
-    const client = new GmxClient(`0x${"ab".repeat(32)}`);
-    try {
-      await client.openPosition("DOGE/USD", "long", 100, 1);
-      expect(true).toBe(false);
-    } catch (error) {
-      expect(getErrorMessage(error)).toContain("Unknown GMX market");
-      expect(getErrorMessage(error)).toContain("DOGE/USD");
-    }
   });
 
   test(

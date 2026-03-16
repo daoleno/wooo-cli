@@ -1,8 +1,8 @@
 # wooo
 
-**All of crypto, one command away — your terminal-native copilot for trading, DeFi, and cross-chain operations.**
+**All of crypto, one command away — your terminal-native copilot for trading, DeFi, and on-chain execution.**
 
-Swap on Uniswap, lend on Aave, bridge via Stargate, trade perps on Hyperliquid — without ever leaving your terminal. wooo unifies 11 protocols across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
+Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, or route through the best supported DEX — without ever leaving your terminal. wooo brings CEX trading, DeFi, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
 
 ## Quick Start
 
@@ -27,8 +27,7 @@ wooo defi aave rates USDC --chain ethereum
 | **CEX Trading** | OKX, Binance, Bybit | Spot buy/sell, futures long/short, balance, positions |
 | **DEX Swaps** | Uniswap V3, Curve, Jupiter | Swap, quote, token lists — EVM + Solana |
 | **DeFi** | Aave V3, Lido | Supply, borrow, stake, view rates & rewards |
-| **Perps** | Hyperliquid, GMX V2 | Long/short with leverage, funding rates |
-| **Bridge** | Stargate V2 | Cross-chain token transfers via LayerZero |
+| **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
@@ -84,21 +83,8 @@ wooo defi lido rewards
 ### Perpetual Futures
 
 ```bash
-# Hyperliquid
 wooo perps hyperliquid long BTC 1000 --leverage 5 --yes
 wooo perps hyperliquid positions
-
-# GMX V2
-wooo perps gmx long ETH/USD 500 --leverage 3 --dry-run
-wooo perps gmx markets
-```
-
-### Cross-Chain Bridge
-
-```bash
-wooo bridge stargate bridge USDC 1000 ethereum arbitrum --yes
-wooo bridge stargate quote USDC 1000 ethereum arbitrum
-wooo bridge stargate routes
 ```
 
 ### On-Chain Utilities
@@ -133,10 +119,7 @@ wooo
 │   ├── aave     — supply, borrow, positions, rates
 │   └── lido     — stake, balance, rewards
 ├── perps
-│   ├── hyperliquid — long, short, positions, funding
-│   └── gmx      — long, short, positions, markets
-└── bridge
-    └── stargate  — bridge, quote, routes
+│   └── hyperliquid — long, short, positions, funding
 ```
 
 ## Global Flags
@@ -214,14 +197,13 @@ real EVM write paths for `chain`, `dex uniswap`, and `defi aave` without using r
 
 ## Architecture
 
-wooo is built around a protocol registry. Each protocol (Uniswap, Aave, etc.) is a self-contained module with:
+wooo is built around a protocol registry plus a shared write-command contract.
+Each protocol exports a manifest from `commands.ts`, keeps protocol I/O in `client.ts`,
+and can expose reusable write flows in `operations.ts` when the same behavior is shared
+across direct protocol commands and aggregated commands such as `wooo swap`.
 
-- `constants.ts` — Contract addresses, ABIs, token registries (per-chain)
-- `client.ts` — Business logic (quote, swap, supply, bridge, etc.)
-- `commands.ts` — CLI command definitions
-- `types.ts` — TypeScript type definitions
-
-Protocols are grouped by type (`dex`, `defi`, `perps`, `bridge`, `cex`) and auto-registered into the CLI command tree.
+Protocols are grouped by type (`dex`, `defi`, `perps`, `cex`) and auto-registered into the CLI command tree.
+Every write command returns an `ExecutionPlan` on `--dry-run --json`.
 
 See [docs/architecture.md](docs/architecture.md) for details.
 

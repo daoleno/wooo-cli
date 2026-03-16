@@ -26,7 +26,6 @@
   "dependencies": {
     "@clack/prompts": "^1.1.0",
     "@curvefi/api": "^2.68.38",
-    "@gmx-io/sdk": "^1.5.0-alpha-8",
     "@lidofinance/lido-ethereum-sdk": "^4.7.0",
     "@solana/web3.js": "1",
     "@uniswap/sdk-core": "^7.12.1",

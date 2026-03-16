@@ -9,7 +9,7 @@ export const binanceProtocol: ProtocolDefinition = {
   name: "binance",
   displayName: "Binance Exchange",
   type: "cex",
-  requiresAuth: true,
+  writeAccountType: "exchange-api",
   setup: () =>
     defineCommand({
       meta: { name: "binance", description: "Binance Exchange" },

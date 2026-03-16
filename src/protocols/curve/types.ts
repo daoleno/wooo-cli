@@ -1,3 +1,9 @@
+export interface CurveQuote {
+  amountOut: string;
+  pool: string;
+  price: number;
+}
+
 export interface CurveSwapResult {
   txHash: string;
   tokenIn: string;

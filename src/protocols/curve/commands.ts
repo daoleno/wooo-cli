@@ -1,14 +1,14 @@
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
-import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,
   validateChain,
   validateTokenSymbol,
 } from "../../core/validation";
+import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";
 import { CurveClient } from "./client";
+import { createCurveSwapOperation } from "./operations";
 
 const SUPPORTED_CHAINS = [
   "ethereum",
@@ -46,52 +46,19 @@ const swap = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const tokenIn = validateTokenSymbol(args.tokenIn);
     const tokenOut = validateTokenSymbol(args.tokenOut);
     const amount = validateAmount(args.amount, "Swap amount");
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
-
-    const client = new CurveClient(chain);
-    const quoteResult = await client.quote(tokenIn, tokenOut, amount);
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `Swap ${amount} ${tokenIn} → ${quoteResult.amountOut} ${tokenOut} via Curve (${chain})`,
-        details: {
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: quoteResult.amountOut,
-          pool: quoteResult.pool,
-          chain,
-          protocol: "Curve",
-        },
-      },
+    await runWriteOperation(
       args,
+      createCurveSwapOperation({
+        tokenIn,
+        tokenOut,
+        amount,
+        chain,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "SWAP",
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: quoteResult.amountOut,
-          pool: quoteResult.pool,
-          chain,
-          protocol: "Curve",
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("evm");
-    const authClient = new CurveClient(chain, privateKey);
-    const result = await authClient.swap(tokenIn, tokenOut, amount);
-    out.data(result);
   },
 });
 
@@ -103,10 +70,16 @@ const pools = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
+    const outputOptions = resolveOutputOptions(args);
+    const out = createOutput(outputOptions);
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
     const client = new CurveClient(chain);
     const list = await client.pools();
+
+    if (outputOptions.json || outputOptions.format === "json") {
+      out.data({ chain, pools: list });
+      return;
+    }
 
     out.table(
       list.map((p) => ({
@@ -167,7 +140,7 @@ export const curveProtocol: ProtocolDefinition = {
   displayName: "Curve Finance",
   type: "dex",
   chains: ["ethereum", "arbitrum", "optimism", "polygon", "base"],
-  requiresAuth: false,
+  writeAccountType: "evm",
   setup: () =>
     defineCommand({
       meta: { name: "curve", description: "Curve stableswap DEX" },

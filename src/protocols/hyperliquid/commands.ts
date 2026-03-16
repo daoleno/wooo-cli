@@ -6,7 +6,7 @@ export const hyperliquidProtocol: ProtocolDefinition = {
   displayName: "Hyperliquid",
   type: "perps",
   chains: ["hyperliquid"],
-  requiresAuth: false,
+  writeAccountType: "evm",
   setup: () =>
     defineCommand({
       meta: { name: "hyperliquid", description: "Hyperliquid perpetuals" },

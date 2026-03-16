@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { HyperliquidClient } from "../../../src/protocols/hyperliquid/client";
+import { createHyperliquidExecutionPlan } from "../../../src/protocols/hyperliquid/plan";
 
 describe("HyperliquidClient", () => {
   function createStubbedClient() {
@@ -71,5 +72,24 @@ describe("HyperliquidClient", () => {
     const funding = await client.fetchFundingRate("BTC/USDC:USDC");
     expect(funding.symbol).toContain("BTC");
     expect(typeof funding.fundingRate).toBe("number");
+  });
+
+  test("execution plan captures leverage and order steps", () => {
+    const plan = createHyperliquidExecutionPlan({
+      side: "long",
+      symbol: "BTC/USDC:USDC",
+      sizeUsd: 100,
+      amount: "0.001000",
+      estimatedPrice: 100000,
+      leverage: 5,
+    });
+
+    expect(plan.kind).toBe("execution-plan");
+    expect(plan.operation.protocol).toBe("hyperliquid");
+    expect(plan.operation.command).toBe("long");
+    expect(plan.chain).toBe("hyperliquid");
+    expect(plan.steps).toHaveLength(2);
+    expect(plan.steps[0]?.details.leverage).toBe("5x");
+    expect(plan.steps[1]?.details.side).toBe("buy");
   });
 });

@@ -1,14 +1,5 @@
 import type { Address } from "viem";
 
-// Curve Router (supports multi-hop swaps across pools)
-export const CURVE_ROUTER: Record<string, Address> = {
-  ethereum: "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D",
-  arbitrum: "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D",
-  optimism: "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D",
-  polygon: "0xF0d4c12A5768D806021F80a262B4d39d26C58b8D",
-  base: "0xd6681e74eEA20d196c824C7e6BC4b8a3e6e06F37",
-};
-
 export type CurvePoolConfig = {
   address: Address;
   name: string;
@@ -17,7 +8,8 @@ export type CurvePoolConfig = {
   decimals: number[];
 };
 
-// Curve pools per chain
+// Curated pool fixtures used by tests and docs. Runtime routing comes from
+// this static map.
 export const CURVE_POOLS: Record<string, Record<string, CurvePoolConfig>> = {
   ethereum: {
     "3pool": {
@@ -118,7 +110,6 @@ export const CURVE_POOLS: Record<string, Record<string, CurvePoolConfig>> = {
   },
 };
 
-// Curve pool exchange ABI (StableSwap)
 export const CURVE_POOL_ABI = [
   {
     name: "get_dy",
@@ -133,7 +124,7 @@ export const CURVE_POOL_ABI = [
   },
   {
     name: "exchange",
-    outputs: [{ type: "uint256", name: "" }],
+    outputs: [],
     inputs: [
       { type: "int128", name: "i" },
       { type: "int128", name: "j" },

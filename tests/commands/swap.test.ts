@@ -1,23 +1,5 @@
 import { describe, expect, test } from "bun:test";
-
-/**
- * Tests the route selection logic used by `wooo swap`.
- * The aggregator picks the quote with the highest amountOut.
- */
-
-interface SwapQuote {
-  protocol: string;
-  amountOut: string;
-  price: number;
-}
-
-// Extracted route selection logic (same as in src/commands/swap/index.ts)
-function selectBestRoute(quotes: SwapQuote[]): SwapQuote {
-  quotes.sort(
-    (a, b) => Number.parseFloat(b.amountOut) - Number.parseFloat(a.amountOut),
-  );
-  return quotes[0];
-}
+import { type SwapQuote, selectBestRoute } from "../../src/commands/swap/index";
 
 describe("swap aggregator route selection", () => {
   test("picks highest amountOut among two quotes", () => {

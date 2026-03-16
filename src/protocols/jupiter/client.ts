@@ -1,5 +1,6 @@
-import { type Connection, VersionedTransaction } from "@solana/web3.js";
+import type { Connection } from "@solana/web3.js";
 import { getSolanaConnection, getSolanaKeypair } from "../../core/solana";
+import { SolanaGateway } from "../../core/solana-gateway";
 import { JUPITER_API, resolveTokenMint } from "./constants";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
 
@@ -111,23 +112,11 @@ export class JupiterClient {
       throw new Error(`Swap failed: ${swapResponse.statusText}`);
     const swapData = (await swapResponse.json()) as JupiterSwapResponse;
 
-    // 3. Deserialize, sign, and send
-    const txBuf = Buffer.from(swapData.swapTransaction, "base64");
-    const transaction = VersionedTransaction.deserialize(txBuf);
-    transaction.sign([keypair]);
-
-    const txHash = await this.connection.sendRawTransaction(
-      transaction.serialize(),
-      { skipPreflight: false, maxRetries: 2 },
+    // 3. Sign, submit, and confirm
+    const gateway = new SolanaGateway(this.connection, keypair);
+    const { txHash } = await gateway.sendVersionedTransaction(
+      swapData.swapTransaction,
     );
-
-    // 4. Confirm
-    const latestBlockhash = await this.connection.getLatestBlockhash();
-    await this.connection.confirmTransaction({
-      signature: txHash,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    });
 
     const outAmount = Number(quoteData.outAmount) / 10 ** tokenOut.decimals;
 

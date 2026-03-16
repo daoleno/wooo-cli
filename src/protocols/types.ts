@@ -1,4 +1,5 @@
 import type { CommandDef } from "citty";
+import type { ExecutionPlanAccountType } from "../core/execution-plan";
 
 export type ProtocolType =
   | "cex"
@@ -24,15 +25,17 @@ export const PROTOCOL_GROUP_DESCRIPTIONS: Record<ProtocolGroup, string> = {
   cex: "Centralized exchanges (OKX, Binance, Bybit, ...)",
   dex: "Decentralized exchanges (Uniswap, Jupiter, ...)",
   defi: "DeFi protocols (Aave, Lido, Curve, ...)",
-  perps: "Perpetual DEXs (Hyperliquid, GMX, ...)",
-  bridge: "Cross-chain bridges (Stargate, ...)",
+  perps: "Perpetual DEXs (Hyperliquid, ...)",
+  bridge: "Cross-chain bridges",
 };
 
-export interface ProtocolDefinition {
+export interface ProtocolManifest {
   name: string;
   displayName: string;
   type: ProtocolType;
   chains?: string[];
-  requiresAuth: boolean;
+  writeAccountType?: ExecutionPlanAccountType;
   setup: () => CommandDef;
 }
+
+export type ProtocolDefinition = ProtocolManifest;

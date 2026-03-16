@@ -2,12 +2,10 @@ import { aaveProtocol } from "./aave/commands";
 import { binanceProtocol } from "./binance/commands";
 import { bybitProtocol } from "./bybit/commands";
 import { curveProtocol } from "./curve/commands";
-import { gmxProtocol } from "./gmx/commands";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
 import { jupiterProtocol } from "./jupiter/commands";
 import { lidoProtocol } from "./lido/commands";
 import { okxProtocol } from "./okx/commands";
-import { stargateProtocol } from "./stargate/commands";
 import {
   PROTOCOL_TYPE_TO_GROUP,
   type ProtocolDefinition,
@@ -22,7 +20,6 @@ const protocols: ProtocolDefinition[] = [
   bybitProtocol,
   // Perps DEX
   hyperliquidProtocol,
-  gmxProtocol,
   // DEX
   uniswapProtocol,
   curveProtocol,
@@ -30,8 +27,6 @@ const protocols: ProtocolDefinition[] = [
   // DeFi (lending + staking)
   aaveProtocol,
   lidoProtocol,
-  // Bridge
-  stargateProtocol,
 ];
 
 export function registerProtocol(protocol: ProtocolDefinition): void {

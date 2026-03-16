@@ -12,8 +12,9 @@ export const SOLANA_TOKENS: Record<string, { mint: string; decimals: number }> =
     PYTH: { mint: "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", decimals: 6 },
   };
 
-// Jupiter API endpoint
-export const JUPITER_API = "https://quote-api.jup.ag/v6";
+// Jupiter Lite API endpoint. The older quote-api.jup.ag endpoint has
+// certificate issues in some environments.
+export const JUPITER_API = "https://lite-api.jup.ag/swap/v1";
 
 export function resolveTokenMint(
   symbol: string,

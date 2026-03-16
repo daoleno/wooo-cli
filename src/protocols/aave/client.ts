@@ -4,6 +4,7 @@ import {
   getPublicClient,
   getWalletClient,
 } from "../../core/evm";
+import { TxGateway } from "../../core/tx-gateway";
 import {
   AAVE_POOL,
   AAVE_POOL_ABI,
@@ -16,8 +17,6 @@ import type { AaveBorrowResult, AaveRate, AaveSupplyResult } from "./types";
 
 // Aave rates are in RAY (1e27)
 const RAY = 10n ** 27n;
-type EvmPublicClient = ReturnType<typeof getPublicClient>;
-type EvmWalletClient = ReturnType<typeof getWalletClient>;
 
 function rayToPercent(ray: bigint): string {
   // Convert ray to percentage with 2 decimals
@@ -54,30 +53,18 @@ export class AaveClient {
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
+    const txGateway = new TxGateway(publicClient, walletClient, account);
     const amountWei = parseUnits(String(amount), token.decimals);
 
     // Approve pool to spend tokens
-    await this.ensureAllowance(
-      token.address,
-      amountWei,
-      account,
-      pool,
-      publicClient,
-      walletClient,
-    );
+    await txGateway.ensureAllowance(token.address, pool, amountWei, ERC20_ABI);
 
     // Supply to Aave
-    const { request } = await publicClient.simulateContract({
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
       address: pool,
       abi: AAVE_POOL_ABI,
       functionName: "supply",
       args: [token.address, amountWei, account, 0],
-      account,
-    });
-
-    const txHash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
     });
 
     return {
@@ -99,20 +86,15 @@ export class AaveClient {
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
+    const txGateway = new TxGateway(publicClient, walletClient, account);
     const amountWei = parseUnits(String(amount), token.decimals);
 
     // Borrow with variable rate (2)
-    const { request } = await publicClient.simulateContract({
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
       address: pool,
       abi: AAVE_POOL_ABI,
       functionName: "borrow",
       args: [token.address, amountWei, 2n, 0, account],
-      account,
-    });
-
-    const txHash = await walletClient.writeContract(request);
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash,
     });
 
     return {
@@ -180,33 +162,5 @@ export class AaveClient {
       variableBorrowAPY: `${rayToPercent(reserveData[6])}%`,
       stableBorrowAPY: `${rayToPercent(reserveData[7])}%`,
     };
-  }
-
-  private async ensureAllowance(
-    token: Address,
-    amount: bigint,
-    owner: Address,
-    spender: Address,
-    publicClient: EvmPublicClient,
-    walletClient: EvmWalletClient,
-  ): Promise<void> {
-    const allowance = (await publicClient.readContract({
-      address: token,
-      abi: ERC20_ABI,
-      functionName: "allowance",
-      args: [owner, spender],
-    })) as bigint;
-
-    if (allowance < amount) {
-      const { request } = await publicClient.simulateContract({
-        address: token,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [spender, amount],
-        account: owner,
-      });
-      const hash = await walletClient.writeContract(request);
-      await publicClient.waitForTransactionReceipt({ hash });
-    }
   }
 }

@@ -9,7 +9,7 @@ export const bybitProtocol: ProtocolDefinition = {
   name: "bybit",
   displayName: "Bybit Exchange",
   type: "cex",
-  requiresAuth: true,
+  writeAccountType: "exchange-api",
   setup: () =>
     defineCommand({
       meta: { name: "bybit", description: "Bybit Exchange" },

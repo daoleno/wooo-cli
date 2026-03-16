@@ -1,10 +1,11 @@
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { validateAmount } from "../../core/validation";
+import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";
 import { LidoClient } from "./client";
+import { createLidoStakeOperation } from "./operations";
 
 const stake = defineCommand({
   meta: { name: "stake", description: "Stake ETH for stETH via Lido" },
@@ -20,39 +21,13 @@ const stake = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const amount = validateAmount(args.amount, "Stake amount");
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `Stake ${amount} ETH via Lido → ~${amount} stETH`,
-        details: {
-          amountETH: amount,
-          estimatedStETH: amount,
-          protocol: "Lido",
-          chain: "ethereum",
-        },
-      },
+    await runWriteOperation(
       args,
+      createLidoStakeOperation({
+        amount,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "STAKE",
-          amountETH: amount,
-          estimatedStETH: amount,
-          protocol: "Lido",
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new LidoClient(privateKey);
-    const result = await client.stake(amount);
-    out.data(result);
   },
 });
 
@@ -91,7 +66,7 @@ export const lidoProtocol: ProtocolDefinition = {
   displayName: "Lido Staking",
   type: "staking",
   chains: ["ethereum"],
-  requiresAuth: false,
+  writeAccountType: "evm",
   setup: () =>
     defineCommand({
       meta: { name: "lido", description: "Lido liquid staking" },

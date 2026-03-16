@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { ETHEREUM_USDC_ADDRESS, EthereumAnvilHarness } from "./anvil-harness";
+import {
+  ETHEREUM_USDC_ADDRESS,
+  ETHEREUM_USDT_ADDRESS,
+  EthereumAnvilHarness,
+} from "./anvil-harness";
 
 interface ChainBalanceOutput {
   address: string;
@@ -34,6 +38,25 @@ interface UniswapSwapOutput {
   txHash: string;
 }
 
+interface CurveQuoteOutput {
+  amountIn: number;
+  amountOut: string;
+  pool: string;
+  price: number;
+  tokenIn: string;
+  tokenOut: string;
+}
+
+interface CurveSwapOutput {
+  amountIn: string;
+  amountOut: string;
+  pool: string;
+  status: string;
+  tokenIn: string;
+  tokenOut: string;
+  txHash: string;
+}
+
 interface AaveRateOutput {
   stableBorrowAPY: string;
   supplyAPY: string;
@@ -59,7 +82,7 @@ interface AavePositionsOutput {
 
 describe("anvil fork e2e", () => {
   test(
-    "runs chain, Uniswap, and Aave flows against an Ethereum fork",
+    "runs chain, Uniswap, Curve, and Aave flows against an Ethereum fork",
     async () => {
       const harness = new EthereumAnvilHarness();
       await harness.start();
@@ -130,6 +153,49 @@ describe("anvil fork e2e", () => {
         ]);
         expect(balanceOf.function).toBe("balanceOf");
         expect(BigInt(balanceOf.result) > 0n).toBe(true);
+
+        const curveQuote = await harness.runJson<CurveQuoteOutput>([
+          "dex",
+          "curve",
+          "quote",
+          "USDC",
+          "USDT",
+          "100",
+          "--chain",
+          "ethereum",
+        ]);
+        expect(curveQuote.tokenIn).toBe("USDC");
+        expect(curveQuote.tokenOut).toBe("USDT");
+        expect(Number(curveQuote.amountOut)).toBeGreaterThan(95);
+        expect(curveQuote.pool.length).toBeGreaterThan(0);
+
+        const curveSwap = await harness.runJson<CurveSwapOutput>([
+          "dex",
+          "curve",
+          "swap",
+          "USDC",
+          "USDT",
+          "100",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(curveSwap.tokenIn).toBe("USDC");
+        expect(curveSwap.tokenOut).toBe("USDT");
+        expect(curveSwap.status).toBe("confirmed");
+        expect(curveSwap.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const usdtBalance = await harness.runJson<ChainBalanceOutput>([
+          "chain",
+          "balance",
+          harness.address,
+          "--chain",
+          "ethereum",
+          "--token",
+          ETHEREUM_USDT_ADDRESS,
+        ]);
+        expect(usdtBalance.token).toBe("USDT");
+        expect(Number(usdtBalance.balance)).toBeGreaterThan(95);
 
         const rates = await harness.runJson<AaveRateOutput>([
           "defi",

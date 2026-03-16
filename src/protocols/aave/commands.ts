@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
 import { getActivePrivateKey } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
@@ -7,8 +6,13 @@ import {
   validateChain,
   validateTokenSymbol,
 } from "../../core/validation";
+import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";
 import { AaveClient } from "./client";
+import {
+  createAaveBorrowOperation,
+  createAaveSupplyOperation,
+} from "./operations";
 
 const SUPPORTED_CHAINS = [
   "ethereum",
@@ -38,37 +42,17 @@ const supply = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const token = validateTokenSymbol(args.token);
     const amount = validateAmount(args.amount);
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `Supply ${amount} ${token} to Aave V3`,
-        details: { token, amount, chain, protocol: "Aave V3" },
-      },
+    await runWriteOperation(
       args,
+      createAaveSupplyOperation({
+        token,
+        amount,
+        chain,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "SUPPLY",
-          token,
-          amount,
-          chain,
-          protocol: "Aave V3",
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new AaveClient(chain, privateKey);
-    const result = await client.supply(token, amount);
-    out.data(result);
   },
 });
 
@@ -92,44 +76,17 @@ const borrow = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const token = validateTokenSymbol(args.token);
     const amount = validateAmount(args.amount);
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
-
-    const confirmed = await confirmTransaction(
-      {
-        action: `Borrow ${amount} ${token} from Aave V3`,
-        details: {
-          token,
-          amount,
-          chain,
-          protocol: "Aave V3",
-          rateMode: "variable",
-        },
-      },
+    await runWriteOperation(
       args,
+      createAaveBorrowOperation({
+        token,
+        amount,
+        chain,
+      }),
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "BORROW",
-          token,
-          amount,
-          chain,
-          protocol: "Aave V3",
-          interestRateMode: "variable",
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new AaveClient(chain, privateKey);
-    const result = await client.borrow(token, amount);
-    out.data(result);
   },
 });
 
@@ -177,7 +134,7 @@ export const aaveProtocol: ProtocolDefinition = {
   displayName: "Aave V3",
   type: "lending",
   chains: SUPPORTED_CHAINS,
-  requiresAuth: false,
+  writeAccountType: "evm",
   setup: () =>
     defineCommand({
       meta: { name: "aave", description: "Aave V3 lending protocol" },

@@ -9,7 +9,7 @@ export const okxProtocol: ProtocolDefinition = {
   name: "okx",
   displayName: "OKX Exchange",
   type: "cex",
-  requiresAuth: true,
+  writeAccountType: "exchange-api",
   setup: () =>
     defineCommand({
       meta: { name: "okx", description: "OKX Exchange" },

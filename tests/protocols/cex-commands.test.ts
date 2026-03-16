@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { calculateFuturesOrderAmount } from "../../src/protocols/cex-base/client";
+import {
+  createFuturesOrderExecutionPlan,
+  createSpotOrderExecutionPlan,
+} from "../../src/protocols/cex-base/operations";
 
 /**
  * Tests CEX command parameter parsing and validation logic.
- * These test the same math used in cex-base/commands.ts for
+ * These test the same math used in cex-base operations for
  * futures position sizing and order construction.
  */
 
@@ -113,5 +117,46 @@ describe("CEX auth resolution", () => {
   test("OKX has passphrase env var", () => {
     const prefix = "WOOO_OKX_";
     expect(`${prefix}PASSPHRASE`).toBe("WOOO_OKX_PASSPHRASE");
+  });
+});
+
+describe("CEX execution plans", () => {
+  test("spot order plan uses exchange-api account type", () => {
+    const plan = createSpotOrderExecutionPlan({
+      exchangeId: "binance",
+      command: "buy",
+      pair: "BTC/USDT",
+      amount: 0.01,
+      estimatedPrice: 100000,
+    });
+
+    expect(plan.kind).toBe("execution-plan");
+    expect(plan.operation.protocol).toBe("binance");
+    expect(plan.operation.command).toBe("buy");
+    expect(plan.accountType).toBe("exchange-api");
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0]?.details.side).toBe("buy");
+  });
+
+  test("futures order plan includes leverage and order steps", () => {
+    const plan = createFuturesOrderExecutionPlan({
+      exchangeId: "okx",
+      command: "short",
+      symbol: "BTC/USDT:USDT",
+      sizeUsd: 1000,
+      amount: 0.01,
+      estimatedPrice: 100000,
+      contractSize: 1,
+      marketType: "contract",
+      leverage: 5,
+    });
+
+    expect(plan.kind).toBe("execution-plan");
+    expect(plan.operation.protocol).toBe("okx");
+    expect(plan.operation.command).toBe("short");
+    expect(plan.accountType).toBe("exchange-api");
+    expect(plan.steps).toHaveLength(2);
+    expect(plan.steps[0]?.details.leverage).toBe("5x");
+    expect(plan.steps[1]?.details.side).toBe("sell");
   });
 });

@@ -1,14 +1,106 @@
 import ansis from "ansis";
 import { defineCommand } from "citty";
-import { confirmTransaction } from "../../core/confirm";
-import { getActivePrivateKey } from "../../core/context";
-import { createOutput, resolveOutputOptions } from "../../core/output";
-import { validateAmount, validateTokenSymbol } from "../../core/validation";
+import type { ExecutionPlan } from "../../core/execution-plan";
+import {
+  validateAmount,
+  validateChain,
+  validateTokenSymbol,
+} from "../../core/validation";
+import {
+  runPreparedWriteOperation,
+  type WriteOperation,
+} from "../../core/write-operation";
+import {
+  createCurveSwapOperation,
+  type PreparedCurveSwap,
+} from "../../protocols/curve/operations";
+import type { CurveSwapResult } from "../../protocols/curve/types";
+import {
+  createJupiterSwapOperation,
+  type PreparedJupiterSwap,
+} from "../../protocols/jupiter/operations";
+import type { JupiterSwapResult } from "../../protocols/jupiter/types";
+import {
+  createUniswapSwapOperation,
+  type PreparedUniswapSwap,
+} from "../../protocols/uniswap/operations";
+import type { UniswapSwapResult } from "../../protocols/uniswap/types";
 
-interface SwapQuote {
+const SUPPORTED_CHAINS = [
+  "ethereum",
+  "arbitrum",
+  "optimism",
+  "polygon",
+  "base",
+  "solana",
+];
+
+export interface SwapQuote {
   protocol: string;
   amountOut: string;
   price: number;
+}
+
+interface PreparedSwapRoute<TPrepared, TResult> {
+  operation: WriteOperation<TPrepared, string, TResult>;
+  prepared: TPrepared;
+  quote: SwapQuote;
+}
+
+type AnyPreparedSwapRoute =
+  | PreparedSwapRoute<PreparedCurveSwap, CurveSwapResult>
+  | PreparedSwapRoute<PreparedJupiterSwap, JupiterSwapResult>
+  | PreparedSwapRoute<PreparedUniswapSwap, UniswapSwapResult>;
+
+function quotePrice(amountIn: number, amountOut: string): number {
+  const output = Number.parseFloat(amountOut);
+  if (!Number.isFinite(output) || !Number.isFinite(amountIn) || amountIn <= 0) {
+    return 0;
+  }
+  return output / amountIn;
+}
+
+function decorateAggregatedPlan(
+  plan: ExecutionPlan,
+  quotes: SwapQuote[],
+  bestRoute: string,
+): ExecutionPlan {
+  return {
+    ...plan,
+    warnings: [
+      ...plan.warnings,
+      "This plan was selected by the aggregated swap router.",
+    ],
+    metadata: {
+      ...(plan.metadata ?? {}),
+      bestRoute,
+      quotes,
+    },
+  };
+}
+
+async function prepareRoute<TPrepared, TResult>(
+  operation: WriteOperation<TPrepared, string, TResult>,
+  toQuote: (prepared: TPrepared) => SwapQuote,
+): Promise<PreparedSwapRoute<TPrepared, TResult>> {
+  const prepared = await operation.prepare();
+  return {
+    operation,
+    prepared,
+    quote: toQuote(prepared),
+  };
+}
+
+export function selectBestRoute(quotes: SwapQuote[]): SwapQuote {
+  if (quotes.length === 0) {
+    throw new Error("No swap quotes available");
+  }
+
+  return quotes.reduce((best, quote) =>
+    Number.parseFloat(quote.amountOut) > Number.parseFloat(best.amountOut)
+      ? quote
+      : best,
+  );
 }
 
 export default defineCommand({
@@ -43,156 +135,119 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const out = createOutput(resolveOutputOptions(args));
     const tokenIn = validateTokenSymbol(args.tokenIn, "Input token");
     const tokenOut = validateTokenSymbol(args.tokenOut, "Output token");
     const amount = validateAmount(args.amount);
-    const chain = args.chain;
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
 
-    // Solana → Jupiter only
     if (chain === "solana") {
-      const { JupiterClient } = await import("../../protocols/jupiter/client");
-      const client = new JupiterClient();
-      const quote = await client.quote(tokenIn, tokenOut, amount);
-
-      const confirmed = await confirmTransaction(
-        {
-          action: `Swap ${amount} ${tokenIn} → ${tokenOut} via Jupiter`,
-          details: {
-            tokenIn,
-            tokenOut,
-            amountIn: amount,
-            amountOut: quote.outAmount,
-            chain: "solana",
-            route: "jupiter",
-          },
-        },
-        args,
+      const route = await prepareRoute(
+        createJupiterSwapOperation({
+          tokenIn,
+          tokenOut,
+          amount,
+        }),
+        (prepared) => ({
+          protocol: "jupiter",
+          amountOut: prepared.quote.outAmount,
+          price: quotePrice(prepared.amount, prepared.quote.outAmount),
+        }),
       );
 
-      if (!confirmed) {
-        if (args["dry-run"]) {
-          out.data({
-            action: "SWAP",
-            bestRoute: "jupiter",
-            tokenIn,
-            tokenOut,
-            amountIn: amount,
-            amountOut: quote.outAmount,
-            chain: "solana",
-            status: "dry-run",
-          });
-        }
-        return;
-      }
-
-      const privateKey = await getActivePrivateKey("solana");
-      const authClient = new JupiterClient(privateKey);
-      const result = await authClient.swap(tokenIn, tokenOut, amount);
-      out.data({ ...result, bestRoute: "jupiter" });
+      await runPreparedWriteOperation(args, route.operation, route.prepared, {
+        formatPlan: (plan) =>
+          decorateAggregatedPlan(plan, [route.quote], route.quote.protocol),
+        formatResult: (result) => ({
+          ...(result as unknown as Record<string, unknown>),
+          bestRoute: route.quote.protocol,
+        }),
+      });
       return;
     }
 
-    // EVM chains → compare Uniswap and Curve
-    const quotes: SwapQuote[] = [];
+    const preparedRoutes: AnyPreparedSwapRoute[] = [];
 
-    // Try Uniswap
     try {
-      const { UniswapClient } = await import("../../protocols/uniswap/client");
-      const uniClient = new UniswapClient(chain);
-      const uniQuote = await uniClient.quote(tokenIn, tokenOut, amount);
-      quotes.push({
-        protocol: "uniswap",
-        amountOut: uniQuote.amountOut,
-        price: uniQuote.price,
-      });
+      preparedRoutes.push(
+        await prepareRoute(
+          createUniswapSwapOperation({
+            tokenIn,
+            tokenOut,
+            amount,
+            chain,
+          }),
+          (prepared) => ({
+            protocol: "uniswap",
+            amountOut: prepared.quote.amountOut,
+            price: prepared.quote.price,
+          }),
+        ),
+      );
     } catch {
-      // Uniswap doesn't support this pair
+      // Uniswap does not support this route.
     }
 
-    // Try Curve
     try {
-      const { CurveClient } = await import("../../protocols/curve/client");
-      const curveClient = new CurveClient(chain);
-      const curveQuote = await curveClient.quote(tokenIn, tokenOut, amount);
-      quotes.push({
-        protocol: "curve",
-        amountOut: curveQuote.amountOut,
-        price: curveQuote.price,
-      });
+      preparedRoutes.push(
+        await prepareRoute(
+          createCurveSwapOperation({
+            tokenIn,
+            tokenOut,
+            amount,
+            chain,
+          }),
+          (prepared) => ({
+            protocol: "curve",
+            amountOut: prepared.quote.amountOut,
+            price: prepared.quote.price,
+          }),
+        ),
+      );
     } catch {
-      // Curve doesn't support this pair
+      // Curve does not support this route.
     }
 
-    if (quotes.length === 0) {
+    if (preparedRoutes.length === 0) {
       console.error(
-        `No DEX route found for ${tokenIn} → ${tokenOut} on ${chain}`,
+        `No DEX route found for ${tokenIn} -> ${tokenOut} on ${chain}`,
       );
       process.exit(1);
     }
 
-    // Pick the best quote (highest output)
-    quotes.sort(
-      (a, b) => Number.parseFloat(b.amountOut) - Number.parseFloat(a.amountOut),
+    const quotes = preparedRoutes.map((route) => route.quote);
+    const bestQuote = selectBestRoute(quotes);
+    const selectedRoute = preparedRoutes.find(
+      (route) => route.quote.protocol === bestQuote.protocol,
     );
-    const best = quotes[0];
 
-    // Show comparison if multiple quotes
+    if (!selectedRoute) {
+      console.error(`Selected route ${bestQuote.protocol} is unavailable.`);
+      process.exit(1);
+    }
+
     if (quotes.length > 1) {
       console.error(ansis.dim("Route comparison:"));
-      for (const q of quotes) {
-        const marker = q === best ? ansis.green("★") : " ";
+      for (const quote of quotes) {
+        const marker =
+          quote.protocol === bestQuote.protocol ? ansis.green("★") : " ";
         console.error(
-          `  ${marker} ${q.protocol.padEnd(10)} → ${q.amountOut} ${tokenOut}`,
+          `  ${marker} ${quote.protocol.padEnd(10)} -> ${quote.amountOut} ${tokenOut}`,
         );
       }
     }
 
-    const confirmed = await confirmTransaction(
-      {
-        action: `Swap ${amount} ${tokenIn} → ${best.amountOut} ${tokenOut} via ${best.protocol}`,
-        details: {
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: best.amountOut,
-          chain,
-          route: best.protocol,
-        },
-      },
+    await runPreparedWriteOperation(
       args,
+      selectedRoute.operation as WriteOperation<object, string, object>,
+      selectedRoute.prepared as object,
+      {
+        formatPlan: (plan) =>
+          decorateAggregatedPlan(plan, quotes, bestQuote.protocol),
+        formatResult: (result) => ({
+          ...(result as unknown as Record<string, unknown>),
+          bestRoute: bestQuote.protocol,
+        }),
+      },
     );
-
-    if (!confirmed) {
-      if (args["dry-run"]) {
-        out.data({
-          action: "SWAP",
-          bestRoute: best.protocol,
-          tokenIn,
-          tokenOut,
-          amountIn: amount,
-          amountOut: best.amountOut,
-          chain,
-          allQuotes: quotes,
-          status: "dry-run",
-        });
-      }
-      return;
-    }
-
-    const privateKey = await getActivePrivateKey("evm");
-
-    // Execute via best protocol
-    if (best.protocol === "uniswap") {
-      const { UniswapClient } = await import("../../protocols/uniswap/client");
-      const client = new UniswapClient(chain, privateKey);
-      const result = await client.swap(tokenIn, tokenOut, amount);
-      out.data({ ...result, bestRoute: "uniswap" });
-    } else {
-      const { CurveClient } = await import("../../protocols/curve/client");
-      const client = new CurveClient(chain, privateKey);
-      const result = await client.swap(tokenIn, tokenOut, amount);
-      out.data({ ...result, bestRoute: "curve" });
-    }
   },
 });

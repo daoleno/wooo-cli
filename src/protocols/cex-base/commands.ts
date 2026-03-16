@@ -1,16 +1,24 @@
 import { defineCommand } from "citty";
-import { loadWoooConfig } from "../../core/config";
-import { confirmTransaction } from "../../core/confirm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,
   validateLeverage,
   validatePair,
 } from "../../core/validation";
+import { runWriteOperation } from "../../core/write-operation";
 import type { CexClientOptions } from "./client";
 import { CexClient } from "./client";
+import {
+  type AuthResolver,
+  createFuturesOrderOperation,
+  createSpotOrderOperation,
+  resolveExchangeAuthFromConfig,
+} from "./operations";
 
-type AuthResolver = () => Promise<CexClientOptions>;
+export {
+  createFuturesOrderExecutionPlan,
+  createSpotOrderExecutionPlan,
+} from "./operations";
 
 export function createCexCommands(
   exchangeId: string,
@@ -39,43 +47,18 @@ export function createCexCommands(
       format: { type: "string", default: "table" },
     },
     async run({ args }) {
-      const out = createOutput(resolveOutputOptions(args));
       const pair = validatePair(args.pair);
       const amount = validateAmount(args.amount);
-
-      const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(pair);
-
-      const confirmed = await confirmTransaction(
-        {
-          action: `BUY ${amount} ${pair}`,
-          details: {
-            pair,
-            amount,
-            estimatedPrice: `$${ticker.last}`,
-            exchange: exchangeId,
-          },
-        },
+      await runWriteOperation(
         args,
+        createSpotOrderOperation({
+          exchangeId,
+          pair,
+          amount,
+          resolveAuth,
+          side: "buy",
+        }),
       );
-
-      if (!confirmed) {
-        if (args["dry-run"]) {
-          out.data({
-            action: "BUY",
-            pair,
-            amount,
-            estimatedPrice: ticker.last,
-            status: "dry-run",
-          });
-        }
-        return;
-      }
-
-      const auth = await resolveAuth();
-      const client = createClient(auth);
-      const result = await client.createSpotOrder(pair, "buy", amount);
-      out.data(result);
     },
   });
 
@@ -98,43 +81,18 @@ export function createCexCommands(
       format: { type: "string", default: "table" },
     },
     async run({ args }) {
-      const out = createOutput(resolveOutputOptions(args));
       const pair = validatePair(args.pair);
       const amount = validateAmount(args.amount);
-
-      const pubClient = createClient();
-      const ticker = await pubClient.fetchTicker(pair);
-
-      const confirmed = await confirmTransaction(
-        {
-          action: `SELL ${amount} ${pair}`,
-          details: {
-            pair,
-            amount,
-            estimatedPrice: `$${ticker.last}`,
-            exchange: exchangeId,
-          },
-        },
+      await runWriteOperation(
         args,
+        createSpotOrderOperation({
+          exchangeId,
+          pair,
+          amount,
+          resolveAuth,
+          side: "sell",
+        }),
       );
-
-      if (!confirmed) {
-        if (args["dry-run"]) {
-          out.data({
-            action: "SELL",
-            pair,
-            amount,
-            estimatedPrice: ticker.last,
-            status: "dry-run",
-          });
-        }
-        return;
-      }
-
-      const auth = await resolveAuth();
-      const client = createClient(auth);
-      const result = await client.createSpotOrder(pair, "sell", amount);
-      out.data(result);
     },
   });
 
@@ -162,59 +120,19 @@ export function createCexCommands(
       format: { type: "string", default: "table" },
     },
     async run({ args }) {
-      const out = createOutput(resolveOutputOptions(args));
       const sizeUsd = validateAmount(args.size, "Position size");
       const leverage = validateLeverage(args.leverage);
-
-      const pubClient = createClient();
-      const preview = await pubClient.getFuturesOrderPreview(
-        args.symbol,
-        sizeUsd,
-      );
-
-      const confirmed = await confirmTransaction(
-        {
-          action: `LONG ${args.symbol} with $${sizeUsd} at ${leverage}x`,
-          details: {
-            symbol: args.symbol,
-            sizeUsd,
-            amount: preview.amount.toString(),
-            estimatedPrice: `$${preview.price}`,
-            contractSize: preview.contractSize,
-            marketType: preview.isContract ? "contract" : "spot-like",
-            leverage: `${leverage}x`,
-            exchange: exchangeId,
-          },
-        },
+      await runWriteOperation(
         args,
+        createFuturesOrderOperation({
+          exchangeId,
+          leverage,
+          resolveAuth,
+          side: "long",
+          sizeUsd,
+          symbol: args.symbol,
+        }),
       );
-
-      if (!confirmed) {
-        if (args["dry-run"]) {
-          out.data({
-            action: "LONG",
-            symbol: args.symbol,
-            sizeUsd,
-            amount: preview.amount.toString(),
-            estimatedPrice: preview.price,
-            contractSize: preview.contractSize,
-            marketType: preview.isContract ? "contract" : "spot-like",
-            leverage,
-            status: "dry-run",
-          });
-        }
-        return;
-      }
-
-      const auth = await resolveAuth();
-      const client = createClient(auth);
-      const result = await client.createFuturesOrder(
-        args.symbol,
-        "buy",
-        sizeUsd,
-        leverage,
-      );
-      out.data(result);
     },
   });
 
@@ -242,59 +160,19 @@ export function createCexCommands(
       format: { type: "string", default: "table" },
     },
     async run({ args }) {
-      const out = createOutput(resolveOutputOptions(args));
       const sizeUsd = validateAmount(args.size, "Position size");
       const leverage = validateLeverage(args.leverage);
-
-      const pubClient = createClient();
-      const preview = await pubClient.getFuturesOrderPreview(
-        args.symbol,
-        sizeUsd,
-      );
-
-      const confirmed = await confirmTransaction(
-        {
-          action: `SHORT ${args.symbol} with $${sizeUsd} at ${leverage}x`,
-          details: {
-            symbol: args.symbol,
-            sizeUsd,
-            amount: preview.amount.toString(),
-            estimatedPrice: `$${preview.price}`,
-            contractSize: preview.contractSize,
-            marketType: preview.isContract ? "contract" : "spot-like",
-            leverage: `${leverage}x`,
-            exchange: exchangeId,
-          },
-        },
+      await runWriteOperation(
         args,
+        createFuturesOrderOperation({
+          exchangeId,
+          leverage,
+          resolveAuth,
+          side: "short",
+          sizeUsd,
+          symbol: args.symbol,
+        }),
       );
-
-      if (!confirmed) {
-        if (args["dry-run"]) {
-          out.data({
-            action: "SHORT",
-            symbol: args.symbol,
-            sizeUsd,
-            amount: preview.amount.toString(),
-            estimatedPrice: preview.price,
-            contractSize: preview.contractSize,
-            marketType: preview.isContract ? "contract" : "spot-like",
-            leverage,
-            status: "dry-run",
-          });
-        }
-        return;
-      }
-
-      const auth = await resolveAuth();
-      const client = createClient(auth);
-      const result = await client.createFuturesOrder(
-        args.symbol,
-        "sell",
-        sizeUsd,
-        leverage,
-      );
-      out.data(result);
     },
   });
 
@@ -376,31 +254,4 @@ export function createCexCommands(
   return { spotBuy, spotSell, futuresLong, futuresShort, balance, positions };
 }
 
-export async function resolveAuthFromConfig(
-  exchangeId: string,
-): Promise<CexClientOptions> {
-  const config = await loadWoooConfig();
-  const exchangeConfig = config[exchangeId] as
-    | Record<string, string>
-    | undefined;
-
-  // Check env vars first: WOOO_OKX_API_KEY, WOOO_OKX_API_SECRET, etc.
-  const prefix = `WOOO_${exchangeId.toUpperCase()}_`;
-  const apiKey = process.env[`${prefix}API_KEY`] || exchangeConfig?.apiKey;
-  const secret =
-    process.env[`${prefix}API_SECRET`] || exchangeConfig?.apiSecret;
-  const password =
-    process.env[`${prefix}PASSPHRASE`] || exchangeConfig?.passphrase;
-
-  if (!apiKey || !secret) {
-    console.error(
-      `Error: ${exchangeId.toUpperCase()} API credentials not configured.`,
-    );
-    console.error(
-      `Set ${prefix}API_KEY and ${prefix}API_SECRET env vars, or run: wooo config set ${exchangeId}.apiKey <key>`,
-    );
-    process.exit(3);
-  }
-
-  return { apiKey, secret, password };
-}
+export const resolveAuthFromConfig = resolveExchangeAuthFromConfig;

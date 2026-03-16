@@ -14,9 +14,10 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("perps");
     expect(result).toContain("dex");
     expect(result).toContain("defi");
-    expect(result).toContain("bridge");
     expect(result).toContain("chain");
     expect(result).toContain("swap");
+    expect(result).not.toContain("bridge");
+    expect(result).not.toContain("capabilities");
   });
 
   test("cex group shows exchanges", async () => {
@@ -29,12 +30,6 @@ describe("wooo-cli smoke tests", () => {
   test("perps group shows protocols", async () => {
     const result = await $`bun run src/index.ts perps --help`.text();
     expect(result).toContain("hyperliquid");
-    expect(result).toContain("gmx");
-  });
-
-  test("bridge group shows protocols", async () => {
-    const result = await $`bun run src/index.ts bridge --help`.text();
-    expect(result).toContain("stargate");
   });
 
   test("cex okx shows subcommands", async () => {
@@ -95,21 +90,6 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("stake");
     expect(result).toContain("rewards");
     expect(result).toContain("balance");
-  });
-
-  test("perps gmx shows subcommands", async () => {
-    const result = await $`bun run src/index.ts perps gmx --help`.text();
-    expect(result).toContain("long");
-    expect(result).toContain("short");
-    expect(result).toContain("positions");
-    expect(result).toContain("markets");
-  });
-
-  test("bridge stargate shows subcommands", async () => {
-    const result = await $`bun run src/index.ts bridge stargate --help`.text();
-    expect(result).toContain("bridge");
-    expect(result).toContain("quote");
-    expect(result).toContain("routes");
   });
 
   test("dex curve shows subcommands", async () => {
