@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { $ } from "bun";
 
+const MORPHO_ETHEREUM_WSTETH_USDC_MARKET =
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc";
+
 describe("execution plan dry-run output", () => {
   test("aave supply returns an execution plan", async () => {
     const result =
-      await $`bun run src/index.ts lend aave supply USDC 100 --chain ethereum --dry-run --json`.text();
+      await $`bun run src/index.ts lend aave supply USDC 100 --chain ethereum --market AaveV3Ethereum --dry-run --json`.text();
     const parsed = JSON.parse(result) as {
       kind: string;
       operation: { group: string; protocol: string; command: string };
@@ -16,6 +19,25 @@ describe("execution plan dry-run output", () => {
     expect(parsed.operation.group).toBe("lend");
     expect(parsed.operation.protocol).toBe("aave");
     expect(parsed.operation.command).toBe("supply");
+    expect(parsed.chain).toBe("ethereum");
+    expect(parsed.steps[0]?.kind).toBe("approval");
+    expect(parsed.steps[1]?.kind).toBe("transaction");
+  });
+
+  test("aave repay returns an execution plan", async () => {
+    const result =
+      await $`bun run src/index.ts lend aave repay USDC 100 --chain ethereum --market AaveV3Ethereum --dry-run --json`.text();
+    const parsed = JSON.parse(result) as {
+      kind: string;
+      operation: { group: string; protocol: string; command: string };
+      chain: string;
+      steps: Array<{ kind: string }>;
+    };
+
+    expect(parsed.kind).toBe("execution-plan");
+    expect(parsed.operation.group).toBe("lend");
+    expect(parsed.operation.protocol).toBe("aave");
+    expect(parsed.operation.command).toBe("repay");
     expect(parsed.chain).toBe("ethereum");
     expect(parsed.steps[0]?.kind).toBe("approval");
     expect(parsed.steps[1]?.kind).toBe("transaction");
@@ -41,7 +63,7 @@ describe("execution plan dry-run output", () => {
       expect(parsed.steps[0]?.kind).toBe("approval");
       expect(parsed.steps[1]?.kind).toBe("transaction");
     },
-    { timeout: 30000 },
+    { timeout: 60000 },
   );
 
   test(
@@ -65,7 +87,7 @@ describe("execution plan dry-run output", () => {
       expect(parsed.accountType).toBe("solana");
       expect(parsed.steps[0]?.kind).toBe("transaction");
     },
-    { timeout: 30000 },
+    { timeout: 60000 },
   );
 
   test(
@@ -90,7 +112,7 @@ describe("execution plan dry-run output", () => {
         "This plan was selected by the aggregated swap router.",
       );
     },
-    { timeout: 30000 },
+    { timeout: 60000 },
   );
 
   test("lido stake returns an execution plan", async () => {
@@ -111,6 +133,83 @@ describe("execution plan dry-run output", () => {
     expect(parsed.steps).toHaveLength(1);
     expect(parsed.steps[0]?.kind).toBe("transaction");
   });
+
+  test(
+    "morpho supply returns an execution plan",
+    async () => {
+      const result =
+        await $`bun run src/index.ts lend morpho supply ${MORPHO_ETHEREUM_WSTETH_USDC_MARKET} 100 --chain ethereum --dry-run --json`.text();
+      const parsed = JSON.parse(result) as {
+        kind: string;
+        operation: { group: string; protocol: string; command: string };
+        chain: string;
+        accountType: string;
+        steps: Array<{ kind: string }>;
+      };
+
+      expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("lend");
+      expect(parsed.operation.protocol).toBe("morpho");
+      expect(parsed.operation.command).toBe("supply");
+      expect(parsed.chain).toBe("ethereum");
+      expect(parsed.accountType).toBe("evm");
+      expect(parsed.steps[0]?.kind).toBe("approval");
+      expect(parsed.steps[1]?.kind).toBe("transaction");
+    },
+    { timeout: 60000 },
+  );
+
+  test(
+    "morpho borrow returns an execution plan",
+    async () => {
+      const result =
+        await $`bun run src/index.ts lend morpho borrow ${MORPHO_ETHEREUM_WSTETH_USDC_MARKET} 10 --chain ethereum --dry-run --json`.text();
+      const parsed = JSON.parse(result) as {
+        kind: string;
+        operation: { group: string; protocol: string; command: string };
+        chain: string;
+        accountType: string;
+        steps: Array<{ kind: string }>;
+      };
+
+      expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("lend");
+      expect(parsed.operation.protocol).toBe("morpho");
+      expect(parsed.operation.command).toBe("borrow");
+      expect(parsed.chain).toBe("ethereum");
+      expect(parsed.accountType).toBe("evm");
+      expect(parsed.steps).toHaveLength(1);
+      expect(parsed.steps[0]?.kind).toBe("transaction");
+    },
+    { timeout: 60000 },
+  );
+
+  test(
+    "aave markets json returns stable machine-readable output",
+    async () => {
+      const result =
+        await $`bun run src/index.ts lend aave markets --chain ethereum --json`.text();
+      const parsed = JSON.parse(result) as {
+        chain: string;
+        markets: Array<{
+          market: string;
+          token: string;
+          tokenAddress: string;
+          supplyAPY: string;
+          variableBorrowAPY: string;
+          active: boolean;
+        }>;
+      };
+
+      expect(parsed.chain).toBe("ethereum");
+      expect(parsed.markets.length).toBeGreaterThan(0);
+      expect(parsed.markets[0]?.market).toContain("AaveV3Ethereum");
+      expect(parsed.markets[0]?.tokenAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      expect(typeof parsed.markets[0]?.active).toBe("boolean");
+      expect(parsed.markets[0]?.supplyAPY).toContain("%");
+    },
+    { timeout: 60000 },
+  );
 
   test(
     "curve pools json returns stable machine-readable output",

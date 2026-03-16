@@ -5,6 +5,7 @@ import { curveProtocol } from "./curve/commands";
 import { hyperliquidProtocol } from "./hyperliquid/commands";
 import { jupiterProtocol } from "./jupiter/commands";
 import { lidoProtocol } from "./lido/commands";
+import { morphoProtocol } from "./morpho/commands";
 import { okxProtocol } from "./okx/commands";
 import {
   PROTOCOL_TYPE_TO_GROUP,
@@ -26,6 +27,7 @@ const protocols: ProtocolDefinition[] = [
   jupiterProtocol,
   // Lending and staking
   aaveProtocol,
+  morphoProtocol,
   lidoProtocol,
 ];
 

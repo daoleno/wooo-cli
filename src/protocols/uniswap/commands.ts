@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { evmChainArg, normalizeChainName } from "../../core/chains";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,
@@ -36,11 +37,7 @@ const swap = defineCommand({
       description: "Amount of tokenIn to swap",
       required: true,
     },
-    chain: {
-      type: "string",
-      description: "Chain (default: ethereum)",
-      default: "ethereum",
-    },
+    chain: evmChainArg(),
     yes: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
     json: { type: "boolean", default: false },
@@ -81,11 +78,7 @@ const quote = defineCommand({
       description: "Amount of tokenIn",
       required: true,
     },
-    chain: {
-      type: "string",
-      description: "Chain (default: ethereum)",
-      default: "ethereum",
-    },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
@@ -105,19 +98,16 @@ const quote = defineCommand({
 const tokens = defineCommand({
   meta: { name: "tokens", description: "List supported tokens on a chain" },
   args: {
-    chain: {
-      type: "string",
-      description: "Chain (default: ethereum)",
-      default: "ethereum",
-    },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const client = new UniswapClient(args.chain);
+    const chain = validateChain(args.chain, SUPPORTED_CHAINS);
+    const client = new UniswapClient(chain);
     const list = await client.tokens();
-    out.data({ chain: args.chain, tokens: list });
+    out.data({ chain: normalizeChainName(chain), tokens: list });
   },
 });
 

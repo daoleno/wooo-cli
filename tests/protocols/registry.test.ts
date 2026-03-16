@@ -18,6 +18,7 @@ describe("protocol registry", () => {
       "curve",
       "jupiter",
       "aave",
+      "morpho",
       "lido",
     ]);
   });
@@ -41,10 +42,12 @@ describe("protocol registry", () => {
   test("protocols have correct types and account modes", () => {
     expect(getProtocol("uniswap")?.type).toBe("dex");
     expect(getProtocol("aave")?.type).toBe("lending");
+    expect(getProtocol("morpho")?.type).toBe("lending");
     expect(getProtocol("lido")?.type).toBe("staking");
     expect(getProtocol("hyperliquid")?.type).toBe("perps");
     expect(getProtocol("uniswap")?.writeAccountType).toBe("evm");
     expect(getProtocol("jupiter")?.writeAccountType).toBe("solana");
+    expect(getProtocol("morpho")?.writeAccountType).toBe("evm");
   });
 
   test("listProtocolsByGroup groups correctly", () => {
@@ -56,7 +59,7 @@ describe("protocol registry", () => {
       "curve",
       "jupiter",
     ]);
-    expect(groups.lend.map((p) => p.name)).toEqual(["aave"]);
+    expect(groups.lend.map((p) => p.name)).toEqual(["aave", "morpho"]);
     expect(groups.stake.map((p) => p.name)).toEqual(["lido"]);
     expect(groups.bridge).toEqual([]);
   });

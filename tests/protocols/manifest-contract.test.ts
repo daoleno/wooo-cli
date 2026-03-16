@@ -19,6 +19,7 @@ describe("protocol manifest contract", () => {
       curve: "evm",
       jupiter: "solana",
       aave: "evm",
+      morpho: "evm",
       lido: "evm",
     });
   });

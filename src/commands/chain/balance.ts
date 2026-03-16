@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { type Address, formatEther, formatUnits, isAddress } from "viem";
+import { evmChainArg, normalizeChainName } from "../../core/chains";
 import { getChain, getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
@@ -42,13 +43,14 @@ export default defineCommand({
       type: "string",
       description: "ERC-20 token contract address (omit for native balance)",
     },
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const publicClient = getPublicClient(args.chain);
+    const chain = normalizeChainName(args.chain);
+    const publicClient = getPublicClient(chain);
 
     if (!isAddress(args.address)) {
       console.error(`Invalid address: ${args.address}`);
@@ -84,19 +86,19 @@ export default defineCommand({
         address: args.address,
         token: symbol,
         balance: formatUnits(balance, decimals),
-        chain: args.chain,
+        chain,
       });
     } else {
       const balance = await publicClient.getBalance({
         address: args.address as Address,
       });
-      const nativeSymbol = getChain(args.chain).nativeCurrency.symbol;
+      const nativeSymbol = getChain(chain).nativeCurrency.symbol;
 
       out.data({
         address: args.address,
         token: nativeSymbol,
         balance: formatEther(balance),
-        chain: args.chain,
+        chain,
       });
     }
   },

@@ -1,65 +1,255 @@
-import { type Address, formatUnits, parseUnits } from "viem";
+import { type Address, formatUnits, maxUint256, parseUnits } from "viem";
 import {
   getAccountAddress,
   getPublicClient,
   getWalletClient,
 } from "../../core/evm";
 import { TxGateway } from "../../core/tx-gateway";
-import {
-  AAVE_POOL,
-  AAVE_POOL_ABI,
-  AAVE_POOL_DATA_PROVIDER,
-  ERC20_ABI,
-  POOL_DATA_PROVIDER_ABI,
-  resolveToken,
-} from "./constants";
-import type { AaveBorrowResult, AaveRate, AaveSupplyResult } from "./types";
+import { type AaveApiMarket, fetchAaveMarkets } from "./api";
+import { AAVE_POOL_ABI, ERC20_ABI } from "./constants";
+import type {
+  AaveBorrowResult,
+  AaveMarketSummary,
+  AavePositionsSummary,
+  AaveRate,
+  AaveRepayResult,
+  AaveSupplyResult,
+  AaveWithdrawResult,
+} from "./types";
 
-// Aave rates are in RAY (1e27)
-const RAY = 10n ** 27n;
+interface AaveMarketSelection {
+  market: string;
+  marketAddress: Address;
+}
 
-function rayToPercent(ray: bigint): string {
-  // Convert ray to percentage with 2 decimals
-  return ((Number(ray) / Number(RAY)) * 100).toFixed(2);
+interface AaveReserveSelection extends AaveMarketSelection {
+  token: string;
+  tokenAddress: Address;
+  decimals: number;
+  reserve: AaveApiMarket["reserves"][number];
+}
+
+interface AaveWriteContext {
+  account: Address;
+  pool: Address;
+  publicClient: ReturnType<typeof getPublicClient>;
+  token: { address: Address; decimals: number };
+  txGateway: TxGateway;
+}
+
+function formatApy(value: string | number | undefined): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return `${numeric.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function formatPercent(value: string | number | undefined): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/A";
+  return `${numeric.toLocaleString("en-US", {
+    minimumFractionDigits: numeric === 0 ? 0 : 0,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
+function normalizeSymbol(symbol: string): string {
+  return symbol.trim().toUpperCase();
 }
 
 export class AaveClient {
+  private marketsPromise?: Promise<AaveApiMarket[]>;
+
   constructor(
     private chain: string,
     private privateKey?: string,
   ) {}
 
-  private getPoolAddress(): Address {
-    const addr = AAVE_POOL[this.chain];
-    if (!addr) throw new Error(`Aave not supported on ${this.chain}`);
-    return addr;
+  private async getMarkets(): Promise<AaveApiMarket[]> {
+    if (!this.marketsPromise) {
+      this.marketsPromise = fetchAaveMarkets(this.chain);
+    }
+
+    const markets = await this.marketsPromise;
+    if (markets.length === 0) {
+      throw new Error(`Aave has no markets on ${this.chain}`);
+    }
+    return markets;
   }
 
-  private getDataProviderAddress(): Address {
-    const addr = AAVE_POOL_DATA_PROVIDER[this.chain];
-    if (!addr)
-      throw new Error(`Aave data provider not available on ${this.chain}`);
-    return addr;
+  private matchMarketSelector(
+    market: AaveApiMarket,
+    selector: string,
+  ): boolean {
+    const normalized = selector.trim().toLowerCase();
+    return (
+      market.name.toLowerCase() === normalized ||
+      market.address.toLowerCase() === normalized
+    );
   }
 
-  async supply(tokenSymbol: string, amount: number): Promise<AaveSupplyResult> {
+  private formatMarketList(markets: AaveApiMarket[]): string {
+    return markets.map((market) => market.name).join(", ");
+  }
+
+  private async requireMarket(selector: string): Promise<AaveApiMarket> {
+    const markets = await this.getMarkets();
+    const market = markets.find((item) =>
+      this.matchMarketSelector(item, selector),
+    );
+    if (!market) {
+      throw new Error(
+        `Unknown Aave market "${selector}" on ${this.chain}. Available: ${this.formatMarketList(markets)}`,
+      );
+    }
+    return market;
+  }
+
+  async resolveMarketSelection(
+    marketSelector?: string,
+  ): Promise<AaveMarketSelection> {
+    const markets = await this.getMarkets();
+
+    if (marketSelector) {
+      const market = await this.requireMarket(marketSelector);
+      return {
+        market: market.name,
+        marketAddress: market.address,
+      };
+    }
+
+    if (markets.length === 1) {
+      return {
+        market: markets[0].name,
+        marketAddress: markets[0].address,
+      };
+    }
+
+    throw new Error(
+      `Aave has multiple markets on ${this.chain}. Specify --market. Available: ${this.formatMarketList(markets)}`,
+    );
+  }
+
+  async resolveReserveSelection(
+    tokenSymbol: string,
+    marketSelector?: string,
+  ): Promise<Omit<AaveReserveSelection, "reserve">> {
+    const selection = await this.findReserveSelection(
+      tokenSymbol,
+      marketSelector,
+    );
+    return {
+      market: selection.market,
+      marketAddress: selection.marketAddress,
+      token: selection.token,
+      tokenAddress: selection.tokenAddress,
+      decimals: selection.decimals,
+    };
+  }
+
+  private async findReserveSelection(
+    tokenSymbol: string,
+    marketSelector?: string,
+  ): Promise<AaveReserveSelection> {
+    const normalizedToken = normalizeSymbol(tokenSymbol);
+    const markets = await this.getMarkets();
+
+    if (marketSelector) {
+      const market = await this.requireMarket(marketSelector);
+      const reserve = market.reserves.find(
+        (item) =>
+          normalizeSymbol(item.underlyingToken.symbol) === normalizedToken,
+      );
+      if (!reserve) {
+        throw new Error(
+          `Token ${normalizedToken} is not listed in ${market.name} on ${this.chain}`,
+        );
+      }
+      return {
+        market: market.name,
+        marketAddress: market.address,
+        token: normalizedToken,
+        tokenAddress: reserve.underlyingToken.address,
+        decimals: reserve.underlyingToken.decimals,
+        reserve,
+      };
+    }
+
+    const matches = markets.flatMap((market) => {
+      const reserve = market.reserves.find(
+        (item) =>
+          normalizeSymbol(item.underlyingToken.symbol) === normalizedToken,
+      );
+      if (!reserve) return [];
+      return [
+        {
+          market: market.name,
+          marketAddress: market.address,
+          token: normalizedToken,
+          tokenAddress: reserve.underlyingToken.address,
+          decimals: reserve.underlyingToken.decimals,
+          reserve,
+        },
+      ];
+    });
+
+    if (matches.length === 0) {
+      throw new Error(`Unknown token: ${normalizedToken} on ${this.chain}`);
+    }
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Token ${normalizedToken} exists in multiple Aave markets on ${this.chain}. Specify --market. Matches: ${matches
+          .map((match) => match.market)
+          .join(", ")}`,
+      );
+    }
+
+    return matches[0];
+  }
+
+  private async createWriteContext(
+    tokenSymbol: string,
+    marketSelector?: string,
+  ): Promise<AaveWriteContext> {
     if (!this.privateKey) throw new Error("Private key required");
 
-    const pool = this.getPoolAddress();
-    const token = resolveToken(tokenSymbol, this.chain);
-    if (!token)
-      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
-
+    const selection = await this.findReserveSelection(
+      tokenSymbol,
+      marketSelector,
+    );
     const publicClient = getPublicClient(this.chain);
     const walletClient = getWalletClient(this.privateKey, this.chain);
     const account = getAccountAddress(this.privateKey);
     const txGateway = new TxGateway(publicClient, walletClient, account);
+
+    return {
+      account,
+      pool: selection.marketAddress,
+      publicClient,
+      token: {
+        address: selection.tokenAddress,
+        decimals: selection.decimals,
+      },
+      txGateway,
+    };
+  }
+
+  async supply(
+    tokenSymbol: string,
+    amount: number,
+    marketSelector?: string,
+  ): Promise<AaveSupplyResult> {
+    const { account, pool, token, txGateway } = await this.createWriteContext(
+      tokenSymbol,
+      marketSelector,
+    );
     const amountWei = parseUnits(String(amount), token.decimals);
 
-    // Approve pool to spend tokens
     await txGateway.ensureAllowance(token.address, pool, amountWei, ERC20_ABI);
 
-    // Supply to Aave
     const { receipt, txHash } = await txGateway.simulateAndWriteContract({
       address: pool,
       abi: AAVE_POOL_ABI,
@@ -69,27 +259,59 @@ export class AaveClient {
 
     return {
       txHash,
-      token: tokenSymbol.toUpperCase(),
+      token: normalizeSymbol(tokenSymbol),
       amount: amount.toString(),
       status: receipt.status === "success" ? "confirmed" : "failed",
     };
   }
 
-  async borrow(tokenSymbol: string, amount: number): Promise<AaveBorrowResult> {
-    if (!this.privateKey) throw new Error("Private key required");
+  async withdraw(
+    tokenSymbol: string,
+    amount?: number,
+    all = false,
+    marketSelector?: string,
+  ): Promise<AaveWithdrawResult> {
+    const { account, pool, token, txGateway } = await this.createWriteContext(
+      tokenSymbol,
+      marketSelector,
+    );
 
-    const pool = this.getPoolAddress();
-    const token = resolveToken(tokenSymbol, this.chain);
-    if (!token)
-      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
+    if (!all && amount === undefined) {
+      throw new Error("Withdraw amount is required unless all=true");
+    }
 
-    const publicClient = getPublicClient(this.chain);
-    const walletClient = getWalletClient(this.privateKey, this.chain);
-    const account = getAccountAddress(this.privateKey);
-    const txGateway = new TxGateway(publicClient, walletClient, account);
+    const amountWei =
+      all || amount === undefined
+        ? maxUint256
+        : parseUnits(String(amount), token.decimals);
+
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
+      address: pool,
+      abi: AAVE_POOL_ABI,
+      functionName: "withdraw",
+      args: [token.address, amountWei, account],
+    });
+
+    return {
+      txHash,
+      token: normalizeSymbol(tokenSymbol),
+      amount: all ? "ALL" : String(amount),
+      all,
+      status: receipt.status === "success" ? "confirmed" : "failed",
+    };
+  }
+
+  async borrow(
+    tokenSymbol: string,
+    amount: number,
+    marketSelector?: string,
+  ): Promise<AaveBorrowResult> {
+    const { account, pool, token, txGateway } = await this.createWriteContext(
+      tokenSymbol,
+      marketSelector,
+    );
     const amountWei = parseUnits(String(amount), token.decimals);
 
-    // Borrow with variable rate (2)
     const { receipt, txHash } = await txGateway.simulateAndWriteContract({
       address: pool,
       abi: AAVE_POOL_ABI,
@@ -99,38 +321,72 @@ export class AaveClient {
 
     return {
       txHash,
-      token: tokenSymbol.toUpperCase(),
+      token: normalizeSymbol(tokenSymbol),
       amount: amount.toString(),
       interestRateMode: "variable",
       status: receipt.status === "success" ? "confirmed" : "failed",
     };
   }
 
-  async positions(): Promise<{
-    totalCollateralUSD: string;
-    totalDebtUSD: string;
-    availableBorrowsUSD: string;
-    healthFactor: string;
-    ltv: string;
-  }> {
+  async repay(
+    tokenSymbol: string,
+    amount?: number,
+    all = false,
+    marketSelector?: string,
+  ): Promise<AaveRepayResult> {
+    const { account, pool, token, txGateway } = await this.createWriteContext(
+      tokenSymbol,
+      marketSelector,
+    );
+
+    if (!all && amount === undefined) {
+      throw new Error("Repay amount is required unless all=true");
+    }
+
+    const amountWei =
+      all || amount === undefined
+        ? maxUint256
+        : parseUnits(String(amount), token.decimals);
+
+    await txGateway.ensureAllowance(token.address, pool, amountWei, ERC20_ABI);
+
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
+      address: pool,
+      abi: AAVE_POOL_ABI,
+      functionName: "repay",
+      args: [token.address, amountWei, 2n, account],
+    });
+
+    return {
+      txHash,
+      token: normalizeSymbol(tokenSymbol),
+      amount: all ? "ALL" : String(amount),
+      all,
+      interestRateMode: "variable",
+      status: receipt.status === "success" ? "confirmed" : "failed",
+    };
+  }
+
+  async positions(marketSelector?: string): Promise<AavePositionsSummary> {
     if (!this.privateKey) throw new Error("Private key required");
 
+    const selection = await this.resolveMarketSelection(marketSelector);
     const publicClient = getPublicClient(this.chain);
     const account = getAccountAddress(this.privateKey);
-    const pool = this.getPoolAddress();
 
     const data = await publicClient.readContract({
-      address: pool,
+      address: selection.marketAddress,
       abi: AAVE_POOL_ABI,
       functionName: "getUserAccountData",
       args: [account],
     });
 
-    // Aave returns values in base currency (USD with 8 decimals)
     const [totalCollateral, totalDebt, availableBorrows, , ltv, healthFactor] =
       data as [bigint, bigint, bigint, bigint, bigint, bigint];
 
     return {
+      market: selection.market,
+      marketAddress: selection.marketAddress,
       totalCollateralUSD: formatUnits(totalCollateral, 8),
       totalDebtUSD: formatUnits(totalDebt, 8),
       availableBorrowsUSD: formatUnits(availableBorrows, 8),
@@ -139,28 +395,52 @@ export class AaveClient {
     };
   }
 
-  async rates(tokenSymbol: string): Promise<AaveRate> {
-    const dataProvider = this.getDataProviderAddress();
-    const token = resolveToken(tokenSymbol, this.chain);
-    if (!token)
-      throw new Error(`Unknown token: ${tokenSymbol} on ${this.chain}`);
-
-    const publicClient = getPublicClient(this.chain);
-
-    const data = await publicClient.readContract({
-      address: dataProvider,
-      abi: POOL_DATA_PROVIDER_ABI,
-      functionName: "getReserveData",
-      args: [token.address],
-    });
-
-    const reserveData = data as unknown as bigint[];
+  async rates(tokenSymbol: string, marketSelector?: string): Promise<AaveRate> {
+    const selection = await this.findReserveSelection(
+      tokenSymbol,
+      marketSelector,
+    );
 
     return {
-      token: tokenSymbol.toUpperCase(),
-      supplyAPY: `${rayToPercent(reserveData[5])}%`,
-      variableBorrowAPY: `${rayToPercent(reserveData[6])}%`,
-      stableBorrowAPY: `${rayToPercent(reserveData[7])}%`,
+      market: selection.market,
+      marketAddress: selection.marketAddress,
+      token: selection.token,
+      supplyAPY: formatApy(selection.reserve.supplyInfo.apy.formatted),
+      variableBorrowAPY: formatApy(
+        selection.reserve.borrowInfo?.apy.formatted ?? 0,
+      ),
+      stableBorrowAPY: "N/A",
     };
+  }
+
+  async markets(marketSelector?: string): Promise<AaveMarketSummary[]> {
+    const markets = marketSelector
+      ? [await this.requireMarket(marketSelector)]
+      : await this.getMarkets();
+
+    return markets
+      .flatMap((market) =>
+        market.reserves.map((reserve) => ({
+          market: market.name,
+          marketAddress: market.address,
+          token: normalizeSymbol(reserve.underlyingToken.symbol),
+          tokenAddress: reserve.underlyingToken.address,
+          decimals: reserve.underlyingToken.decimals,
+          supplyAPY: formatApy(reserve.supplyInfo.apy.formatted),
+          variableBorrowAPY: formatApy(reserve.borrowInfo?.apy.formatted ?? 0),
+          stableBorrowAPY: "N/A",
+          ltv: formatPercent(reserve.supplyInfo.maxLTV.formatted),
+          collateralEnabled: reserve.supplyInfo.canBeCollateral,
+          borrowingEnabled: reserve.borrowInfo?.borrowingState === "ENABLED",
+          stableBorrowEnabled: false,
+          active: !reserve.isPaused,
+          frozen: reserve.isFrozen,
+        })),
+      )
+      .sort(
+        (left, right) =>
+          left.market.localeCompare(right.market) ||
+          left.token.localeCompare(right.token),
+      );
   }
 }

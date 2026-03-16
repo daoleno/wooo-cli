@@ -69,6 +69,7 @@ describe("wooo-cli smoke tests", () => {
   test("lend group shows protocols", async () => {
     const result = await $`bun run src/index.ts lend --help`.text();
     expect(result).toContain("aave");
+    expect(result).toContain("morpho");
   });
 
   test("stake group shows protocols", async () => {
@@ -86,9 +87,25 @@ describe("wooo-cli smoke tests", () => {
   test("lend aave shows subcommands", async () => {
     const result = await $`bun run src/index.ts lend aave --help`.text();
     expect(result).toContain("supply");
+    expect(result).toContain("withdraw");
     expect(result).toContain("borrow");
+    expect(result).toContain("repay");
     expect(result).toContain("positions");
+    expect(result).toContain("markets");
     expect(result).toContain("rates");
+  });
+
+  test("lend morpho shows subcommands", async () => {
+    const result = await $`bun run src/index.ts lend morpho --help`.text();
+    expect(result).toContain("markets");
+    expect(result).toContain("market");
+    expect(result).toContain("positions");
+    expect(result).toContain("supply");
+    expect(result).toContain("withdraw");
+    expect(result).toContain("supply-collateral");
+    expect(result).toContain("withdraw-collateral");
+    expect(result).toContain("borrow");
+    expect(result).toContain("repay");
   });
 
   test("stake lido shows subcommands", async () => {
@@ -128,6 +145,13 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("chain");
   });
 
+  test("help shows common chain aliases", async () => {
+    const result = await $`bun run src/index.ts swap --help`.text();
+    expect(result).toContain("ethereum|eth");
+    expect(result).toContain("arbitrum|arb");
+    expect(result).toContain("solana|sol");
+  });
+
   test("config list returns defaults", async () => {
     const result = await $`bun run src/index.ts config list`.text();
     expect(result).toContain("ethereum");
@@ -160,5 +184,13 @@ describe("wooo-cli smoke tests", () => {
     const parsed = JSON.parse(result) as { chain: string; tokens: string[] };
     expect(parsed.chain).toBe("solana");
     expect(parsed.tokens).toContain("SOL");
+  });
+
+  test("evm chain aliases are normalized in command output", async () => {
+    const result =
+      await $`bun run src/index.ts dex uniswap tokens --chain eth --json`.text();
+    const parsed = JSON.parse(result) as { chain: string; tokens: string[] };
+    expect(parsed.chain).toBe("ethereum");
+    expect(parsed.tokens).toContain("USDC");
   });
 });

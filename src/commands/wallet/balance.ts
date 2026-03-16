@@ -1,6 +1,10 @@
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { defineCommand } from "citty";
 import { formatEther, isAddress } from "viem";
+import {
+  EVM_OR_SOLANA_CHAIN_HELP_TEXT,
+  normalizeChainName,
+} from "../../core/chains";
 import { loadWoooConfig } from "../../core/config";
 import { getActiveWallet } from "../../core/context";
 import { getChain, getPublicClient } from "../../core/evm";
@@ -18,7 +22,7 @@ export default defineCommand({
     },
     chain: {
       type: "string",
-      description: "EVM chain or Solana network override",
+      description: EVM_OR_SOLANA_CHAIN_HELP_TEXT,
       required: false,
     },
     json: { type: "boolean", default: false },
@@ -66,13 +70,14 @@ export default defineCommand({
     }
 
     const configuredDefaultChain = config.default?.chain;
-    const chain =
+    const chainInput =
       args.chain ||
       (configuredDefaultChain &&
       configuredDefaultChain !== "solana" &&
       resolveWalletType(configuredDefaultChain) === "evm"
         ? configuredDefaultChain
         : "ethereum");
+    const chain = normalizeChainName(chainInput);
     const client = getPublicClient(chain);
     const nativeSymbol = getChain(chain).nativeCurrency.symbol;
     const balance = await client.getBalance({

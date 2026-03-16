@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { evmChainArg } from "../../core/chains";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,
@@ -39,7 +40,7 @@ const swap = defineCommand({
       description: "Amount of tokenIn to swap",
       required: true,
     },
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     yes: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
     json: { type: "boolean", default: false },
@@ -65,7 +66,7 @@ const swap = defineCommand({
 const pools = defineCommand({
   meta: { name: "pools", description: "List available Curve pools" },
   args: {
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
@@ -113,7 +114,7 @@ const quote = defineCommand({
       description: "Amount of tokenIn",
       required: true,
     },
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },

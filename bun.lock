@@ -8,6 +8,8 @@
         "@clack/prompts": "^1.1.0",
         "@curvefi/api": "^2.68.38",
         "@lidofinance/lido-ethereum-sdk": "^4.7.0",
+        "@morpho-org/blue-sdk": "^5.18.0",
+        "@morpho-org/blue-sdk-viem": "^4.5.0",
         "@solana/web3.js": "1",
         "@uniswap/sdk-core": "^7.12.1",
         "@uniswap/smart-order-router": "^4.31.10",
@@ -190,6 +192,12 @@
 
     "@metamask/utils": ["@metamask/utils@9.3.0", "https://registry.npmmirror.com/@metamask/utils/-/utils-9.3.0.tgz", { "dependencies": { "@ethereumjs/tx": "^4.2.0", "@metamask/superstruct": "^3.1.0", "@noble/hashes": "^1.3.1", "@scure/base": "^1.1.3", "@types/debug": "^4.1.7", "debug": "^4.3.4", "pony-cause": "^2.1.10", "semver": "^7.5.4", "uuid": "^9.0.1" } }, "sha512-w8CVbdkDrVXFJbfBSlDfafDR6BAkpDmv1bC1UJVCoVny5tW2RKAdn9i68Xf7asYT4TnUhl/hN4zfUiKQq9II4g=="],
 
+    "@morpho-org/blue-sdk": ["@morpho-org/blue-sdk@5.18.0", "https://registry.npmmirror.com/@morpho-org/blue-sdk/-/blue-sdk-5.18.0.tgz", { "dependencies": { "@noble/hashes": "^1.6.1", "@types/lodash.isplainobject": "^4.0.9", "@types/lodash.mergewith": "^4.6.9", "lodash.isplainobject": "^4.0.6", "lodash.mergewith": "^4.6.2" }, "peerDependencies": { "@morpho-org/morpho-ts": "^2.5.0" } }, "sha512-9LmTCiE5parbghnNYawEcJ38ftC43NV9iYEbU6xkittTz8UXdd32Psc0W/UvcSqjrrlyh/Mv+Vs84uDvKFlbqA=="],
+
+    "@morpho-org/blue-sdk-viem": ["@morpho-org/blue-sdk-viem@4.5.0", "https://registry.npmmirror.com/@morpho-org/blue-sdk-viem/-/blue-sdk-viem-4.5.0.tgz", { "peerDependencies": { "@morpho-org/blue-sdk": "^5.17.0", "@morpho-org/morpho-ts": "^2.5.0", "viem": "^2.0.0" } }, "sha512-nqr+j1Yg7e8tcHgklZizd6x6ebGoQiJk/jKyTLiJNDqZYyyVmFnIKghC3Ear7NxJHQrX6q3QIYg3VbVcogLgAQ=="],
+
+    "@morpho-org/morpho-ts": ["@morpho-org/morpho-ts@2.5.0", "https://registry.npmmirror.com/@morpho-org/morpho-ts/-/morpho-ts-2.5.0.tgz", {}, "sha512-eU0DYR5fJoacOEfHVNdQxt5wYCwjF7/YXGudPhpBrzd3M4ejPS0Gv3Gkr3imUiMKeIA6IBzRLuw7qiFAsqXvxA=="],
+
     "@multiformats/dns": ["@multiformats/dns@1.0.13", "https://registry.npmmirror.com/@multiformats/dns/-/dns-1.0.13.tgz", { "dependencies": { "@dnsquery/dns-packet": "^6.1.1", "@libp2p/interface": "^3.1.0", "hashlru": "^2.3.0", "p-queue": "^9.0.0", "progress-events": "^1.0.0", "uint8arrays": "^5.0.2" } }, "sha512-yr4bxtA3MbvJ+2461kYIYMsiiZj/FIqKI64hE4SdvWJUdWF9EtZLar38juf20Sf5tguXKFUruluswAO6JsjS2w=="],
 
     "@multiformats/multiaddr": ["@multiformats/multiaddr@12.5.1", "https://registry.npmmirror.com/@multiformats/multiaddr/-/multiaddr-12.5.1.tgz", { "dependencies": { "@chainsafe/is-ip": "^2.0.1", "@chainsafe/netmask": "^2.0.0", "@multiformats/dns": "^1.0.3", "abort-error": "^1.0.1", "multiformats": "^13.0.0", "uint8-varint": "^2.0.1", "uint8arrays": "^5.0.0" } }, "sha512-+DDlr9LIRUS8KncI1TX/FfUn8F2dl6BIxJgshS/yFQCNB5IAF0OGzcwB39g5NLE22s4qqDePv0Qof6HdpJ/4aQ=="],
@@ -323,6 +331,12 @@
     "@types/estree": ["@types/estree@1.0.8", "https://registry.npmmirror.com/@types/estree/-/estree-1.0.8.tgz", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 
     "@types/jsesc": ["@types/jsesc@2.5.1", "https://registry.npmmirror.com/@types/jsesc/-/jsesc-2.5.1.tgz", {}, "sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw=="],
+
+    "@types/lodash": ["@types/lodash@4.17.24", "https://registry.npmmirror.com/@types/lodash/-/lodash-4.17.24.tgz", {}, "sha512-gIW7lQLZbue7lRSWEFql49QJJWThrTFFeIMJdp3eH4tKoxm1OvEPg02rm4wCCSHS0cL3/Fizimb35b7k8atwsQ=="],
+
+    "@types/lodash.isplainobject": ["@types/lodash.isplainobject@4.0.9", "https://registry.npmmirror.com/@types/lodash.isplainobject/-/lodash.isplainobject-4.0.9.tgz", { "dependencies": { "@types/lodash": "*" } }, "sha512-QC8nKcap5hRrbtIaPRjUMlcXXnLeayqQZPSaWJDx3xeuN17+2PW5wkmEJ4+lZgNnQRlSPzxjTYKCfV1uTnPaEg=="],
+
+    "@types/lodash.mergewith": ["@types/lodash.mergewith@4.6.9", "https://registry.npmmirror.com/@types/lodash.mergewith/-/lodash.mergewith-4.6.9.tgz", { "dependencies": { "@types/lodash": "*" } }, "sha512-fgkoCAOF47K7sxrQ7Mlud2TH023itugZs2bUg8h/KzT+BnZNrR2jAOmaokbLunHNnobXVWOezAeNn/lZqwxkcw=="],
 
     "@types/ms": ["@types/ms@2.1.0", "https://registry.npmmirror.com/@types/ms/-/ms-2.1.0.tgz", {}, "sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA=="],
 
@@ -777,6 +791,10 @@
     "locate-path": ["locate-path@6.0.0", "https://registry.npmmirror.com/locate-path/-/locate-path-6.0.0.tgz", { "dependencies": { "p-locate": "^5.0.0" } }, "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw=="],
 
     "lodash": ["lodash@4.17.23", "https://registry.npmmirror.com/lodash/-/lodash-4.17.23.tgz", {}, "sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w=="],
+
+    "lodash.isplainobject": ["lodash.isplainobject@4.0.6", "https://registry.npmmirror.com/lodash.isplainobject/-/lodash.isplainobject-4.0.6.tgz", {}, "sha512-oSXzaWypCMHkPC3NvBEaPHf0KsA5mvPrOPgQWDsbg8n7orZ290M0BmC/jgRZ4vcJ6DTAhjrsSYgdsW/F+MFOBA=="],
+
+    "lodash.mergewith": ["lodash.mergewith@4.6.2", "https://registry.npmmirror.com/lodash.mergewith/-/lodash.mergewith-4.6.2.tgz", {}, "sha512-GK3g5RPZWTRSeLSpgP8Xhra+pnjBC56q9FZYe1d5RN3TJ35dbkGy3YqBSMbyCrlbi+CM9Z3Jk5yTL7RCsqboyQ=="],
 
     "log-symbols": ["log-symbols@4.1.0", "https://registry.npmmirror.com/log-symbols/-/log-symbols-4.1.0.tgz", { "dependencies": { "chalk": "^4.1.0", "is-unicode-supported": "^0.1.0" } }, "sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg=="],
 

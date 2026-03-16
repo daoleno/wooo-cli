@@ -72,7 +72,13 @@ describe("loadWoooConfig", () => {
     expect(config.default?.chain).toBe("arbitrum");
     expect(config.default?.wallet).toBe("main");
     expect(config.chains?.arbitrum?.rpc).toBe("https://example.invalid/arb");
-    expect(config.chains?.ethereum?.rpc).toBe("https://eth.llamarpc.com");
+    expect(config.chains?.ethereum?.rpc).toBe(
+      "https://ethereum.publicnode.com",
+    );
+    expect(config.chains?.optimism?.rpc).toBe("https://mainnet.optimism.io");
+    expect(config.chains?.polygon?.rpc).toBe(
+      "https://polygon-bor-rpc.publicnode.com",
+    );
   });
 
   test("ensureConfigDir creates the target directory", () => {

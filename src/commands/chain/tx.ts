@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { formatEther, formatGwei } from "viem";
+import { evmChainArg, normalizeChainName } from "../../core/chains";
 import { getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
@@ -11,13 +12,14 @@ export default defineCommand({
       description: "Transaction hash",
       required: true,
     },
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const publicClient = getPublicClient(args.chain);
+    const chain = normalizeChainName(args.chain);
+    const publicClient = getPublicClient(chain);
 
     const tx = await publicClient.getTransaction({
       hash: args.hash as `0x${string}`,
@@ -27,6 +29,7 @@ export default defineCommand({
     });
 
     out.data({
+      chain,
       hash: tx.hash,
       status: receipt.status,
       from: tx.from,

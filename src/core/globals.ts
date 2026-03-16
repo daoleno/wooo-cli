@@ -1,3 +1,5 @@
+import { CHAIN_HELP_TEXT_WITH_CONFIG_DEFAULT } from "./chains";
+
 export const globalArgs = {
   json: {
     type: "boolean" as const,
@@ -11,7 +13,7 @@ export const globalArgs = {
   },
   chain: {
     type: "string" as const,
-    description: "Specify chain (default from config)",
+    description: CHAIN_HELP_TEXT_WITH_CONFIG_DEFAULT,
   },
   wallet: {
     type: "string" as const,

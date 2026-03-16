@@ -17,7 +17,8 @@ wooo wallet generate my-wallet
 # Start using
 wooo market price BTC
 wooo swap USDC ETH 100 --chain arbitrum --dry-run
-wooo lend aave rates USDC --chain ethereum
+wooo lend aave rates USDC --chain ethereum --market AaveV3Ethereum
+wooo lend morpho markets --chain ethereum
 ```
 
 ## What Can It Do?
@@ -26,12 +27,15 @@ wooo lend aave rates USDC --chain ethereum
 |----------|-----------|-------------|
 | **CEX Trading** | OKX, Binance, Bybit | Spot buy/sell, futures long/short, balance, positions |
 | **DEX Swaps** | Uniswap V3, Curve, Jupiter | Swap, quote, token lists — EVM + Solana |
-| **Lending** | Aave V3 | Supply, borrow, view rates & positions |
+| **Lending** | Aave V3, Morpho Markets V1 | Aave supply/borrow/rates/positions, Morpho market discovery, positions, and market-native lend/borrow writes |
 | **Staking** | Lido | Stake ETH, view stETH balance & rewards |
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
+
+Common EVM chain aliases are supported in CLI flags, for example `eth`,
+`arb`, `op`, and `matic`.
 
 ## Usage Examples
 
@@ -70,16 +74,33 @@ wooo dex jupiter swap SOL USDC 10 --yes
 
 ```bash
 # Aave V3 — lending & borrowing
-wooo lend aave rates USDC --chain ethereum
-wooo lend aave supply USDC 1000 --chain ethereum --yes
-wooo lend aave borrow ETH 0.5 --chain ethereum --yes
-wooo lend aave positions --chain ethereum
+wooo lend aave markets --chain ethereum
+wooo lend aave markets --chain ethereum --market AaveV3Ethereum
+wooo lend aave rates USDC --chain ethereum --market AaveV3Ethereum
+wooo lend aave supply USDC 1000 --chain ethereum --market AaveV3Ethereum --yes
+wooo lend aave withdraw USDC 250 --chain ethereum --market AaveV3Ethereum --yes
+wooo lend aave borrow ETH 0.5 --chain ethereum --market AaveV3Ethereum --yes
+wooo lend aave repay ETH 0.1 --chain ethereum --market AaveV3Ethereum --yes
+wooo lend aave positions --chain ethereum --market AaveV3Ethereum
+
+# Morpho Markets V1 — market discovery, positions, and market-native writes
+wooo lend morpho markets --chain ethereum
+wooo lend morpho market 0x0123...abcd --chain ethereum
+wooo lend morpho positions --chain ethereum
+wooo lend morpho supply 0xb323...86cc 100 --chain ethereum --yes
+wooo lend morpho supply-collateral 0xb323...86cc 0.1 --chain ethereum --yes
+wooo lend morpho borrow 0xb323...86cc 10 --chain ethereum --yes
+wooo lend morpho repay 0xb323...86cc --all --chain ethereum --yes
 
 # Lido — liquid staking
 wooo stake lido stake 5 --yes
 wooo stake lido balance
 wooo stake lido rewards
 ```
+
+For chains with multiple Aave markets, token-specific and account-specific
+commands require `--market`. Use `wooo lend aave markets --chain <chain>` to
+discover available market names and pool addresses.
 
 ### Perpetual Futures
 
@@ -117,7 +138,8 @@ wooo
 │   ├── curve    — swap, quote, pools
 │   └── jupiter  — swap, quote, tokens
 ├── lend
-│   └── aave     — supply, borrow, positions, rates
+│   ├── aave     — markets, supply, withdraw, borrow, repay, positions, rates
+│   └── morpho   — markets, market, positions, supply, withdraw, supply-collateral, withdraw-collateral, borrow, repay
 ├── stake
 │   └── lido     — stake, balance, rewards
 ├── perps

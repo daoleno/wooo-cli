@@ -6,42 +6,94 @@ import {
 } from "../../core/execution-plan";
 import type { WriteOperation } from "../../core/write-operation";
 import { AaveClient } from "./client";
-import type { AaveBorrowResult, AaveSupplyResult } from "./types";
+import type {
+  AaveBorrowResult,
+  AaveRepayResult,
+  AaveSupplyResult,
+  AaveWithdrawResult,
+} from "./types";
 
 export interface AaveSupplyParams {
   amount: number;
   chain: string;
+  market?: string;
   token: string;
 }
 
 export interface AaveBorrowParams {
   amount: number;
   chain: string;
+  market?: string;
   token: string;
 }
 
-export interface PreparedAaveSupply extends AaveSupplyParams {}
+export interface AaveWithdrawParams {
+  amount?: number;
+  all?: boolean;
+  chain: string;
+  market?: string;
+  token: string;
+}
 
-export interface PreparedAaveBorrow extends AaveBorrowParams {}
+export interface AaveRepayParams {
+  amount?: number;
+  all?: boolean;
+  chain: string;
+  market?: string;
+  token: string;
+}
+
+export interface PreparedAaveSupply extends AaveSupplyParams {
+  market: string;
+  marketAddress: string;
+}
+
+export interface PreparedAaveBorrow extends AaveBorrowParams {
+  market: string;
+  marketAddress: string;
+}
+
+export interface PreparedAaveWithdraw extends Required<AaveWithdrawParams> {
+  market: string;
+  marketAddress: string;
+}
+
+export interface PreparedAaveRepay extends Required<AaveRepayParams> {
+  market: string;
+  marketAddress: string;
+}
 
 export function createAaveSupplyOperation(
   params: AaveSupplyParams,
 ): WriteOperation<PreparedAaveSupply, string, AaveSupplyResult> {
   return {
     protocol: "aave",
-    prepare: async () => params,
+    prepare: async () => {
+      const client = new AaveClient(params.chain);
+      const selection = await client.resolveReserveSelection(
+        params.token,
+        params.market,
+      );
+      return {
+        ...params,
+        market: selection.market,
+        marketAddress: selection.marketAddress,
+      };
+    },
     createPreview: (prepared) => ({
-      action: `Supply ${prepared.amount} ${prepared.token} to Aave V3`,
+      action: `Supply ${prepared.amount} ${prepared.token} to ${prepared.market}`,
       details: {
         token: prepared.token,
         amount: prepared.amount,
         chain: prepared.chain,
         protocol: "Aave V3",
+        market: prepared.market,
+        marketAddress: prepared.marketAddress,
       },
     }),
     createPlan: (prepared) =>
       createExecutionPlan({
-        summary: `Supply ${prepared.amount} ${prepared.token} to Aave V3`,
+        summary: `Supply ${prepared.amount} ${prepared.token} to ${prepared.market}`,
         group: "lend",
         protocol: "aave",
         command: "supply",
@@ -51,7 +103,7 @@ export function createAaveSupplyOperation(
           createApprovalStep("Approve token spend", {
             token: prepared.token,
             amount: prepared.amount,
-            spender: "Aave Pool",
+            spender: prepared.marketAddress,
           }),
           createTransactionStep("Submit supply transaction", {
             token: prepared.token,
@@ -61,6 +113,8 @@ export function createAaveSupplyOperation(
         ],
         metadata: {
           displayName: "Aave V3",
+          market: prepared.market,
+          marketAddress: prepared.marketAddress,
           token: prepared.token,
           amount: prepared.amount,
         },
@@ -68,7 +122,11 @@ export function createAaveSupplyOperation(
     resolveAuth: async () => await getActivePrivateKey("evm"),
     execute: async (prepared, privateKey) => {
       const client = new AaveClient(prepared.chain, privateKey);
-      return await client.supply(prepared.token, prepared.amount);
+      return await client.supply(
+        prepared.token,
+        prepared.amount,
+        prepared.marketAddress,
+      );
     },
   };
 }
@@ -78,20 +136,33 @@ export function createAaveBorrowOperation(
 ): WriteOperation<PreparedAaveBorrow, string, AaveBorrowResult> {
   return {
     protocol: "aave",
-    prepare: async () => params,
+    prepare: async () => {
+      const client = new AaveClient(params.chain);
+      const selection = await client.resolveReserveSelection(
+        params.token,
+        params.market,
+      );
+      return {
+        ...params,
+        market: selection.market,
+        marketAddress: selection.marketAddress,
+      };
+    },
     createPreview: (prepared) => ({
-      action: `Borrow ${prepared.amount} ${prepared.token} from Aave V3`,
+      action: `Borrow ${prepared.amount} ${prepared.token} from ${prepared.market}`,
       details: {
         token: prepared.token,
         amount: prepared.amount,
         chain: prepared.chain,
         protocol: "Aave V3",
+        market: prepared.market,
+        marketAddress: prepared.marketAddress,
         rateMode: "variable",
       },
     }),
     createPlan: (prepared) =>
       createExecutionPlan({
-        summary: `Borrow ${prepared.amount} ${prepared.token} from Aave V3`,
+        summary: `Borrow ${prepared.amount} ${prepared.token} from ${prepared.market}`,
         group: "lend",
         protocol: "aave",
         command: "borrow",
@@ -110,6 +181,8 @@ export function createAaveBorrowOperation(
         ],
         metadata: {
           displayName: "Aave V3",
+          market: prepared.market,
+          marketAddress: prepared.marketAddress,
           token: prepared.token,
           amount: prepared.amount,
           interestRateMode: "variable",
@@ -118,7 +191,161 @@ export function createAaveBorrowOperation(
     resolveAuth: async () => await getActivePrivateKey("evm"),
     execute: async (prepared, privateKey) => {
       const client = new AaveClient(prepared.chain, privateKey);
-      return await client.borrow(prepared.token, prepared.amount);
+      return await client.borrow(
+        prepared.token,
+        prepared.amount,
+        prepared.marketAddress,
+      );
+    },
+  };
+}
+
+export function createAaveWithdrawOperation(
+  params: AaveWithdrawParams,
+): WriteOperation<PreparedAaveWithdraw, string, AaveWithdrawResult> {
+  return {
+    protocol: "aave",
+    prepare: async () => {
+      const client = new AaveClient(params.chain);
+      const selection = await client.resolveReserveSelection(
+        params.token,
+        params.market,
+      );
+      return {
+        amount: params.amount ?? 0,
+        all: params.all ?? false,
+        chain: params.chain,
+        market: selection.market,
+        marketAddress: selection.marketAddress,
+        token: params.token,
+      };
+    },
+    createPreview: (prepared) => ({
+      action: `Withdraw ${prepared.all ? "all" : prepared.amount} ${prepared.token} from ${prepared.market}`,
+      details: {
+        token: prepared.token,
+        amount: prepared.all ? "ALL" : prepared.amount,
+        chain: prepared.chain,
+        protocol: "Aave V3",
+        market: prepared.market,
+        marketAddress: prepared.marketAddress,
+      },
+    }),
+    createPlan: (prepared) =>
+      createExecutionPlan({
+        summary: `Withdraw ${prepared.all ? "all" : prepared.amount} ${prepared.token} from ${prepared.market}`,
+        group: "lend",
+        protocol: "aave",
+        command: "withdraw",
+        chain: prepared.chain,
+        accountType: "evm",
+        steps: [
+          createTransactionStep("Submit withdraw transaction", {
+            token: prepared.token,
+            amount: prepared.all ? "ALL" : prepared.amount,
+            method: "withdraw",
+          }),
+        ],
+        warnings: [
+          "Withdrawals are limited by supplied balance and current Aave liquidity.",
+        ],
+        metadata: {
+          displayName: "Aave V3",
+          market: prepared.market,
+          marketAddress: prepared.marketAddress,
+          token: prepared.token,
+          amount: prepared.all ? "ALL" : prepared.amount,
+          all: prepared.all,
+        },
+      }),
+    resolveAuth: async () => await getActivePrivateKey("evm"),
+    execute: async (prepared, privateKey) => {
+      const client = new AaveClient(prepared.chain, privateKey);
+      return await client.withdraw(
+        prepared.token,
+        prepared.all ? undefined : prepared.amount,
+        prepared.all,
+        prepared.marketAddress,
+      );
+    },
+  };
+}
+
+export function createAaveRepayOperation(
+  params: AaveRepayParams,
+): WriteOperation<PreparedAaveRepay, string, AaveRepayResult> {
+  return {
+    protocol: "aave",
+    prepare: async () => {
+      const client = new AaveClient(params.chain);
+      const selection = await client.resolveReserveSelection(
+        params.token,
+        params.market,
+      );
+      return {
+        amount: params.amount ?? 0,
+        all: params.all ?? false,
+        chain: params.chain,
+        market: selection.market,
+        marketAddress: selection.marketAddress,
+        token: params.token,
+      };
+    },
+    createPreview: (prepared) => ({
+      action: `Repay ${prepared.all ? "all" : prepared.amount} ${prepared.token} on ${prepared.market}`,
+      details: {
+        token: prepared.token,
+        amount: prepared.all ? "ALL" : prepared.amount,
+        chain: prepared.chain,
+        protocol: "Aave V3",
+        market: prepared.market,
+        marketAddress: prepared.marketAddress,
+        rateMode: "variable",
+      },
+    }),
+    createPlan: (prepared) =>
+      createExecutionPlan({
+        summary: `Repay ${prepared.all ? "all" : prepared.amount} ${prepared.token} on ${prepared.market}`,
+        group: "lend",
+        protocol: "aave",
+        command: "repay",
+        chain: prepared.chain,
+        accountType: "evm",
+        steps: [
+          createApprovalStep("Approve token spend", {
+            token: prepared.token,
+            amount: prepared.all ? "ALL" : prepared.amount,
+            spender: prepared.marketAddress,
+          }),
+          createTransactionStep("Submit repay transaction", {
+            token: prepared.token,
+            amount: prepared.all ? "ALL" : prepared.amount,
+            method: "repay",
+            interestRateMode: "variable",
+          }),
+        ],
+        warnings: [
+          "This repays variable-rate debt only, matching the current Aave borrow flow.",
+        ],
+        metadata: {
+          displayName: "Aave V3",
+          market: prepared.market,
+          marketAddress: prepared.marketAddress,
+          token: prepared.token,
+          amount: prepared.all ? "ALL" : prepared.amount,
+          all: prepared.all,
+          interestRateMode: "variable",
+        },
+      }),
+    resolveAuth: async () => await getActivePrivateKey("evm"),
+    execute: async (prepared, privateKey) => {
+      const client = new AaveClient(prepared.chain, privateKey);
+      return await client.repay(
+        prepared.token,
+        prepared.all ? undefined : prepared.amount,
+        prepared.all,
+        prepared.marketAddress,
+      );
     },
   };
 }

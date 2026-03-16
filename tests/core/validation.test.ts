@@ -102,12 +102,20 @@ describe("PairSchema", () => {
 });
 
 describe("chainSchema", () => {
-  const supported = ["ethereum", "arbitrum", "polygon"];
+  const supported = ["ethereum", "arbitrum", "optimism", "polygon"];
 
   test("accepts supported chains", () => {
     const schema = chainSchema(supported);
     expect(schema.parse("ethereum")).toBe("ethereum");
     expect(schema.parse("arbitrum")).toBe("arbitrum");
+  });
+
+  test("normalizes common chain aliases", () => {
+    const schema = chainSchema(supported);
+    expect(schema.parse("eth")).toBe("ethereum");
+    expect(schema.parse("arb")).toBe("arbitrum");
+    expect(schema.parse("op")).toBe("optimism");
+    expect(schema.parse("matic")).toBe("polygon");
   });
 
   test("rejects unsupported chains", () => {

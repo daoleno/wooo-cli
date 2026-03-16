@@ -8,6 +8,7 @@ import {
   parseAbi,
 } from "viem";
 import { parseAbiArguments } from "../../core/abi";
+import { evmChainArg, normalizeChainName } from "../../core/chains";
 import { getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
@@ -29,19 +30,20 @@ export default defineCommand({
       description: "Function arguments (comma-separated)",
       required: false,
     },
-    chain: { type: "string", default: "ethereum" },
+    chain: evmChainArg(),
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
+    const chain = normalizeChainName(args.chain);
 
     if (!isAddress(args.contract)) {
       console.error(`Invalid contract address: ${args.contract}`);
       process.exit(2);
     }
 
-    const publicClient = getPublicClient(args.chain);
+    const publicClient = getPublicClient(chain);
 
     // Parse human-readable signature like "balanceOf(address)(uint256)"
     const sig = args.signature;
@@ -98,7 +100,7 @@ export default defineCommand({
       contract: args.contract,
       function: funcName,
       result: decoded,
-      chain: args.chain,
+      chain,
     });
   },
 });

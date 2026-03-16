@@ -5,6 +5,8 @@ import {
   EthereumAnvilHarness,
 } from "./anvil-harness";
 
+const AAVE_ETHEREUM_MARKET = "AaveV3Ethereum";
+
 interface ChainBalanceOutput {
   address: string;
   balance: string;
@@ -204,6 +206,8 @@ describe("anvil fork e2e", () => {
           "USDC",
           "--chain",
           "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
         ]);
         expect(rates.token).toBe("USDC");
         expect(rates.supplyAPY).toContain("%");
@@ -217,6 +221,8 @@ describe("anvil fork e2e", () => {
           "1000",
           "--chain",
           "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
           "--yes",
         ]);
         expect(supply.token).toBe("USDC");
@@ -225,7 +231,15 @@ describe("anvil fork e2e", () => {
         expect(supply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
         const positionsAfterSupply = await harness.runJson<AavePositionsOutput>(
-          ["lend", "aave", "positions", "--chain", "ethereum"],
+          [
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
         );
         expect(Number(positionsAfterSupply.totalCollateralUSD)).toBeGreaterThan(
           900,
@@ -241,6 +255,8 @@ describe("anvil fork e2e", () => {
           "0.01",
           "--chain",
           "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
           "--yes",
         ]);
         expect(borrow.token).toBe("WETH");
@@ -250,7 +266,15 @@ describe("anvil fork e2e", () => {
         expect(borrow.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
         const positionsAfterBorrow = await harness.runJson<AavePositionsOutput>(
-          ["lend", "aave", "positions", "--chain", "ethereum"],
+          [
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
         );
         expect(Number(positionsAfterBorrow.totalCollateralUSD)).toBeGreaterThan(
           900,

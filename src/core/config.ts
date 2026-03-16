@@ -19,8 +19,10 @@ export const CONFIG_DEFAULTS: WoooConfig = {
     format: "table",
   },
   chains: {
-    ethereum: { rpc: "https://eth.llamarpc.com" },
+    ethereum: { rpc: "https://ethereum.publicnode.com" },
     arbitrum: { rpc: "https://arb1.arbitrum.io/rpc" },
+    optimism: { rpc: "https://mainnet.optimism.io" },
+    polygon: { rpc: "https://polygon-bor-rpc.publicnode.com" },
     base: { rpc: "https://mainnet.base.org" },
   },
 };

@@ -48,6 +48,7 @@ src/
 │   ├── hyperliquid/
 │   ├── jupiter/
 │   ├── lido/
+│   ├── morpho/
 │   ├── okx/
 │   └── uniswap/
 └── tests/
@@ -189,6 +190,6 @@ orders through `ExchangeGateway`.
 3. Export a `ProtocolManifest` from `commands.ts`.
 4. Register the manifest in `src/protocols/registry.ts`.
 5. Add contract tests:
-   the manifest should declare `writeAccountType`, and each write command should return an `ExecutionPlan` on `--dry-run --json`.
+   if the protocol exposes write commands, the manifest should declare `writeAccountType`, and each write command should return an `ExecutionPlan` on `--dry-run --json`.
 
 No changes to `src/index.ts` are required unless you are adding a brand-new top-level non-protocol command.

@@ -1,5 +1,6 @@
 import ansis from "ansis";
 import { defineCommand } from "citty";
+import { SWAP_CHAIN_HELP_TEXT_WITH_DEFAULT } from "../../core/chains";
 import type { ExecutionPlan } from "../../core/execution-plan";
 import {
   validateAmount,
@@ -126,7 +127,7 @@ export default defineCommand({
     },
     chain: {
       type: "string",
-      description: "Chain (default: ethereum, or solana)",
+      description: SWAP_CHAIN_HELP_TEXT_WITH_DEFAULT,
       default: "ethereum",
     },
     yes: { type: "boolean", default: false },

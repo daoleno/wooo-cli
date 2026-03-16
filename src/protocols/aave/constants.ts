@@ -52,6 +52,18 @@ export const AAVE_POOL_ABI = [
     inputs: [
       { name: "asset", type: "address" },
       { name: "amount", type: "uint256" },
+      { name: "interestRateMode", type: "uint256" },
+      { name: "onBehalfOf", type: "address" },
+    ],
+    name: "repay",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
       { name: "to", type: "address" },
     ],
     name: "withdraw",
@@ -77,6 +89,22 @@ export const AAVE_POOL_ABI = [
 
 export const POOL_DATA_PROVIDER_ABI = [
   {
+    inputs: [],
+    name: "getAllReservesTokens",
+    outputs: [
+      {
+        components: [
+          { name: "symbol", type: "string" },
+          { name: "tokenAddress", type: "address" },
+        ],
+        name: "",
+        type: "tuple[]",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [{ name: "asset", type: "address" }],
     name: "getReserveData",
     outputs: [
@@ -92,6 +120,24 @@ export const POOL_DATA_PROVIDER_ABI = [
       { name: "liquidityIndex", type: "uint256" },
       { name: "variableBorrowIndex", type: "uint256" },
       { name: "lastUpdateTimestamp", type: "uint40" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "asset", type: "address" }],
+    name: "getReserveConfigurationData",
+    outputs: [
+      { name: "decimals", type: "uint256" },
+      { name: "ltv", type: "uint256" },
+      { name: "liquidationThreshold", type: "uint256" },
+      { name: "liquidationBonus", type: "uint256" },
+      { name: "reserveFactor", type: "uint256" },
+      { name: "usageAsCollateralEnabled", type: "bool" },
+      { name: "borrowingEnabled", type: "bool" },
+      { name: "stableBorrowRateEnabled", type: "bool" },
+      { name: "isActive", type: "bool" },
+      { name: "isFrozen", type: "bool" },
     ],
     stateMutability: "view",
     type: "function",

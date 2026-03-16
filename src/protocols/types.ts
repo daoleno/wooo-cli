@@ -30,7 +30,7 @@ export const PROTOCOL_TYPE_TO_GROUP: Record<ProtocolType, ProtocolGroup> = {
 export const PROTOCOL_GROUP_DESCRIPTIONS: Record<ProtocolGroup, string> = {
   cex: "Centralized exchanges (OKX, Binance, Bybit, ...)",
   dex: "Decentralized exchanges and swap routers (Uniswap, Curve, Jupiter, ...)",
-  lend: "Lending markets (Aave, ...)",
+  lend: "Lending markets (Aave, Morpho, ...)",
   stake: "Staking protocols (Lido, ...)",
   perps: "Perpetual DEXs (Hyperliquid, ...)",
   bridge: "Cross-chain bridges",

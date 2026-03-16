@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatSupportedChains, normalizeChainName } from "./chains";
 
 // --- Zod Schemas ---
 
@@ -36,9 +37,12 @@ export const PairSchema = z.string().refine((val) => val.includes("/"), {
 
 /** Chain name validated against a supported list */
 export function chainSchema(supported: string[]) {
-  return z.string().refine((val) => supported.includes(val), {
-    message: `Unsupported chain. Available: ${supported.join(", ")}`,
-  });
+  return z
+    .string()
+    .transform(normalizeChainName)
+    .refine((val) => supported.includes(val), {
+      message: `Unsupported chain. Available: ${formatSupportedChains(supported)}`,
+    });
 }
 
 // --- Convenience Validators ---
