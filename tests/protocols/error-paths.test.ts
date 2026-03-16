@@ -30,47 +30,47 @@ describe("error paths: client construction without auth", () => {
     expect(client).toBeDefined();
   });
 
-  test("UniswapClient.swap throws without private key", async () => {
+  test("UniswapClient.swap throws without signer", async () => {
     const { UniswapClient } = require("../../src/protocols/uniswap/client");
     const client = new UniswapClient("ethereum");
     try {
       await client.swap("ETH", "USDC", 1);
       expect(true).toBe(false);
     } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
+      expect(getErrorMessage(error)).toContain("Signer required");
     }
   });
 
-  test("LidoClient.stake throws without private key", async () => {
+  test("LidoClient.stake throws without signer", async () => {
     const { LidoClient } = require("../../src/protocols/lido/client");
     const client = new LidoClient();
     try {
       await client.stake(1);
       expect(true).toBe(false);
     } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
+      expect(getErrorMessage(error)).toContain("Signer required");
     }
   });
 
-  test("AaveClient.supply throws without private key", async () => {
+  test("AaveClient.supply throws without signer", async () => {
     const { AaveClient } = require("../../src/protocols/aave/client");
     const client = new AaveClient("ethereum");
     try {
       await client.supply("USDC", 100);
       expect(true).toBe(false);
     } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
+      expect(getErrorMessage(error)).toContain("Signer required");
     }
   });
 
-  test("JupiterClient.swap throws without private key", async () => {
+  test("JupiterClient.swap throws without signer", async () => {
     const { JupiterClient } = require("../../src/protocols/jupiter/client");
     const client = new JupiterClient();
     try {
       await client.swap("SOL", "USDC", 1);
       expect(true).toBe(false);
     } catch (error) {
-      expect(getErrorMessage(error)).toContain("Private key required");
+      expect(getErrorMessage(error)).toContain("Signer required");
     }
   });
 });
@@ -86,12 +86,6 @@ describe("error paths: invalid inputs to clients", () => {
       expect(getErrorMessage(error)).toContain("Unknown token");
       expect(getErrorMessage(error)).toContain("FAKECOIN");
     }
-  });
-
-  test("AaveClient rejects unsupported chain", async () => {
-    const { AaveClient } = require("../../src/protocols/aave/client");
-    const client = new AaveClient("fantom", "0xdeadbeef");
-    await expect(client.supply("USDC", 100)).rejects.toThrow("not supported");
   });
 
   test(

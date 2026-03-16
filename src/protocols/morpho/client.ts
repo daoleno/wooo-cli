@@ -18,12 +18,8 @@ import {
   parseUnits,
   zeroAddress,
 } from "viem";
-import {
-  getAccountAddress,
-  getChain,
-  getPublicClient,
-  getWalletClient,
-} from "../../core/evm";
+import { getChain, getPublicClient } from "../../core/evm";
+import type { EvmSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { ERC20_ABI } from "../uniswap/constants";
 import type {
@@ -197,7 +193,7 @@ async function queryMorpho<T>(
 export class MorphoClient {
   constructor(
     private chain: string,
-    private privateKey?: string,
+    private signer?: EvmSigner,
   ) {}
 
   private getChainId(): number {
@@ -208,11 +204,11 @@ export class MorphoClient {
     return getAddress(getChainAddresses(this.getChainId()).morpho);
   }
 
-  private requirePrivateKey(): string {
-    if (!this.privateKey) {
-      throw new Error("Private key required");
+  private requireSigner(): EvmSigner {
+    if (!this.signer) {
+      throw new Error("Signer required");
     }
-    return this.privateKey;
+    return this.signer;
   }
 
   private async fetchTokenInfo(address: Address): Promise<MorphoTokenInfo> {
@@ -832,11 +828,14 @@ export class MorphoClient {
   async executeWrite(
     prepared: MorphoPreparedWrite,
   ): Promise<MorphoWriteResult> {
-    const privateKey = this.requirePrivateKey();
+    const signer = this.requireSigner();
     const publicClient = getPublicClient(this.chain);
-    const walletClient = getWalletClient(privateKey, this.chain);
-    const account = getAccountAddress(privateKey);
-    const txGateway = new TxGateway(publicClient, walletClient, account);
+    const account = signer.address;
+    const txGateway = new TxGateway(this.chain, publicClient, signer, {
+      group: "lend",
+      protocol: "morpho",
+      command: prepared.command,
+    });
     const morphoAddress = getAddress(prepared.morphoAddress);
 
     if (prepared.requiresApproval && prepared.amountWei > 0n) {

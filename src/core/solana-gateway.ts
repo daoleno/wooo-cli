@@ -1,30 +1,36 @@
-import {
-  type Connection,
-  type Keypair,
-  VersionedTransaction,
-} from "@solana/web3.js";
+import type { Connection } from "@solana/web3.js";
+import type { SignerRequestOrigin } from "./signer-protocol";
+import type { SolanaSigner } from "./signers";
 
 export interface SolanaSendTransactionResult {
-  txHash: string;
   status: "confirmed";
+  txHash: string;
 }
 
 export class SolanaGateway {
   constructor(
     private connection: Connection,
-    private keypair: Keypair,
+    private network: string,
+    private signer: SolanaSigner,
+    private origin?: SignerRequestOrigin,
   ) {}
 
   async sendVersionedTransaction(
     serializedTransactionBase64: string,
   ): Promise<SolanaSendTransactionResult> {
-    const txBuf = Buffer.from(serializedTransactionBase64, "base64");
-    const transaction = VersionedTransaction.deserialize(txBuf);
-    transaction.sign([this.keypair]);
-
-    const txHash = await this.connection.sendRawTransaction(
-      transaction.serialize(),
-      { skipPreflight: false, maxRetries: 2 },
+    const txHash = await this.signer.sendVersionedTransaction(
+      this.network,
+      serializedTransactionBase64,
+      {
+        origin: this.origin,
+        prompt: {
+          action: `Authorize Solana transaction for ${this.signer.address}`,
+          details: {
+            network: this.network,
+            wallet: this.signer.address,
+          },
+        },
+      },
     );
 
     const latestBlockhash = await this.connection.getLatestBlockhash();

@@ -267,11 +267,13 @@ export class EthereumAnvilHarness {
       ),
     );
 
-    const walletStore = new WalletStore(
-      join(this.configDir, "keystore"),
+    const walletStore = new WalletStore(join(this.configDir, "keystore"));
+    await walletStore.importKey(
+      "anvil-default",
+      this.privateKey,
+      "evm",
       MASTER_PASSWORD,
     );
-    await walletStore.importKey("anvil-default", this.privateKey, "evm");
     await walletStore.setActive("anvil-default");
   }
 
@@ -300,6 +302,7 @@ export class EthereumAnvilHarness {
         ...process.env,
         WOOO_CONFIG_DIR: this.configDir,
         WOOO_MASTER_PASSWORD: MASTER_PASSWORD,
+        WOOO_SIGNER_AUTO_APPROVE: "1",
       },
       stdout: "pipe",
       stderr: "pipe",

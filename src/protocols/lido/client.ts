@@ -1,88 +1,87 @@
 import type { LidoSDKCoreProps } from "@lidofinance/lido-ethereum-sdk";
-import { formatEther } from "viem";
-import { mainnet } from "viem/chains";
-import {
-  getAccountAddress,
-  getPublicClient,
-  getWalletClient,
-} from "../../core/evm";
+import { formatEther, parseEther, zeroAddress } from "viem";
+import { getPublicClient } from "../../core/evm";
+import type { EvmSigner } from "../../core/signers";
+import { TxGateway } from "../../core/tx-gateway";
+import { STETH_ABI, STETH_ADDRESS } from "./constants";
 import type { LidoRewards, LidoStakeResult } from "./types";
 
 export class LidoClient {
-  private chain = "ethereum"; // Lido staking is Ethereum only
+  private chain = "ethereum";
 
-  constructor(private privateKey?: string) {}
+  constructor(private signer?: EvmSigner) {}
 
   async stake(amountETH: number): Promise<LidoStakeResult> {
-    if (!this.privateKey) throw new Error("Private key required for staking");
+    if (!this.signer) throw new Error("Signer required for staking");
 
-    const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
+    const publicClient = getPublicClient(this.chain);
+    const txGateway = new TxGateway(this.chain, publicClient, this.signer, {
+      group: "stake",
+      protocol: "lido",
+      command: "stake",
+    });
+    const balanceBefore = (await publicClient.readContract({
+      address: STETH_ADDRESS,
+      abi: STETH_ABI,
+      functionName: "balanceOf",
+      args: [this.signer.address],
+    })) as bigint;
 
-    const rpcProvider = getPublicClient(this.chain);
-    const web3Provider = getWalletClient(this.privateKey, this.chain);
-    const account = getAccountAddress(this.privateKey);
-
-    const sdkConfig: LidoSDKCoreProps = {
-      chainId: mainnet.id,
-      rpcProvider,
-      web3Provider,
-      logMode: "none",
-    };
-    const sdk = new LidoSDK(sdkConfig);
-
-    const value = String(amountETH);
-
-    const result = await sdk.stake.stakeEth({
-      value,
-      account,
+    const { receipt, txHash } = await txGateway.simulateAndWriteContract({
+      address: STETH_ADDRESS,
+      abi: STETH_ABI,
+      functionName: "submit",
+      args: [zeroAddress],
+      value: parseEther(String(amountETH)),
     });
 
+    const balanceAfter = (await publicClient.readContract({
+      address: STETH_ADDRESS,
+      abi: STETH_ABI,
+      functionName: "balanceOf",
+      args: [this.signer.address],
+    })) as bigint;
+
     return {
-      txHash: result.hash,
+      txHash,
       amountETH: amountETH.toString(),
-      amountStETH: formatEther(result.result?.stethReceived ?? 0n),
-      status: result.receipt?.status === "success" ? "confirmed" : "failed",
+      amountStETH: formatEther(
+        balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0n,
+      ),
+      status: receipt.status === "success" ? "confirmed" : "failed",
     };
   }
 
-  async rewards(): Promise<LidoRewards> {
-    if (!this.privateKey) throw new Error("Private key required");
-
+  async rewards(address: string): Promise<LidoRewards> {
     const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
 
     const rpcProvider = getPublicClient(this.chain);
-    const account = getAccountAddress(this.privateKey);
-
     const sdkConfig: LidoSDKCoreProps = {
-      chainId: mainnet.id,
+      chainId: 1,
       rpcProvider,
       logMode: "none",
     };
     const sdk = new LidoSDK(sdkConfig);
 
-    // Get stETH balance via SDK
+    const account = address as `0x${string}`;
     const stethBalance = await sdk.steth.balance(account);
-
-    // Get rewards from chain events
     const rewardsData = await sdk.rewards.getRewardsFromChain({
       address: account,
       stepBlock: 50000,
       back: { days: 30n },
     });
 
-    // Sum up rewards from all events
     const totalRewards = rewardsData.rewards.reduce(
-      (sum, r) => sum + (r.change ?? 0n),
+      (sum, reward) => sum + (reward.change ?? 0n),
       0n,
     );
 
-    // Get current APR from statistics
     let apr = "N/A";
     try {
       const stats = await sdk.statistics.apr.getLastApr();
       apr = `${(Number(stats) / 100).toFixed(2)}%`;
     } catch {
-      // APR stats may not be available
+      // APR stats may be unavailable.
     }
 
     return {
@@ -92,22 +91,14 @@ export class LidoClient {
     };
   }
 
-  async balance(): Promise<string> {
-    if (!this.privateKey) throw new Error("Private key required");
-
-    const { LidoSDK } = await import("@lidofinance/lido-ethereum-sdk");
-
-    const rpcProvider = getPublicClient(this.chain);
-    const account = getAccountAddress(this.privateKey);
-
-    const sdkConfig: LidoSDKCoreProps = {
-      chainId: mainnet.id,
-      rpcProvider,
-      logMode: "none",
-    };
-    const sdk = new LidoSDK(sdkConfig);
-
-    const stethBalance = await sdk.steth.balance(account);
+  async balance(address: string): Promise<string> {
+    const publicClient = getPublicClient(this.chain);
+    const stethBalance = (await publicClient.readContract({
+      address: STETH_ADDRESS,
+      abi: STETH_ABI,
+      functionName: "balanceOf",
+      args: [address as `0x${string}`],
+    })) as bigint;
     return formatEther(stethBalance);
   }
 }

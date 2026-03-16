@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { getActivePrivateKey } from "../../core/context";
+import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { validateAmount } from "../../core/validation";
 import { runWriteOperation } from "../../core/write-operation";
@@ -39,9 +39,9 @@ const rewards = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new LidoClient(privateKey);
-    const result = await client.rewards();
+    const wallet = await getActiveWallet("evm");
+    const client = new LidoClient();
+    const result = await client.rewards(wallet.address);
     out.data(result);
   },
 });
@@ -54,9 +54,9 @@ const balance = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new LidoClient(privateKey);
-    const stethBalance = await client.balance();
+    const wallet = await getActiveWallet("evm");
+    const client = new LidoClient();
+    const stethBalance = await client.balance(wallet.address);
     out.data({ stETH: stethBalance, protocol: "Lido" });
   },
 });

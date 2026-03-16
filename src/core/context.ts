@@ -1,19 +1,41 @@
 import { join } from "node:path";
 import { getConfigDir } from "./config";
+import { createEvmSigner, createSolanaSigner } from "./signers";
 import {
   resolveWalletType,
   type WalletInfo,
+  type WalletRecord,
   WalletStore,
   type WalletType,
 } from "./wallet-store";
 
 export function getWalletStore(): WalletStore {
+  return new WalletStore(join(getConfigDir(), "keystore"));
+}
+
+async function getRequiredMasterPassword(): Promise<string> {
   const password = process.env.WOOO_MASTER_PASSWORD;
-  if (!password) {
-    console.error("Error: Set WOOO_MASTER_PASSWORD environment variable");
+  if (password) {
+    return password;
+  }
+
+  if (!process.stdin.isTTY) {
+    console.error(
+      "Error: Local keystore signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or an external signer wallet.",
+    );
     process.exit(3);
   }
-  return new WalletStore(join(getConfigDir(), "keystore"), password);
+
+  const clack = await import("@clack/prompts");
+  const value = await clack.password({
+    message: "Enter WOOO master password:",
+  });
+  if (!value || typeof value === "symbol") {
+    console.error("Error: No master password provided.");
+    process.exit(3);
+  }
+
+  return value;
 }
 
 export async function getActiveWallet(
@@ -43,15 +65,53 @@ export async function getActiveWallet(
   return active;
 }
 
-export async function getActivePrivateKey(
+export async function getActiveWalletRecord(
   requiredType?: WalletType,
-): Promise<string> {
-  const active = await getActiveWallet(requiredType);
+): Promise<WalletRecord> {
   const store = getWalletStore();
-  const pk = await store.exportKey(active.name);
-  if (!pk) {
-    console.error("Could not retrieve wallet key");
+  const active = await getActiveWallet(requiredType);
+  const wallet = await store.get(active.name);
+  if (!wallet) {
+    console.error(`Wallet "${active.name}" not found in wallet store.`);
     process.exit(1);
   }
-  return pk;
+  return wallet;
+}
+
+export async function getActiveEvmSigner() {
+  const wallet = await getActiveWalletRecord("evm");
+  return createEvmSigner(wallet);
+}
+
+export async function getActiveSolanaSigner() {
+  const wallet = await getActiveWalletRecord("solana");
+  return createSolanaSigner(wallet);
+}
+
+export async function getActiveLocalSecret(
+  requiredType?: WalletType,
+): Promise<string> {
+  const wallet = await getActiveWalletRecord(requiredType);
+  if (wallet.auth.kind !== "local-keystore") {
+    console.error(
+      `Wallet "${wallet.name}" uses ${wallet.auth.kind} auth and has no local secret to export.`,
+    );
+    process.exit(1);
+  }
+
+  const secret = await getWalletStore().getLocalSecret(
+    wallet.name,
+    await getRequiredMasterPassword(),
+  );
+  if (!secret) {
+    console.error(
+      `Could not retrieve local secret for wallet "${wallet.name}".`,
+    );
+    process.exit(1);
+  }
+  return secret;
+}
+
+export async function requireMasterPassword(): Promise<string> {
+  return await getRequiredMasterPassword();
 }

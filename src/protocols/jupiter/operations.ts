@@ -1,8 +1,9 @@
-import { getActivePrivateKey } from "../../core/context";
+import { getActiveSolanaSigner } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
+import type { SolanaSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { JupiterClient } from "./client";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
@@ -19,7 +20,7 @@ export interface PreparedJupiterSwap extends JupiterSwapParams {
 
 export function createJupiterSwapOperation(
   params: JupiterSwapParams,
-): WriteOperation<PreparedJupiterSwap, string, JupiterSwapResult> {
+): WriteOperation<PreparedJupiterSwap, SolanaSigner, JupiterSwapResult> {
   return {
     protocol: "jupiter",
     prepare: async () => {
@@ -65,9 +66,9 @@ export function createJupiterSwapOperation(
           quote: prepared.quote,
         },
       }),
-    resolveAuth: async () => await getActivePrivateKey("solana"),
-    execute: async (prepared, privateKey) => {
-      const client = new JupiterClient(privateKey);
+    resolveAuth: async () => await getActiveSolanaSigner(),
+    execute: async (prepared, signer) => {
+      const client = new JupiterClient(signer);
       return await client.swap(
         prepared.tokenIn,
         prepared.tokenOut,

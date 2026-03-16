@@ -2,6 +2,27 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { defineCommand } from "citty";
 import { ensureConfigDir, getConfigPath } from "../../core/config";
 
+function parseConfigValue(rawValue: string): unknown {
+  const value = rawValue.trim();
+
+  if (
+    value.startsWith("{") ||
+    value.startsWith("[") ||
+    value.startsWith('"') ||
+    value === "true" ||
+    value === "false" ||
+    value === "null"
+  ) {
+    return JSON.parse(value);
+  }
+
+  if (/^-?\d+(\.\d+)?$/.test(value)) {
+    return Number(value);
+  }
+
+  return rawValue;
+}
+
 export default defineCommand({
   meta: {
     name: "set",
@@ -30,7 +51,7 @@ export default defineCommand({
       }
       current = current[parts[i]] as Record<string, unknown>;
     }
-    current[parts[parts.length - 1]] = args.value;
+    current[parts[parts.length - 1]] = parseConfigValue(args.value);
     writeFileSync(configPath, JSON.stringify(config, null, 2));
     console.log(`Set ${args.key} = ${args.value}`);
   },

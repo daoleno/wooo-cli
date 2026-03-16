@@ -21,11 +21,15 @@ src/
 ├── index.ts              # Entry point — command registration, protocol group wiring
 ├── core/                 # Shared infrastructure
 │   ├── config.ts         # Configuration loading (c12)
-│   ├── context.ts        # Active wallet / secret resolution
+│   ├── context.ts        # Active wallet / signer resolution
 │   ├── evm.ts            # Shared EVM clients (viem)
 │   ├── execution-plan.ts # Machine-readable dry-run contract
 │   ├── exchange-gateway.ts # Thin execution wrapper for exchange APIs
 │   ├── output.ts         # Structured output (table, JSON)
+│   ├── signer-audit.ts   # Local signer JSONL audit log
+│   ├── signer-policy.ts  # Signer-side policy evaluation
+│   ├── signer-protocol.ts # Command signer request / response contract
+│   ├── signers.ts        # Wallet signer adapters (local keystore / external command)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
 │   ├── solana.ts         # Shared Solana connection and keypair helpers
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
@@ -36,7 +40,7 @@ src/
 │   ├── market/           # wooo market price/search
 │   ├── portfolio/        # wooo portfolio overview
 │   ├── swap/             # wooo swap (aggregated route selection)
-│   └── wallet/           # wooo wallet generate/import/list/balance/switch/export
+│   └── wallet/           # wooo wallet connect/generate/import/list/balance/switch
 ├── protocols/            # Protocol modules
 │   ├── types.ts          # ProtocolManifest, ProtocolType, ProtocolGroup
 │   ├── registry.ts       # Protocol registration, listProtocolsByGroup()
@@ -86,7 +90,7 @@ A protocol-specific operation provides:
 - `prepare()` — fetch quotes / previews / derived amounts
 - `createPreview()` — user-facing confirmation payload
 - `createPlan()` — `ExecutionPlan` for `--dry-run --json`
-- `resolveAuth()` — how to get signing or API credentials
+- `resolveAuth()` — how to resolve a signer backend or API credentials
 - `execute()` — real execution
 
 The command layer stays thin: validate args, create an operation, hand it to the runner.
@@ -112,8 +116,8 @@ This is the contract AI should consume, not help text.
 
 No generic workflow engine is used. Execution stays concrete:
 
-- `TxGateway` for EVM contract simulation, allowance handling, submission, and receipt waiting
-- `SolanaGateway` for signing and confirming serialized versioned transactions
+- `TxGateway` for EVM contract simulation, allowance handling, signer submission, and receipt waiting
+- `SolanaGateway` for signer submission and confirmation of serialized versioned transactions
 - `ExchangeGateway` for authenticated exchange order submission
 
 Protocol clients keep business logic. Gateways handle the mechanical submission layer.
@@ -157,26 +161,93 @@ The aggregator only does three things:
 
 ## Multi-Chain Support
 
+### Wallet Auth
+
+Wallet metadata and signer auth are separate concerns.
+
+- Wallet registry stores `name`, `address`, `chain`, and auth backend config
+- Local wallets keep encrypted secrets in the keystore, but signing is delegated to an internal signer subprocess
+- External wallets are integrated through a command signer contract
+- The main CLI never needs a raw private key in protocol execution code
+- Local signer policy is configured per wallet via `config.signerPolicy[walletName]`
+- Local signer approvals and rejections are appended to `~/.config/wooo/signer-audit.jsonl`
+
+The command signer contract is file-based:
+
+1. CLI writes a JSON request file
+2. CLI invokes the signer command with `--request-file` and `--response-file`
+3. Signer performs local confirmation / policy checks
+4. Signer writes a JSON response file containing a tx hash or signature
+
+Service signers use the same request / response payloads over local HTTP:
+
+1. CLI serializes the same JSON signer request
+2. CLI `POST`s it to the configured local signer service URL
+3. Service performs local confirmation / policy checks
+4. Service returns the same JSON response contract
+
+`--yes` only bypasses the CLI confirmation layer. Signer-side policy and signer-side
+approval still apply.
+
+Signer subprocess environment is intentionally constrained:
+
+- `WOOO_CONFIG_DIR` is forwarded so the signer can load shared policy config
+- `WOOO_SIGNER_*` variables are forwarded for signer-specific configuration
+- common shell / terminal variables such as `PATH`, `HOME`, and `TERM` are forwarded
+- the rest of the parent environment is not inherited by default
+
+This keeps unrelated parent-process secrets from leaking into external signer commands.
+
+Signer service URLs are restricted to local hosts. `wooo` does not treat arbitrary
+remote HTTP endpoints as trusted signer backends.
+
+For the built-in local signer:
+
+- EVM requests can be constrained by chain, contract, function, native value, and token approval policy
+- Solana requests can be constrained by network
+- Hyperliquid requests can be constrained by action type, symbol, leverage, and order size
+- Matching requests can be auto-approved within an explicit time window
+
+External signers use the same request / response contract and are responsible for
+enforcing equivalent confirmation, policy, and audit behavior inside their own
+trusted environment.
+
+`src/examples/command-signer.ts` is the in-repo reference implementation of that
+contract. It shares the same signer-side policy and audit runtime as the built-in
+local signer, but resolves the signing secret from signer-local inputs instead of
+from the `wooo` keystore.
+
+`src/examples/signer-service.ts` provides the equivalent reference implementation
+for non-CLI wallet systems that expose a local signer service.
+
+`wooo wallet discover --url <local-service>` lets users inspect signer service
+metadata before connecting it as a wallet.
+
+Current transport limitation:
+
+- EVM and Solana work with command signers, service signers, and local-keystore wallets
+- Hyperliquid still requires synchronous signing because of the upstream SDK hook shape, so it currently supports command signers and local-keystore wallets, not service signers
+
 ### EVM
 
 `src/core/evm.ts` provides:
 
 - `CHAIN_MAP`
 - `getPublicClient(chain)`
-- `getWalletClient(key, chain)`
+- `getWalletClient(key, chain)` for local signer subprocess execution only
 - `getAccountAddress(key)`
 
-EVM write protocols use `TxGateway` on top of those helpers.
+EVM write protocols use `TxGateway` on top of `getPublicClient()` plus an `EvmSigner`.
 
 ### Solana
 
 `src/core/solana.ts` provides:
 
 - `getSolanaConnection()`
-- `getSolanaKeypair(privateKey)`
+- `getSolanaKeypair(privateKey)` for local signer subprocess execution only
 - `getSolanaAddress(privateKey)`
 
-Solana write protocols use `SolanaGateway` for transaction submission.
+Solana write protocols use `SolanaGateway` plus a `SolanaSigner`.
 
 ### Exchange APIs
 

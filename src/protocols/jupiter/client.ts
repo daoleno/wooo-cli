@@ -1,5 +1,5 @@
-import type { Connection } from "@solana/web3.js";
-import { getSolanaConnection, getSolanaKeypair } from "../../core/solana";
+import type { SolanaSigner } from "../../core/signers";
+import { getSolanaConnection } from "../../core/solana";
 import { SolanaGateway } from "../../core/solana-gateway";
 import { JUPITER_API, resolveTokenMint } from "./constants";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
@@ -21,11 +21,9 @@ interface JupiterSwapResponse {
 }
 
 export class JupiterClient {
-  private connection: Connection;
+  private connection = getSolanaConnection();
 
-  constructor(private privateKey?: string) {
-    this.connection = getSolanaConnection();
-  }
+  constructor(private signer?: SolanaSigner) {}
 
   async quote(
     tokenInSymbol: string,
@@ -74,9 +72,8 @@ export class JupiterClient {
     tokenOutSymbol: string,
     amountIn: number,
   ): Promise<JupiterSwapResult> {
-    if (!this.privateKey) throw new Error("Private key required for swap");
+    if (!this.signer) throw new Error("Signer required for swap");
 
-    const keypair = getSolanaKeypair(this.privateKey);
     const tokenIn = resolveTokenMint(tokenInSymbol);
     const tokenOut = resolveTokenMint(tokenOutSymbol);
     if (!tokenIn) throw new Error(`Unknown Solana token: ${tokenInSymbol}`);
@@ -103,7 +100,7 @@ export class JupiterClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         quoteResponse: quoteData,
-        userPublicKey: keypair.publicKey.toString(),
+        userPublicKey: this.signer.address,
         wrapAndUnwrapSol: true,
       }),
     });
@@ -113,7 +110,16 @@ export class JupiterClient {
     const swapData = (await swapResponse.json()) as JupiterSwapResponse;
 
     // 3. Sign, submit, and confirm
-    const gateway = new SolanaGateway(this.connection, keypair);
+    const gateway = new SolanaGateway(
+      this.connection,
+      "mainnet-beta",
+      this.signer,
+      {
+        group: "dex",
+        protocol: "jupiter",
+        command: "swap",
+      },
+    );
     const { txHash } = await gateway.sendVersionedTransaction(
       swapData.swapTransaction,
     );

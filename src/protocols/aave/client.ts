@@ -1,9 +1,6 @@
 import { type Address, formatUnits, maxUint256, parseUnits } from "viem";
-import {
-  getAccountAddress,
-  getPublicClient,
-  getWalletClient,
-} from "../../core/evm";
+import { getPublicClient } from "../../core/evm";
+import type { EvmSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { type AaveApiMarket, fetchAaveMarkets } from "./api";
 import { AAVE_POOL_ABI, ERC20_ABI } from "./constants";
@@ -64,7 +61,7 @@ export class AaveClient {
 
   constructor(
     private chain: string,
-    private privateKey?: string,
+    private signer?: EvmSigner,
   ) {}
 
   private async getMarkets(): Promise<AaveApiMarket[]> {
@@ -212,18 +209,22 @@ export class AaveClient {
 
   private async createWriteContext(
     tokenSymbol: string,
+    command: "borrow" | "repay" | "supply" | "withdraw",
     marketSelector?: string,
   ): Promise<AaveWriteContext> {
-    if (!this.privateKey) throw new Error("Private key required");
+    if (!this.signer) throw new Error("Signer required");
 
     const selection = await this.findReserveSelection(
       tokenSymbol,
       marketSelector,
     );
     const publicClient = getPublicClient(this.chain);
-    const walletClient = getWalletClient(this.privateKey, this.chain);
-    const account = getAccountAddress(this.privateKey);
-    const txGateway = new TxGateway(publicClient, walletClient, account);
+    const account = this.signer.address;
+    const txGateway = new TxGateway(this.chain, publicClient, this.signer, {
+      group: "lend",
+      protocol: "aave",
+      command,
+    });
 
     return {
       account,
@@ -244,6 +245,7 @@ export class AaveClient {
   ): Promise<AaveSupplyResult> {
     const { account, pool, token, txGateway } = await this.createWriteContext(
       tokenSymbol,
+      "supply",
       marketSelector,
     );
     const amountWei = parseUnits(String(amount), token.decimals);
@@ -273,6 +275,7 @@ export class AaveClient {
   ): Promise<AaveWithdrawResult> {
     const { account, pool, token, txGateway } = await this.createWriteContext(
       tokenSymbol,
+      "withdraw",
       marketSelector,
     );
 
@@ -308,6 +311,7 @@ export class AaveClient {
   ): Promise<AaveBorrowResult> {
     const { account, pool, token, txGateway } = await this.createWriteContext(
       tokenSymbol,
+      "borrow",
       marketSelector,
     );
     const amountWei = parseUnits(String(amount), token.decimals);
@@ -336,6 +340,7 @@ export class AaveClient {
   ): Promise<AaveRepayResult> {
     const { account, pool, token, txGateway } = await this.createWriteContext(
       tokenSymbol,
+      "repay",
       marketSelector,
     );
 
@@ -367,18 +372,18 @@ export class AaveClient {
     };
   }
 
-  async positions(marketSelector?: string): Promise<AavePositionsSummary> {
-    if (!this.privateKey) throw new Error("Private key required");
-
+  async positions(
+    address: string,
+    marketSelector?: string,
+  ): Promise<AavePositionsSummary> {
     const selection = await this.resolveMarketSelection(marketSelector);
     const publicClient = getPublicClient(this.chain);
-    const account = getAccountAddress(this.privateKey);
 
     const data = await publicClient.readContract({
       address: selection.marketAddress,
       abi: AAVE_POOL_ABI,
       functionName: "getUserAccountData",
-      args: [account],
+      args: [address as Address],
     });
 
     const [totalCollateral, totalDebt, availableBorrows, , ltv, healthFactor] =

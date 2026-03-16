@@ -1,4 +1,4 @@
-import { getActivePrivateKey } from "../../core/context";
+import { getActiveEvmSigner } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
@@ -6,6 +6,7 @@ import {
   createWrapStep,
   type ExecutionPlanStep,
 } from "../../core/execution-plan";
+import type { EvmSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { UniswapClient } from "./client";
 import { NATIVE_WRAPS } from "./constants";
@@ -28,7 +29,7 @@ function isNativeToken(symbol: string): boolean {
 
 export function createUniswapSwapOperation(
   params: UniswapSwapParams,
-): WriteOperation<PreparedUniswapSwap, string, UniswapSwapResult> {
+): WriteOperation<PreparedUniswapSwap, EvmSigner, UniswapSwapResult> {
   return {
     protocol: "uniswap",
     prepare: async () => {
@@ -100,9 +101,9 @@ export function createUniswapSwapOperation(
         },
       });
     },
-    resolveAuth: async () => await getActivePrivateKey("evm"),
-    execute: async (prepared, privateKey) => {
-      const client = new UniswapClient(prepared.chain, privateKey);
+    resolveAuth: async () => await getActiveEvmSigner(),
+    execute: async (prepared, signer) => {
+      const client = new UniswapClient(prepared.chain, signer);
       return await client.swap(
         prepared.tokenIn,
         prepared.tokenOut,

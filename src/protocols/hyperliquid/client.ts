@@ -1,4 +1,6 @@
 import ccxt, { type hyperliquid } from "ccxt";
+import type { HyperliquidActionContext } from "../../core/signer-protocol";
+import type { EvmSigner } from "../../core/signers";
 import type {
   HyperliquidFunding,
   HyperliquidOrderResult,
@@ -6,20 +8,79 @@ import type {
   HyperliquidTicker,
 } from "./types";
 
-export class HyperliquidClient {
-  private exchange: hyperliquid;
+const DUMMY_PRIVATE_KEY = `0x${"11".repeat(32)}`;
 
-  constructor(privateKey?: string) {
-    if (privateKey) {
-      const { privateKeyToAccount } = require("viem/accounts");
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
-      this.exchange = new ccxt.hyperliquid({
-        privateKey,
-        walletAddress: account.address,
-      });
-    } else {
-      this.exchange = new ccxt.hyperliquid({});
-    }
+type HyperliquidExchange = hyperliquid & {
+  signL1Action: (
+    action: Record<string, unknown>,
+    nonce: number,
+    vaultAddress?: string,
+    expiresAfter?: number,
+  ) => { r: `0x${string}`; s: `0x${string}`; v: number };
+};
+
+interface HyperliquidSigningState {
+  command?: string;
+  current?: HyperliquidActionContext;
+}
+
+function createExchange(
+  address?: string,
+  signer?: EvmSigner,
+  signingState?: HyperliquidSigningState,
+): HyperliquidExchange {
+  const exchange = new ccxt.hyperliquid(
+    address
+      ? {
+          privateKey: DUMMY_PRIVATE_KEY,
+          walletAddress: address,
+        }
+      : {},
+  ) as HyperliquidExchange;
+
+  if (address && signer) {
+    exchange.signL1Action = (action, nonce, vaultAddress, expiresAfter) =>
+      signer.signHyperliquidL1Action(
+        {
+          action,
+          nonce,
+          vaultAddress,
+          expiresAfter,
+          context: {
+            actionType: String(action.type ?? "unknown"),
+            ...(signingState?.current ?? {}),
+          },
+          prompt: {
+            action: `Authorize Hyperliquid action for ${address}`,
+            details: {
+              actionType: String(action.type ?? "unknown"),
+              ...(signingState?.current?.symbol
+                ? { symbol: signingState.current.symbol }
+                : {}),
+              ...(signingState?.current?.leverage !== undefined
+                ? { leverage: signingState.current.leverage }
+                : {}),
+            },
+          },
+        },
+        {
+          group: "perps",
+          protocol: "hyperliquid",
+          command: signingState?.command,
+        },
+      );
+  }
+
+  return exchange;
+}
+
+export class HyperliquidClient {
+  private exchange: HyperliquidExchange;
+  private signingState: HyperliquidSigningState;
+
+  constructor(address?: string, signer?: EvmSigner, command?: string) {
+    this.signingState = { command };
+    this.exchange = createExchange(address, signer, this.signingState);
   }
 
   async fetchMarkets() {
@@ -27,7 +88,16 @@ export class HyperliquidClient {
   }
 
   async setLeverage(leverage: number, symbol: string): Promise<void> {
-    await this.exchange.setLeverage(leverage, symbol);
+    this.signingState.current = {
+      actionType: "updateLeverage",
+      leverage,
+      symbol,
+    };
+    try {
+      await this.exchange.setLeverage(leverage, symbol);
+    } finally {
+      this.signingState.current = undefined;
+    }
   }
 
   async fetchTicker(symbol: string): Promise<HyperliquidTicker> {
@@ -54,15 +124,15 @@ export class HyperliquidClient {
   async fetchPositions(): Promise<HyperliquidPosition[]> {
     const positions = await this.exchange.fetchPositions();
     return positions
-      .filter((p) => Math.abs(p.contracts ?? 0) > 0)
-      .map((p) => ({
-        symbol: p.symbol,
-        side: (p.side === "long" ? "LONG" : "SHORT") as "LONG" | "SHORT",
-        size: Math.abs(p.contracts ?? 0),
-        entryPrice: p.entryPrice ?? 0,
-        markPrice: p.markPrice ?? 0,
-        pnl: p.unrealizedPnl ?? 0,
-        leverage: p.leverage ?? 1,
+      .filter((position) => Math.abs(position.contracts ?? 0) > 0)
+      .map((position) => ({
+        symbol: position.symbol,
+        side: (position.side === "long" ? "LONG" : "SHORT") as "LONG" | "SHORT",
+        size: Math.abs(position.contracts ?? 0),
+        entryPrice: position.entryPrice ?? 0,
+        markPrice: position.markPrice ?? 0,
+        pnl: position.unrealizedPnl ?? 0,
+        leverage: position.leverage ?? 1,
       }));
   }
 
@@ -70,15 +140,26 @@ export class HyperliquidClient {
     symbol: string,
     side: "buy" | "sell",
     amount: number,
+    sizeUsd?: number,
   ): Promise<HyperliquidOrderResult> {
-    const order = await this.exchange.createMarketOrder(symbol, side, amount);
-    return {
-      orderId: order.id,
-      symbol: order.symbol,
-      side: String(order.side),
-      size: order.amount,
-      price: order.average ?? order.price ?? 0,
-      status: String(order.status),
+    this.signingState.current = {
+      actionType: "order",
+      side,
+      sizeUsd,
+      symbol,
     };
+    try {
+      const order = await this.exchange.createMarketOrder(symbol, side, amount);
+      return {
+        orderId: order.id,
+        symbol: order.symbol,
+        side: String(order.side),
+        size: order.amount,
+        price: order.average ?? order.price ?? 0,
+        status: String(order.status),
+      };
+    } finally {
+      this.signingState.current = undefined;
+    }
   }
 }

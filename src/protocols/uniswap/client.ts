@@ -1,9 +1,6 @@
 import { type Address, formatUnits, parseUnits } from "viem";
-import {
-  getAccountAddress,
-  getPublicClient,
-  getWalletClient,
-} from "../../core/evm";
+import { getPublicClient } from "../../core/evm";
+import type { EvmSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import {
   ERC20_ABI,
@@ -22,12 +19,11 @@ const FEE_TIERS = [3000, 500, 10000, 100] as const;
 const SLIPPAGE_BPS = 50; // 0.5% default slippage
 
 type EvmPublicClient = ReturnType<typeof getPublicClient>;
-type EvmWalletClient = ReturnType<typeof getWalletClient>;
 
 export class UniswapClient {
   constructor(
     private chain: string,
-    private privateKey?: string,
+    private signer?: EvmSigner,
   ) {}
 
   /**
@@ -109,7 +105,7 @@ export class UniswapClient {
     tokenOutSymbol: string,
     amountInHuman: number,
   ): Promise<UniswapSwapResult> {
-    if (!this.privateKey) throw new Error("Private key required for swap");
+    if (!this.signer) throw new Error("Signer required for swap");
 
     const tokenIn = resolveToken(tokenInSymbol, this.chain);
     const tokenOut = resolveToken(tokenOutSymbol, this.chain);
@@ -119,9 +115,11 @@ export class UniswapClient {
       throw new Error(`Unknown token: ${tokenOutSymbol} on ${this.chain}`);
 
     const publicClient = getPublicClient(this.chain);
-    const walletClient = getWalletClient(this.privateKey, this.chain);
-    const account = getAccountAddress(this.privateKey);
-    const txGateway = new TxGateway(publicClient, walletClient, account);
+    const txGateway = new TxGateway(this.chain, publicClient, this.signer, {
+      group: "dex",
+      protocol: "uniswap",
+      command: "swap",
+    });
     const amountIn = parseUnits(String(amountInHuman), tokenIn.decimals);
     const isNativeIn = this.isNativeToken(tokenInSymbol);
     const isNativeOut = this.isNativeToken(tokenOutSymbol);
@@ -160,7 +158,7 @@ export class UniswapClient {
           address: tokenOut.address,
           abi: ERC20_ABI,
           functionName: "balanceOf",
-          args: [account],
+          args: [txGateway.account],
         })) as bigint)
       : 0n;
 
@@ -174,7 +172,7 @@ export class UniswapClient {
           tokenIn: tokenIn.address,
           tokenOut: tokenOut.address,
           fee,
-          recipient: account,
+          recipient: txGateway.account,
           amountIn,
           amountOutMinimum: amountOutMin,
           sqrtPriceLimitX96: 0n,
@@ -186,10 +184,9 @@ export class UniswapClient {
     if (isNativeOut) {
       const unwrappedAmount = await this.unwrapNativeOutput(
         tokenOut.address,
-        account,
         wrappedBalanceBefore,
         publicClient,
-        walletClient,
+        txGateway,
       );
       if (unwrappedAmount > 0n) {
         amountOut = Number(
@@ -228,16 +225,15 @@ export class UniswapClient {
 
   private async unwrapNativeOutput(
     wrappedToken: Address,
-    account: Address,
     balanceBefore: bigint,
     publicClient: EvmPublicClient,
-    walletClient: EvmWalletClient,
+    txGateway: TxGateway,
   ): Promise<bigint> {
     const balanceAfter = (await publicClient.readContract({
       address: wrappedToken,
       abi: ERC20_ABI,
       functionName: "balanceOf",
-      args: [account],
+      args: [txGateway.account],
     })) as bigint;
     const received =
       balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0n;
@@ -246,15 +242,12 @@ export class UniswapClient {
       return 0n;
     }
 
-    const { request } = await publicClient.simulateContract({
+    await txGateway.simulateAndWriteContract({
       address: wrappedToken,
       abi: WETH9_ABI,
       functionName: "withdraw",
       args: [received],
-      account,
     });
-    const hash = await walletClient.writeContract(request);
-    await publicClient.waitForTransactionReceipt({ hash });
     return received;
   }
 

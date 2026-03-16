@@ -10,9 +10,9 @@ Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, or route through the 
 # Install
 bun install -g wooo-cli
 
-# Set up
+# Set up a local wallet
 wooo config init
-wooo wallet generate my-wallet
+wooo wallet generate my-wallet   # prompts for the master password unless WOOO_MASTER_PASSWORD is set
 
 # Start using
 wooo market price BTC
@@ -44,6 +44,9 @@ Common EVM chain aliases are supported in CLI flags, for example `eth`,
 ```bash
 wooo wallet generate trading-wallet
 wooo wallet import 0xprivatekey... --name imported
+wooo wallet discover --url http://127.0.0.1:8787/ --json
+wooo wallet connect ledger-main --chain ethereum --address 0xabc... --command '["/usr/local/bin/wooo-signer-ledger","--profile","main"]'
+wooo wallet connect signer-service --url http://127.0.0.1:8787/
 wooo wallet list
 wooo wallet switch trading-wallet
 wooo wallet balance
@@ -124,7 +127,7 @@ wooo chain call 0x... "totalSupply()(uint256)"      # Read contract
 ```
 wooo
 ├── config       — init, set, get, list
-├── wallet       — generate, import, list, balance, switch, export
+├── wallet       — connect, generate, import, list, balance, switch
 ├── market       — price, search
 ├── portfolio    — overview
 ├── chain        — tx, balance, ens, call
@@ -179,12 +182,131 @@ export WOOO_BYBIT_API_SECRET=...
 
 ### On-Chain Protocols
 
-On-chain operations use your local wallet. Generate or import one:
+On-chain operations execute through a signer backend, not through private key export.
+
+For a local encrypted wallet:
 
 ```bash
 wooo wallet generate my-wallet
 wooo wallet import 0xprivatekey... --name imported
 ```
+
+`wooo wallet generate` and `wooo wallet import` prompt for the master password on
+TTYs. `WOOO_MASTER_PASSWORD` remains available for controlled local automation and tests.
+
+For an external wallet system, register a command-based signer:
+
+```bash
+wooo wallet connect signer-main \
+  --chain ethereum \
+  --address 0xabc123... \
+  --command '["/usr/local/bin/wooo-signer","--profile","main"]'
+```
+
+For an external wallet system that exposes a local service instead of a CLI command:
+
+```bash
+wooo wallet connect signer-service \
+  --url http://127.0.0.1:8787/
+```
+
+This repo also ships a reference command signer for local development and as an
+implementation template:
+
+```bash
+export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
+
+wooo wallet connect signer-main \
+  --chain ethereum \
+  --address 0xabc123... \
+  --command '["bun","run","src/examples/command-signer.ts"]'
+```
+
+And a reference local signer service:
+
+```bash
+export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
+bun run src/examples/signer-service.ts --port 8787
+
+wooo wallet connect signer-service \
+  --chain ethereum \
+  --address 0xabc123... \
+  --url http://127.0.0.1:8787/
+```
+
+The external signer command receives `--request-file <path>` and
+`--response-file <path>` arguments. The request file contains a JSON payload
+describing the action to authorize. The signer command is expected to perform
+local confirmation or policy checks, sign or send the request, write a JSON
+response file, and exit.
+
+For service-based signers, `wooo` sends the same JSON payload over HTTP `POST`
+to the configured local URL and expects the same JSON response contract.
+You can inspect signer service metadata first with `wooo wallet discover --url ...`.
+
+The reference signer resolves its secret from, in order:
+
+- `--secret-file <path>`
+- `WOOO_SIGNER_SECRET_FILE`
+- `WOOO_SIGNER_SECRET`
+- interactive prompt
+
+It is suitable for local development, testing, and as a template. For production,
+replace secret resolution with a hardware wallet, OS keychain, HSM, MPC signer,
+or your own trusted local signing daemon.
+
+For local-keystore wallets, `wooo` applies signer policy and audit logging inside
+the signer subprocess. This keeps the main CLI process focused on planning and
+execution routing, not secret handling.
+
+Example signer policy:
+
+```json
+{
+  "signerPolicy": {
+    "agent-wallet": {
+      "autoApprove": true,
+      "expiresAt": "2026-03-16T18:00:00Z",
+      "allowProtocols": ["uniswap"],
+      "allowCommands": ["swap"],
+      "evm": {
+        "allowChains": ["arbitrum"],
+        "allowFunctions": ["approve", "exactInputSingle"],
+        "approvals": {
+          "denyUnlimited": true,
+          "maxAmount": "1000000000"
+        }
+      }
+    }
+  }
+}
+```
+
+You can write these values with `wooo config set`, including JSON arrays and
+objects:
+
+```bash
+wooo config set signerPolicy.agent-wallet.autoApprove true
+wooo config set signerPolicy.agent-wallet.allowProtocols '["uniswap"]'
+wooo config set signerPolicy.agent-wallet.evm '{"allowChains":["arbitrum"],"approvals":{"denyUnlimited":true}}'
+```
+
+Local signer audit records are appended to `~/.config/wooo/signer-audit.jsonl`.
+External signers should implement equivalent policy and audit controls on their side.
+
+Security model:
+
+- The main CLI process never exposes private keys through the command surface.
+- Local-keystore wallets sign through an internal signer subprocess.
+- External signer wallets can keep keys entirely outside `wooo`, either as a local command or a local service.
+- `--yes` skips the CLI confirmation prompt, but signer-level authorization is still enforced by the signer backend.
+- `config.signerPolicy[walletName]` is enforced on the signer side, not in the planner.
+- Local signer approvals and rejections are logged to `~/.config/wooo/signer-audit.jsonl`.
+- External signer subprocesses do not inherit the full parent environment. `wooo` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
+- Signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
+- Service-based signers currently support EVM and Solana write flows. Hyperliquid still requires a synchronous signer transport, so use a command signer or local-keystore wallet there.
+
+See [docs/external-signer.md](docs/external-signer.md) for the full external signer integration contract.
 
 ## Development
 

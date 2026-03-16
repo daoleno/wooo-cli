@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { getWalletStore } from "../../core/context";
+import { getWalletStore, requireMasterPassword } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { resolveWalletType } from "../../core/wallet-store";
 
@@ -25,12 +25,17 @@ export default defineCommand({
       process.exit(1);
     }
     const store = getWalletStore();
-    const wallet = await store.generate(name, walletType);
+    const wallet = await store.generate(
+      name,
+      walletType,
+      await requireMasterPassword(),
+    );
     const out = createOutput(resolveOutputOptions(args));
     out.data({
       name: wallet.name,
       address: wallet.address,
       chain: wallet.chain,
+      auth: wallet.authKind,
       active: wallet.active,
     });
   },

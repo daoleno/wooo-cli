@@ -21,9 +21,13 @@ export default defineCommand({
         name: w.name,
         address: w.address,
         chain: w.chain,
+        auth: w.authKind,
         active: w.active ? "✓" : "",
       })),
-      { columns: ["name", "address", "chain", "active"], title: "Wallets" },
+      {
+        columns: ["name", "address", "chain", "auth", "active"],
+        title: "Wallets",
+      },
     );
   },
 });

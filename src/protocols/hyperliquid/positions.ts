@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { getActivePrivateKey } from "../../core/context";
+import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { HyperliquidClient } from "./client";
 
@@ -10,8 +10,8 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const pk = await getActivePrivateKey("evm");
-    const client = new HyperliquidClient(pk);
+    const wallet = await getActiveWallet("evm");
+    const client = new HyperliquidClient(wallet.address);
     const positions = await client.fetchPositions();
     const out = createOutput(resolveOutputOptions(args));
 

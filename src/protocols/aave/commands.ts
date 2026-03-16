@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { evmChainArg } from "../../core/chains";
-import { getActivePrivateKey } from "../../core/context";
+import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,
@@ -245,9 +245,11 @@ const positions = defineCommand({
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
     const chain = validateChain(args.chain, SUPPORTED_CHAINS);
-    const privateKey = await getActivePrivateKey("evm");
-    const client = new AaveClient(chain, privateKey);
-    const result = await runAaveCommand(() => client.positions(args.market));
+    const wallet = await getActiveWallet("evm");
+    const client = new AaveClient(chain);
+    const result = await runAaveCommand(() =>
+      client.positions(wallet.address, args.market),
+    );
     out.data(result);
   },
 });

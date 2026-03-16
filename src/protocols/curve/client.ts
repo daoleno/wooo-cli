@@ -1,9 +1,6 @@
 import { formatUnits, parseUnits } from "viem";
-import {
-  getAccountAddress,
-  getPublicClient,
-  getWalletClient,
-} from "../../core/evm";
+import { getPublicClient } from "../../core/evm";
+import type { EvmSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import {
   CURVE_POOL_ABI,
@@ -25,7 +22,7 @@ interface ResolvedPool {
 export class CurveClient {
   constructor(
     private chain = "ethereum",
-    private privateKey?: string,
+    private signer?: EvmSigner,
   ) {}
 
   private getChainPools(): Record<string, CurvePoolConfig> {
@@ -103,12 +100,14 @@ export class CurveClient {
     amountIn: number,
     slippage = 0.3,
   ): Promise<CurveSwapResult> {
-    if (!this.privateKey) throw new Error("Private key required for swap");
+    if (!this.signer) throw new Error("Signer required for swap");
     const pool = this.resolvePool(tokenIn, tokenOut);
     const publicClient = getPublicClient(this.chain);
-    const walletClient = getWalletClient(this.privateKey, this.chain);
-    const account = getAccountAddress(this.privateKey);
-    const txGateway = new TxGateway(publicClient, walletClient, account);
+    const txGateway = new TxGateway(this.chain, publicClient, this.signer, {
+      group: "dex",
+      protocol: "curve",
+      command: "swap",
+    });
     const amountInRaw = parseUnits(
       String(amountIn),
       pool.config.decimals[pool.indexIn],

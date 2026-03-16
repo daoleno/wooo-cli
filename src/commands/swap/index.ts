@@ -36,22 +36,63 @@ const SUPPORTED_CHAINS = [
   "solana",
 ];
 
+type SwapRouteProtocol = "curve" | "jupiter" | "uniswap";
+
 export interface SwapQuote {
-  protocol: string;
+  protocol: SwapRouteProtocol;
   amountOut: string;
   price: number;
 }
 
-interface PreparedSwapRoute<TPrepared, TResult> {
-  operation: WriteOperation<TPrepared, string, TResult>;
+interface PreparedSwapRoute<
+  TPrepared,
+  TAuth,
+  TResult,
+  TProtocol extends SwapRouteProtocol,
+> {
+  operation: WriteOperation<TPrepared, TAuth, TResult>;
   prepared: TPrepared;
-  quote: SwapQuote;
+  protocol: TProtocol;
+  quote: SwapQuote & { protocol: TProtocol };
 }
 
 type AnyPreparedSwapRoute =
-  | PreparedSwapRoute<PreparedCurveSwap, CurveSwapResult>
-  | PreparedSwapRoute<PreparedJupiterSwap, JupiterSwapResult>
-  | PreparedSwapRoute<PreparedUniswapSwap, UniswapSwapResult>;
+  | PreparedSwapRoute<
+      PreparedCurveSwap,
+      ReturnType<typeof createCurveSwapOperation> extends WriteOperation<
+        PreparedCurveSwap,
+        infer TAuth,
+        CurveSwapResult
+      >
+        ? TAuth
+        : never,
+      CurveSwapResult,
+      "curve"
+    >
+  | PreparedSwapRoute<
+      PreparedJupiterSwap,
+      ReturnType<typeof createJupiterSwapOperation> extends WriteOperation<
+        PreparedJupiterSwap,
+        infer TAuth,
+        JupiterSwapResult
+      >
+        ? TAuth
+        : never,
+      JupiterSwapResult,
+      "jupiter"
+    >
+  | PreparedSwapRoute<
+      PreparedUniswapSwap,
+      ReturnType<typeof createUniswapSwapOperation> extends WriteOperation<
+        PreparedUniswapSwap,
+        infer TAuth,
+        UniswapSwapResult
+      >
+        ? TAuth
+        : never,
+      UniswapSwapResult,
+      "uniswap"
+    >;
 
 function quotePrice(amountIn: number, amountOut: string): number {
   const output = Number.parseFloat(amountOut);
@@ -80,15 +121,22 @@ function decorateAggregatedPlan(
   };
 }
 
-async function prepareRoute<TPrepared, TResult>(
-  operation: WriteOperation<TPrepared, string, TResult>,
-  toQuote: (prepared: TPrepared) => SwapQuote,
-): Promise<PreparedSwapRoute<TPrepared, TResult>> {
+async function prepareRoute<
+  TPrepared,
+  TAuth,
+  TResult,
+  TProtocol extends SwapRouteProtocol,
+>(
+  operation: WriteOperation<TPrepared, TAuth, TResult>,
+  toQuote: (prepared: TPrepared) => SwapQuote & { protocol: TProtocol },
+): Promise<PreparedSwapRoute<TPrepared, TAuth, TResult, TProtocol>> {
   const prepared = await operation.prepare();
+  const quote = toQuote(prepared);
   return {
     operation,
     prepared,
-    quote: toQuote(prepared),
+    protocol: quote.protocol,
+    quote,
   };
 }
 
@@ -102,6 +150,52 @@ export function selectBestRoute(quotes: SwapQuote[]): SwapQuote {
       ? quote
       : best,
   );
+}
+
+async function runSelectedRoute(
+  args: {
+    yes?: boolean;
+    "dry-run"?: boolean;
+    json?: boolean;
+    format?: string;
+  },
+  route: AnyPreparedSwapRoute,
+  quotes: SwapQuote[],
+  bestRoute: string,
+): Promise<void> {
+  switch (route.protocol) {
+    case "curve":
+      await runPreparedWriteOperation(args, route.operation, route.prepared, {
+        formatPlan: (plan) => decorateAggregatedPlan(plan, quotes, bestRoute),
+        formatResult: (result) => ({
+          ...(result as unknown as Record<string, unknown>),
+          bestRoute,
+        }),
+      });
+      return;
+    case "jupiter":
+      await runPreparedWriteOperation(args, route.operation, route.prepared, {
+        formatPlan: (plan) => decorateAggregatedPlan(plan, quotes, bestRoute),
+        formatResult: (result) => ({
+          ...(result as unknown as Record<string, unknown>),
+          bestRoute,
+        }),
+      });
+      return;
+    case "uniswap":
+      await runPreparedWriteOperation(args, route.operation, route.prepared, {
+        formatPlan: (plan) => decorateAggregatedPlan(plan, quotes, bestRoute),
+        formatResult: (result) => ({
+          ...(result as unknown as Record<string, unknown>),
+          bestRoute,
+        }),
+      });
+      return;
+    default: {
+      const exhaustive: never = route;
+      return exhaustive;
+    }
+  }
 }
 
 export default defineCommand({
@@ -237,18 +331,6 @@ export default defineCommand({
       }
     }
 
-    await runPreparedWriteOperation(
-      args,
-      selectedRoute.operation as WriteOperation<object, string, object>,
-      selectedRoute.prepared as object,
-      {
-        formatPlan: (plan) =>
-          decorateAggregatedPlan(plan, quotes, bestQuote.protocol),
-        formatResult: (result) => ({
-          ...(result as unknown as Record<string, unknown>),
-          bestRoute: bestQuote.protocol,
-        }),
-      },
-    );
+    await runSelectedRoute(args, selectedRoute, quotes, bestQuote.protocol);
   },
 });

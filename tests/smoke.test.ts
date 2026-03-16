@@ -159,11 +159,11 @@ describe("wooo-cli smoke tests", () => {
 
   test("wallet help shows subcommands", async () => {
     const result = await $`bun run src/index.ts wallet --help`.text();
+    expect(result).toContain("connect");
     expect(result).toContain("generate");
     expect(result).toContain("import");
     expect(result).toContain("list");
     expect(result).toContain("balance");
-    expect(result).toContain("export");
     expect(result).toContain("switch");
   });
 
