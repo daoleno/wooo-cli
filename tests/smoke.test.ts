@@ -13,10 +13,12 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("cex");
     expect(result).toContain("perps");
     expect(result).toContain("dex");
-    expect(result).toContain("defi");
+    expect(result).toContain("lend");
+    expect(result).toContain("stake");
     expect(result).toContain("chain");
     expect(result).toContain("swap");
     expect(result).not.toContain("bridge");
+    expect(result).not.toContain("defi");
     expect(result).not.toContain("capabilities");
   });
 
@@ -64,9 +66,13 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("jupiter");
   });
 
-  test("defi group shows protocols", async () => {
-    const result = await $`bun run src/index.ts defi --help`.text();
+  test("lend group shows protocols", async () => {
+    const result = await $`bun run src/index.ts lend --help`.text();
     expect(result).toContain("aave");
+  });
+
+  test("stake group shows protocols", async () => {
+    const result = await $`bun run src/index.ts stake --help`.text();
     expect(result).toContain("lido");
   });
 
@@ -77,16 +83,16 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("tokens");
   });
 
-  test("defi aave shows subcommands", async () => {
-    const result = await $`bun run src/index.ts defi aave --help`.text();
+  test("lend aave shows subcommands", async () => {
+    const result = await $`bun run src/index.ts lend aave --help`.text();
     expect(result).toContain("supply");
     expect(result).toContain("borrow");
     expect(result).toContain("positions");
     expect(result).toContain("rates");
   });
 
-  test("defi lido shows subcommands", async () => {
-    const result = await $`bun run src/index.ts defi lido --help`.text();
+  test("stake lido shows subcommands", async () => {
+    const result = await $`bun run src/index.ts stake lido --help`.text();
     expect(result).toContain("stake");
     expect(result).toContain("rewards");
     expect(result).toContain("balance");

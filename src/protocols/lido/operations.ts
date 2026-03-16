@@ -31,7 +31,7 @@ export function createLidoStakeOperation(
     createPlan: (prepared) =>
       createExecutionPlan({
         summary: `Stake ${prepared.amount} ETH via Lido`,
-        group: "defi",
+        group: "stake",
         protocol: "lido",
         command: "stake",
         chain: "ethereum",

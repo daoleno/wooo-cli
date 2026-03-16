@@ -4,15 +4,16 @@ import { $ } from "bun";
 describe("execution plan dry-run output", () => {
   test("aave supply returns an execution plan", async () => {
     const result =
-      await $`bun run src/index.ts defi aave supply USDC 100 --chain ethereum --dry-run --json`.text();
+      await $`bun run src/index.ts lend aave supply USDC 100 --chain ethereum --dry-run --json`.text();
     const parsed = JSON.parse(result) as {
       kind: string;
-      operation: { protocol: string; command: string };
+      operation: { group: string; protocol: string; command: string };
       chain: string;
       steps: Array<{ kind: string }>;
     };
 
     expect(parsed.kind).toBe("execution-plan");
+    expect(parsed.operation.group).toBe("lend");
     expect(parsed.operation.protocol).toBe("aave");
     expect(parsed.operation.command).toBe("supply");
     expect(parsed.chain).toBe("ethereum");
@@ -27,12 +28,13 @@ describe("execution plan dry-run output", () => {
         await $`bun run src/index.ts dex curve swap USDC USDT 100 --chain ethereum --dry-run --json`.text();
       const parsed = JSON.parse(result) as {
         kind: string;
-        operation: { protocol: string; command: string };
+        operation: { group: string; protocol: string; command: string };
         chain: string;
         steps: Array<{ kind: string }>;
       };
 
       expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("dex");
       expect(parsed.operation.protocol).toBe("curve");
       expect(parsed.operation.command).toBe("swap");
       expect(parsed.chain).toBe("ethereum");
@@ -49,13 +51,14 @@ describe("execution plan dry-run output", () => {
         await $`bun run src/index.ts dex jupiter swap SOL USDC 0.1 --dry-run --json`.text();
       const parsed = JSON.parse(result) as {
         kind: string;
-        operation: { protocol: string; command: string };
+        operation: { group: string; protocol: string; command: string };
         chain: string;
         accountType: string;
         steps: Array<{ kind: string }>;
       };
 
       expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("dex");
       expect(parsed.operation.protocol).toBe("jupiter");
       expect(parsed.operation.command).toBe("swap");
       expect(parsed.chain).toBe("solana");
@@ -72,12 +75,13 @@ describe("execution plan dry-run output", () => {
         await $`bun run src/index.ts swap USDC USDT 100 --chain ethereum --dry-run --json`.text();
       const parsed = JSON.parse(result) as {
         kind: string;
-        operation: { protocol: string; command: string };
+        operation: { group: string; protocol: string; command: string };
         metadata?: { bestRoute?: string; quotes?: Array<{ protocol: string }> };
         warnings: string[];
       };
 
       expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("dex");
       expect(parsed.operation.command).toBe("swap");
       expect(["curve", "uniswap"]).toContain(parsed.operation.protocol);
       expect(parsed.metadata?.bestRoute).toBe(parsed.operation.protocol);
@@ -91,15 +95,16 @@ describe("execution plan dry-run output", () => {
 
   test("lido stake returns an execution plan", async () => {
     const result =
-      await $`bun run src/index.ts defi lido stake 1 --dry-run --json`.text();
+      await $`bun run src/index.ts stake lido stake 1 --dry-run --json`.text();
     const parsed = JSON.parse(result) as {
       kind: string;
-      operation: { protocol: string; command: string };
+      operation: { group: string; protocol: string; command: string };
       chain: string;
       steps: Array<{ kind: string }>;
     };
 
     expect(parsed.kind).toBe("execution-plan");
+    expect(parsed.operation.group).toBe("stake");
     expect(parsed.operation.protocol).toBe("lido");
     expect(parsed.operation.command).toBe("stake");
     expect(parsed.chain).toBe("ethereum");

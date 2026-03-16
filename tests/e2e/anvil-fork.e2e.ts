@@ -198,7 +198,7 @@ describe("anvil fork e2e", () => {
         expect(Number(usdtBalance.balance)).toBeGreaterThan(95);
 
         const rates = await harness.runJson<AaveRateOutput>([
-          "defi",
+          "lend",
           "aave",
           "rates",
           "USDC",
@@ -210,7 +210,7 @@ describe("anvil fork e2e", () => {
         expect(rates.variableBorrowAPY).toContain("%");
 
         const supply = await harness.runJson<AaveTransactionOutput>([
-          "defi",
+          "lend",
           "aave",
           "supply",
           "USDC",
@@ -225,7 +225,7 @@ describe("anvil fork e2e", () => {
         expect(supply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
         const positionsAfterSupply = await harness.runJson<AavePositionsOutput>(
-          ["defi", "aave", "positions", "--chain", "ethereum"],
+          ["lend", "aave", "positions", "--chain", "ethereum"],
         );
         expect(Number(positionsAfterSupply.totalCollateralUSD)).toBeGreaterThan(
           900,
@@ -234,7 +234,7 @@ describe("anvil fork e2e", () => {
         expect(positionsAfterSupply.healthFactor).toBe("∞");
 
         const borrow = await harness.runJson<AaveTransactionOutput>([
-          "defi",
+          "lend",
           "aave",
           "borrow",
           "WETH",
@@ -250,7 +250,7 @@ describe("anvil fork e2e", () => {
         expect(borrow.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
         const positionsAfterBorrow = await harness.runJson<AavePositionsOutput>(
-          ["defi", "aave", "positions", "--chain", "ethereum"],
+          ["lend", "aave", "positions", "--chain", "ethereum"],
         );
         expect(Number(positionsAfterBorrow.totalCollateralUSD)).toBeGreaterThan(
           900,

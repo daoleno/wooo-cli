@@ -42,7 +42,7 @@ export function createAaveSupplyOperation(
     createPlan: (prepared) =>
       createExecutionPlan({
         summary: `Supply ${prepared.amount} ${prepared.token} to Aave V3`,
-        group: "defi",
+        group: "lend",
         protocol: "aave",
         command: "supply",
         chain: prepared.chain,
@@ -92,7 +92,7 @@ export function createAaveBorrowOperation(
     createPlan: (prepared) =>
       createExecutionPlan({
         summary: `Borrow ${prepared.amount} ${prepared.token} from Aave V3`,
-        group: "defi",
+        group: "lend",
         protocol: "aave",
         command: "borrow",
         chain: prepared.chain,

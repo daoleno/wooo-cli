@@ -71,7 +71,9 @@ export interface ProtocolManifest {
 }
 ```
 
-`type` controls grouping (`cex`, `dex`, `defi`, `perps`).
+`type` controls grouping (`cex`, `dex`, `lend`, `stake`, `perps`, `bridge`).
+`lending` protocols map to the `lend` CLI group and `staking` protocols map to `stake`,
+so the top-level command tree stays mutually exclusive.
 `writeAccountType` documents how authenticated write flows execute.
 
 ### 2. Write Commands Share One Runtime Contract

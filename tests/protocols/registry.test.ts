@@ -38,7 +38,7 @@ describe("protocol registry", () => {
     }
   });
 
-  test("DeFi protocols have correct types", () => {
+  test("protocols have correct types and account modes", () => {
     expect(getProtocol("uniswap")?.type).toBe("dex");
     expect(getProtocol("aave")?.type).toBe("lending");
     expect(getProtocol("lido")?.type).toBe("staking");
@@ -56,8 +56,8 @@ describe("protocol registry", () => {
       "curve",
       "jupiter",
     ]);
-    expect(groups.defi.map((p) => p.name)).toContain("aave");
-    expect(groups.defi.map((p) => p.name)).toContain("lido");
+    expect(groups.lend.map((p) => p.name)).toEqual(["aave"]);
+    expect(groups.stake.map((p) => p.name)).toEqual(["lido"]);
     expect(groups.bridge).toEqual([]);
   });
 

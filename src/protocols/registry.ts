@@ -24,7 +24,7 @@ const protocols: ProtocolDefinition[] = [
   uniswapProtocol,
   curveProtocol,
   jupiterProtocol,
-  // DeFi (lending + staking)
+  // Lending and staking
   aaveProtocol,
   lidoProtocol,
 ];
@@ -41,7 +41,7 @@ export function listProtocols(): ProtocolDefinition[] {
   return [...protocols];
 }
 
-/** Group protocols by their CLI group (cex, dex, defi, perps, bridge) */
+/** Group protocols by their CLI group (cex, dex, lend, stake, perps, bridge) */
 export function listProtocolsByGroup(): Record<
   ProtocolGroup,
   ProtocolDefinition[]
@@ -49,7 +49,8 @@ export function listProtocolsByGroup(): Record<
   const groups: Record<ProtocolGroup, ProtocolDefinition[]> = {
     cex: [],
     dex: [],
-    defi: [],
+    lend: [],
+    stake: [],
     perps: [],
     bridge: [],
   };

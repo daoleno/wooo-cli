@@ -17,7 +17,7 @@ wooo wallet generate my-wallet
 # Start using
 wooo market price BTC
 wooo swap USDC ETH 100 --chain arbitrum --dry-run
-wooo defi aave rates USDC --chain ethereum
+wooo lend aave rates USDC --chain ethereum
 ```
 
 ## What Can It Do?
@@ -26,7 +26,8 @@ wooo defi aave rates USDC --chain ethereum
 |----------|-----------|-------------|
 | **CEX Trading** | OKX, Binance, Bybit | Spot buy/sell, futures long/short, balance, positions |
 | **DEX Swaps** | Uniswap V3, Curve, Jupiter | Swap, quote, token lists — EVM + Solana |
-| **DeFi** | Aave V3, Lido | Supply, borrow, stake, view rates & rewards |
+| **Lending** | Aave V3 | Supply, borrow, view rates & positions |
+| **Staking** | Lido | Stake ETH, view stETH balance & rewards |
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
@@ -65,19 +66,19 @@ wooo dex curve swap USDT USDC 1000 --dry-run
 wooo dex jupiter swap SOL USDC 10 --yes
 ```
 
-### DeFi Operations
+### Lending and Staking
 
 ```bash
 # Aave V3 — lending & borrowing
-wooo defi aave rates USDC --chain ethereum
-wooo defi aave supply USDC 1000 --chain ethereum --yes
-wooo defi aave borrow ETH 0.5 --chain ethereum --yes
-wooo defi aave positions --chain ethereum
+wooo lend aave rates USDC --chain ethereum
+wooo lend aave supply USDC 1000 --chain ethereum --yes
+wooo lend aave borrow ETH 0.5 --chain ethereum --yes
+wooo lend aave positions --chain ethereum
 
 # Lido — liquid staking
-wooo defi lido stake 5 --yes
-wooo defi lido balance
-wooo defi lido rewards
+wooo stake lido stake 5 --yes
+wooo stake lido balance
+wooo stake lido rewards
 ```
 
 ### Perpetual Futures
@@ -115,8 +116,9 @@ wooo
 │   ├── uniswap  — swap, quote, tokens
 │   ├── curve    — swap, quote, pools
 │   └── jupiter  — swap, quote, tokens
-├── defi
-│   ├── aave     — supply, borrow, positions, rates
+├── lend
+│   └── aave     — supply, borrow, positions, rates
+├── stake
 │   └── lido     — stake, balance, rewards
 ├── perps
 │   └── hyperliquid — long, short, positions, funding
@@ -153,7 +155,7 @@ export WOOO_BYBIT_API_KEY=...
 export WOOO_BYBIT_API_SECRET=...
 ```
 
-### DeFi / DEX
+### On-Chain Protocols
 
 On-chain operations use your local wallet. Generate or import one:
 
@@ -193,7 +195,7 @@ bun run lint:fix
 ```
 
 The anvil e2e flow uses a local Ethereum fork and an ephemeral wallet, so it exercises
-real EVM write paths for `chain`, `dex uniswap`, and `defi aave` without using real funds.
+real EVM write paths for `chain`, `dex uniswap`, and `lend aave` without using real funds.
 
 ## Architecture
 
@@ -202,7 +204,7 @@ Each protocol exports a manifest from `commands.ts`, keeps protocol I/O in `clie
 and can expose reusable write flows in `operations.ts` when the same behavior is shared
 across direct protocol commands and aggregated commands such as `wooo swap`.
 
-Protocols are grouped by type (`dex`, `defi`, `perps`, `cex`) and auto-registered into the CLI command tree.
+Protocols are grouped into mutually exclusive CLI buckets (`dex`, `lend`, `stake`, `perps`, `cex`) and auto-registered into the command tree.
 Every write command returns an `ExecutionPlan` on `--dry-run --json`.
 
 See [docs/architecture.md](docs/architecture.md) for details.

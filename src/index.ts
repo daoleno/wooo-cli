@@ -7,7 +7,7 @@ import {
   type ProtocolGroup,
 } from "./protocols/types";
 
-// Build group commands: wooo cex okx ..., wooo perps hyperliquid ..., etc.
+// Build group commands: wooo cex okx ..., wooo lend aave ..., wooo stake lido ...
 const groupCommands: SubCommandsDef = {};
 const groups = listProtocolsByGroup();
 
