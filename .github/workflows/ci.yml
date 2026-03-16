@@ -50,7 +50,6 @@ jobs:
     needs: quality
     env:
       ANVIL_FORK_URL_ETHEREUM: https://rpc.flashbots.net
-      ANVIL_FORK_BLOCK_NUMBER: "24652791"
 
     steps:
       - name: Check out repository
