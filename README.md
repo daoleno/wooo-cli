@@ -36,6 +36,7 @@ wooo lend morpho markets --chain ethereum
 | **Staking** | Lido | Stake ETH, view stETH balance & rewards |
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Prediction Markets** | Polymarket | Gamma discovery, positions, CLOB market data, approvals, and signer-backed trading |
+| **Onchain Data** | OKX Onchain OS | Token search, token metadata, market metrics, portfolio balances, tx history |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
@@ -64,6 +65,10 @@ wooo wallet balance
 wooo market price BTC          # Aggregated price across exchanges
 wooo market price ETH/USDT     # Specific pair
 wooo market search DOGE         # Search markets
+wooo market okx chains
+wooo market okx search weth --chains ethereum,optimism
+wooo market okx token ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo market okx metrics base 0x4200000000000000000000000000000000000006
 ```
 
 ### Swapping Tokens
@@ -135,6 +140,21 @@ wooo chain balance 0xabc... --chain ethereum        # Native balance
 wooo chain balance 0xabc... --token 0xerc20...      # Token balance
 wooo chain ens vitalik.eth                          # ENS lookup
 wooo chain call 0x... "totalSupply()(uint256)"      # Read contract
+wooo chain okx history 0xabc... --chains ethereum,base
+wooo chain okx tx arbitrum 0xabc123...
+```
+
+### OKX Onchain Data
+
+```bash
+wooo market okx chains
+wooo market okx search weth --chains ethereum,optimism
+wooo market okx price ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo portfolio okx value 0xabc... --chains ethereum,base
+wooo portfolio okx balances 0xabc... --chains ethereum,base
+wooo portfolio okx balance 0xabc... ethereum native
+wooo chain okx history 0xabc... --chains ethereum,base --limit 20
+wooo chain okx tx ethereum 0xabc123...
 ```
 
 ## Command Structure
@@ -143,9 +163,9 @@ wooo chain call 0x... "totalSupply()(uint256)"      # Read contract
 wooo
 ├── config       — init, set, get, list
 ├── wallet       — connect, generate, import, list, balance, switch
-├── market       — price, search
-├── portfolio    — overview
-├── chain        — tx, balance, ens, call
+├── market       — price, search, okx
+├── portfolio    — overview, okx
+├── chain        — tx, balance, ens, call, okx
 ├── swap         — aggregated DEX swap (auto-routes)
 ├── cex
 │   ├── okx      — buy, sell, long, short, balance, positions
@@ -195,6 +215,28 @@ export WOOO_BINANCE_API_SECRET=...
 # Bybit
 export WOOO_BYBIT_API_KEY=...
 export WOOO_BYBIT_API_SECRET=...
+```
+
+### OKX Onchain Data API
+
+OKX Onchain data commands use API credentials only. They do not use or weaken
+the signer boundary for private keys.
+
+```bash
+export WOOO_OKX_ONCHAIN_API_KEY=...
+export WOOO_OKX_ONCHAIN_SECRET=...
+export WOOO_OKX_ONCHAIN_PASSPHRASE=...
+
+# Optional for local testing or mocks
+export WOOO_OKX_ONCHAIN_BASE_URL=http://127.0.0.1:8787
+```
+
+Equivalent config keys:
+
+```bash
+wooo config set okxOnchain.apiKey ...
+wooo config set okxOnchain.secret ...
+wooo config set okxOnchain.passphrase ...
 ```
 
 ### On-Chain Protocols

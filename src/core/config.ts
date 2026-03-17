@@ -47,6 +47,12 @@ export interface WoooConfig {
     format?: "table" | "csv" | "json";
   };
   chains?: Record<string, { rpc?: string }>;
+  okxOnchain?: {
+    apiKey?: string;
+    secret?: string;
+    passphrase?: string;
+    baseUrl?: string;
+  };
   signerPolicy?: Record<string, WalletSignerPolicy>;
   [protocol: string]: unknown;
 }

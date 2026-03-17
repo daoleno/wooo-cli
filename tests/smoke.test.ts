@@ -128,6 +128,7 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("balance");
     expect(result).toContain("ens");
     expect(result).toContain("call");
+    expect(result).toContain("okx");
   });
 
   test("dex jupiter shows subcommands", async () => {
@@ -171,11 +172,37 @@ describe("wooo-cli smoke tests", () => {
     const result = await $`bun run src/index.ts market --help`.text();
     expect(result).toContain("price");
     expect(result).toContain("search");
+    expect(result).toContain("okx");
   });
 
   test("portfolio help shows subcommands", async () => {
     const result = await $`bun run src/index.ts portfolio --help`.text();
     expect(result).toContain("overview");
+    expect(result).toContain("okx");
+  });
+
+  test("market okx help shows subcommands", async () => {
+    const result = await $`bun run src/index.ts market okx --help`.text();
+    expect(result).toContain("chains");
+    expect(result).toContain("search");
+    expect(result).toContain("token");
+    expect(result).toContain("metrics");
+    expect(result).toContain("price");
+  });
+
+  test("portfolio okx help shows subcommands", async () => {
+    const result = await $`bun run src/index.ts portfolio okx --help`.text();
+    expect(result).toContain("chains");
+    expect(result).toContain("value");
+    expect(result).toContain("balances");
+    expect(result).toContain("balance");
+  });
+
+  test("chain okx help shows subcommands", async () => {
+    const result = await $`bun run src/index.ts chain okx --help`.text();
+    expect(result).toContain("chains");
+    expect(result).toContain("history");
+    expect(result).toContain("tx");
   });
 
   test("json subcommand output is not polluted by the root banner", async () => {
