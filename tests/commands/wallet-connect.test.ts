@@ -16,6 +16,85 @@ describe("wallet connect command", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  test("local wallet commands do not expose transport details in JSON output", async () => {
+    const env = {
+      ...process.env,
+      WOOO_CONFIG_DIR: tempDir,
+      WOOO_MASTER_PASSWORD: "test-master-password-32-chars-ok!",
+    };
+
+    const generateResult = Bun.spawn({
+      cmd: [
+        "bun",
+        "run",
+        "src/index.ts",
+        "wallet",
+        "generate",
+        "local-wallet",
+        "--json",
+      ],
+      cwd: process.cwd(),
+      env,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    const [generateStdout, generateStderr, generateExitCode] =
+      await Promise.all([
+        new Response(generateResult.stdout).text(),
+        new Response(generateResult.stderr).text(),
+        generateResult.exited,
+      ]);
+
+    expect(generateExitCode).toBe(0);
+    expect(generateStderr.trim()).toBe("");
+
+    const generatedWallet = JSON.parse(generateStdout) as {
+      active: boolean;
+      address: string;
+      chain: string;
+      mode: string;
+      name: string;
+      transport?: string;
+    };
+
+    expect(generatedWallet.name).toBe("local-wallet");
+    expect(generatedWallet.mode).toBe("local");
+    expect("transport" in generatedWallet).toBe(false);
+
+    const listResult = Bun.spawn({
+      cmd: ["bun", "run", "src/index.ts", "wallet", "list", "--json"],
+      cwd: process.cwd(),
+      env,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    const [listStdout, listStderr, listExitCode] = await Promise.all([
+      new Response(listResult.stdout).text(),
+      new Response(listResult.stderr).text(),
+      listResult.exited,
+    ]);
+
+    expect(listExitCode).toBe(0);
+    expect(listStderr.trim()).toBe("");
+
+    const wallets = JSON.parse(listStdout) as Array<{
+      active: boolean;
+      address: string;
+      chain: string;
+      mode: string;
+      name: string;
+      transport?: string;
+    }>;
+
+    expect(wallets).toHaveLength(1);
+    expect(wallets[0]?.name).toBe("local-wallet");
+    expect(wallets[0]?.mode).toBe("local");
+    expect(wallets[0]?.active).toBe(true);
+    expect("transport" in (wallets[0] ?? {})).toBe(false);
+  });
+
   test("auto-discovers a service wallet from signer metadata", async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -75,15 +154,17 @@ describe("wallet connect command", () => {
 
       const output = JSON.parse(stdout) as {
         address: string;
-        auth: string;
         chain: string;
+        mode: string;
         name: string;
+        transport: string | null;
       };
 
       expect(output.name).toBe("service-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.auth).toBe("service");
+      expect(output.mode).toBe("remote");
+      expect(output.transport).toBe("service");
     } finally {
       server.stop(true);
     }

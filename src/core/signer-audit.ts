@@ -37,8 +37,8 @@ interface SignerAuditEntry {
   timestamp: string;
   wallet: {
     address: string;
-    authKind: string;
     chain: string;
+    mode: string;
     name: string;
   };
 }
@@ -124,7 +124,7 @@ export function appendSignerAudit(
       name: request.wallet.name,
       address: request.wallet.address,
       chain: request.wallet.chain,
-      authKind: request.wallet.authKind,
+      mode: request.wallet.mode,
     },
     error,
   };

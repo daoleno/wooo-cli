@@ -19,7 +19,7 @@ async function resolveMasterPassword(): Promise<string> {
   }
 
   if (!process.stdin.isTTY) {
-    throw new Error("Set WOOO_MASTER_PASSWORD for local signer usage");
+    throw new Error("Set WOOO_MASTER_PASSWORD for local wallet signing");
   }
 
   const clack = await import("@clack/prompts");
@@ -45,7 +45,10 @@ async function resolveLocalSecret(walletName: string): Promise<string> {
 }
 
 export default defineCommand({
-  meta: { name: "__local-signer", description: "Internal local signer bridge" },
+  meta: {
+    name: "__local-wallet-bridge",
+    description: "Internal local wallet bridge",
+  },
   args: {
     "request-file": {
       type: "string",

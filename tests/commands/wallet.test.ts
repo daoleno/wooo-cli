@@ -26,7 +26,8 @@ describe("WalletStore", () => {
     expect(wallet.name).toBe("test-wallet");
     expect(wallet.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(wallet.chain).toBe("evm");
-    expect(wallet.authKind).toBe("local-keystore");
+    expect(wallet.mode).toBe("local");
+    expect(wallet.transport).toBeUndefined();
   });
 
   test("generates a new Solana wallet", async () => {
@@ -34,7 +35,8 @@ describe("WalletStore", () => {
     expect(wallet.name).toBe("sol-wallet");
     expect(() => new PublicKey(wallet.address)).not.toThrow();
     expect(wallet.chain).toBe("solana");
-    expect(wallet.authKind).toBe("local-keystore");
+    expect(wallet.mode).toBe("local");
+    expect(wallet.transport).toBeUndefined();
   });
 
   test("lists wallets", async () => {
@@ -70,7 +72,7 @@ describe("WalletStore", () => {
     expect(wallet.chain).toBe("solana");
   });
 
-  test("retrieves local secret for local-keystore wallets", async () => {
+  test("retrieves local secret for local wallets", async () => {
     const { generatePrivateKey } = await import("viem/accounts");
     const pk = generatePrivateKey();
     await store.importKey("local-secret", pk, "evm", TEST_PASSWORD);
@@ -78,24 +80,32 @@ describe("WalletStore", () => {
     expect(secret).toBe(pk);
   });
 
-  test("connects an external command wallet", async () => {
-    const wallet = await store.connectCommandWallet(
+  test("connects a remote command wallet", async () => {
+    const wallet = await store.connectRemoteWallet(
       "external",
       "0x000000000000000000000000000000000000dEaD",
       "evm",
-      ["/usr/local/bin/mock-signer", "--profile", "test"],
+      {
+        transport: "command",
+        command: ["/usr/local/bin/mock-signer", "--profile", "test"],
+      },
     );
-    expect(wallet.authKind).toBe("command");
+    expect(wallet.mode).toBe("remote");
+    expect(wallet.transport).toBe("command");
   });
 
-  test("connects an external signer service wallet", async () => {
-    const wallet = await store.connectServiceWallet(
+  test("connects a remote signer service wallet", async () => {
+    const wallet = await store.connectRemoteWallet(
       "service-wallet",
       "0x000000000000000000000000000000000000dEaD",
       "evm",
-      "http://127.0.0.1:8787/",
+      {
+        transport: "service",
+        url: "http://127.0.0.1:8787/",
+      },
     );
-    expect(wallet.authKind).toBe("service");
+    expect(wallet.mode).toBe("remote");
+    expect(wallet.transport).toBe("service");
   });
 
   test("switches active wallet", async () => {

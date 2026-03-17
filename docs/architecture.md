@@ -28,8 +28,8 @@ src/
 │   ├── output.ts         # Structured output (table, JSON)
 │   ├── signer-audit.ts   # Local signer JSONL audit log
 │   ├── signer-policy.ts  # Signer-side policy evaluation
-│   ├── signer-protocol.ts # Command signer request / response contract
-│   ├── signers.ts        # Wallet signer adapters (local keystore / external command)
+│   ├── signer-protocol.ts # Remote signer request / response contract
+│   ├── signers.ts        # Wallet signer adapters (local wallet bridge / remote signer transports)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
 │   ├── solana.ts         # Shared Solana connection and keypair helpers
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
@@ -161,25 +161,25 @@ The aggregator only does three things:
 
 ## Multi-Chain Support
 
-### Wallet Auth
+### Wallet Modes
 
-Wallet metadata and signer auth are separate concerns.
+Wallet metadata and signer connection are separate concerns.
 
-- Wallet registry stores `name`, `address`, `chain`, and auth backend config
+- Wallet registry stores `name`, `address`, `chain`, and signer connection config
 - Local wallets keep encrypted secrets in the keystore, but signing is delegated to an internal signer subprocess
-- External wallets are integrated through a command signer contract
+- Remote signers are integrated through a command or local-service transport
 - The main CLI never needs a raw private key in protocol execution code
 - Local signer policy is configured per wallet via `config.signerPolicy[walletName]`
 - Local signer approvals and rejections are appended to `~/.config/wooo/signer-audit.jsonl`
 
-The command signer contract is file-based:
+The command transport for remote signers is file-based:
 
 1. CLI writes a JSON request file
 2. CLI invokes the signer command with `--request-file` and `--response-file`
 3. Signer performs local confirmation / policy checks
 4. Signer writes a JSON response file containing a tx hash or signature
 
-Service signers use the same request / response payloads over local HTTP:
+Remote signers using service transport use the same request / response payloads over local HTTP:
 
 1. CLI serializes the same JSON signer request
 2. CLI `POST`s it to the configured local signer service URL
@@ -196,7 +196,7 @@ Signer subprocess environment is intentionally constrained:
 - common shell / terminal variables such as `PATH`, `HOME`, and `TERM` are forwarded
 - the rest of the parent environment is not inherited by default
 
-This keeps unrelated parent-process secrets from leaking into external signer commands.
+This keeps unrelated parent-process secrets from leaking into remote signer commands.
 
 Signer service URLs are restricted to local hosts. `wooo` does not treat arbitrary
 remote HTTP endpoints as trusted signer backends.
@@ -208,7 +208,7 @@ For the built-in local signer:
 - Hyperliquid requests can be constrained by action type, symbol, leverage, and order size
 - Matching requests can be auto-approved within an explicit time window
 
-External signers use the same request / response contract and are responsible for
+Remote signers use the same request / response contract and are responsible for
 enforcing equivalent confirmation, policy, and audit behavior inside their own
 trusted environment.
 
@@ -223,10 +223,11 @@ for non-CLI wallet systems that expose a local signer service.
 `wooo wallet discover --url <local-service>` lets users inspect signer service
 metadata before connecting it as a wallet.
 
-Current transport limitation:
+Current transport support:
 
-- EVM and Solana work with command signers, service signers, and local-keystore wallets
-- Hyperliquid still requires synchronous signing because of the upstream SDK hook shape, so it currently supports command signers and local-keystore wallets, not service signers
+- EVM works with local wallets and remote signers
+- Solana works with local wallets and remote signers
+- Hyperliquid works with local wallets and remote signers
 
 ### EVM
 

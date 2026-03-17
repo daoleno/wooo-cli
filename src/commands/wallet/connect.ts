@@ -90,7 +90,7 @@ function selectServiceWallet(
 }
 
 export default defineCommand({
-  meta: { name: "connect", description: "Connect an external signer wallet" },
+  meta: { name: "connect", description: "Connect a remote signer wallet" },
   args: {
     name: {
       type: "positional",
@@ -99,11 +99,11 @@ export default defineCommand({
     },
     address: {
       type: "string",
-      description: "Wallet address controlled by the external signer",
+      description: "Wallet address controlled by the remote signer",
     },
     command: {
       type: "string",
-      description: "JSON array command to invoke the external signer",
+      description: "JSON array command to invoke the remote signer",
     },
     url: {
       type: "string",
@@ -130,7 +130,7 @@ export default defineCommand({
       ? await (() => {
           if (!args.chain || !args.address) {
             throw new Error(
-              "Command signers require both --chain and --address",
+              "Remote signers using command transport require both --chain and --address",
             );
           }
           if (!args.command) {
@@ -142,11 +142,14 @@ export default defineCommand({
               `Unsupported wallet type: ${args.chain}. Available: evm, solana`,
             );
           }
-          return store.connectCommandWallet(
+          return store.connectRemoteWallet(
             args.name,
             validateWalletAddress(args.address, walletType),
             walletType,
-            parseCommandJson(args.command),
+            {
+              transport: "command",
+              command: parseCommandJson(args.command),
+            },
           );
         })()
       : await (async () => {
@@ -160,11 +163,14 @@ export default defineCommand({
             args.address,
             args.chain,
           );
-          return store.connectServiceWallet(
+          return store.connectRemoteWallet(
             args.name,
             selected.address,
             selected.chain,
-            url,
+            {
+              transport: "service",
+              url,
+            },
           );
         })();
     const out = createOutput(resolveOutputOptions(args));
@@ -172,7 +178,8 @@ export default defineCommand({
       name: wallet.name,
       address: wallet.address,
       chain: wallet.chain,
-      auth: wallet.authKind,
+      mode: wallet.mode,
+      ...(wallet.transport ? { transport: wallet.transport } : {}),
       active: wallet.active,
     });
   },

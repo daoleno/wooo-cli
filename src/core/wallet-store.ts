@@ -4,44 +4,63 @@ import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { Keystore } from "./keystore";
-import type { WalletAuthKind } from "./signer-protocol";
+import type { WalletMode } from "./signer-protocol";
 import { getSolanaKeypair } from "./solana";
 
 export type WalletType = "evm" | "solana";
+export type RemoteSignerTransport = "command" | "service";
 
-export interface CommandWalletAuthConfig {
-  command: string[];
-  kind: "command";
+export interface LocalWalletConnection {
+  keyRef: string;
+  mode: "local";
 }
 
-export interface ServiceWalletAuthConfig {
-  kind: "service";
+export interface RemoteCommandWalletConnection {
+  command: string[];
+  mode: "remote";
+  transport: "command";
+}
+
+export interface RemoteServiceWalletConnection {
+  mode: "remote";
+  transport: "service";
   url: string;
 }
 
-export interface LocalKeystoreWalletAuthConfig {
-  keyRef: string;
-  kind: "local-keystore";
+export type RemoteWalletConnection =
+  | RemoteCommandWalletConnection
+  | RemoteServiceWalletConnection;
+
+export interface RemoteCommandWalletConfig {
+  command: string[];
+  transport: "command";
 }
 
-export type WalletAuthConfig =
-  | CommandWalletAuthConfig
-  | LocalKeystoreWalletAuthConfig
-  | ServiceWalletAuthConfig;
+export interface RemoteServiceWalletConfig {
+  transport: "service";
+  url: string;
+}
+
+export type RemoteWalletConfig =
+  | RemoteCommandWalletConfig
+  | RemoteServiceWalletConfig;
+
+export type WalletConnection = LocalWalletConnection | RemoteWalletConnection;
 
 export interface WalletRecord {
   address: string;
-  auth: WalletAuthConfig;
   chain: string;
+  connection: WalletConnection;
   name: string;
 }
 
 export interface WalletInfo {
   active: boolean;
   address: string;
-  authKind: WalletAuthKind;
   chain: string;
+  mode: WalletMode;
   name: string;
+  transport?: RemoteSignerTransport;
 }
 
 interface WalletManifest {
@@ -77,8 +96,37 @@ function toWalletInfo(
     name: wallet.name,
     address: wallet.address,
     chain: wallet.chain,
-    authKind: wallet.auth.kind,
+    mode: wallet.connection.mode,
+    ...(wallet.connection.mode === "remote"
+      ? { transport: wallet.connection.transport }
+      : {}),
     active: activeName === wallet.name,
+  };
+}
+
+function toRemoteWalletConnection(
+  connection: RemoteWalletConfig,
+): RemoteWalletConnection {
+  if (connection.transport === "command") {
+    if (connection.command.length === 0) {
+      throw new Error("Signer command cannot be empty");
+    }
+
+    return {
+      mode: "remote",
+      transport: "command",
+      command: [...connection.command],
+    };
+  }
+
+  if (!connection.url.trim()) {
+    throw new Error("Signer service URL cannot be empty");
+  }
+
+  return {
+    mode: "remote",
+    transport: "service",
+    url: connection.url.trim(),
   };
 }
 
@@ -173,60 +221,29 @@ export class WalletStore {
       name,
       address,
       chain: walletType,
-      auth: {
-        kind: "local-keystore",
+      connection: {
+        mode: "local",
         keyRef,
       },
     });
   }
 
-  async connectCommandWallet(
+  async connectRemoteWallet(
     name: string,
     address: string,
     chain: string,
-    command: string[],
+    connection: RemoteWalletConfig,
   ): Promise<WalletInfo> {
     const walletType = resolveWalletType(chain);
     if (!walletType) {
       throw new Error(`Unsupported wallet type: ${chain}`);
-    }
-    if (command.length === 0) {
-      throw new Error("Signer command cannot be empty");
     }
 
     return this.upsertWallet({
       name,
       address: address.trim(),
       chain: walletType,
-      auth: {
-        kind: "command",
-        command,
-      },
-    });
-  }
-
-  async connectServiceWallet(
-    name: string,
-    address: string,
-    chain: string,
-    url: string,
-  ): Promise<WalletInfo> {
-    const walletType = resolveWalletType(chain);
-    if (!walletType) {
-      throw new Error(`Unsupported wallet type: ${chain}`);
-    }
-    if (!url.trim()) {
-      throw new Error("Signer service URL cannot be empty");
-    }
-
-    return this.upsertWallet({
-      name,
-      address: address.trim(),
-      chain: walletType,
-      auth: {
-        kind: "service",
-        url: url.trim(),
-      },
+      connection: toRemoteWalletConnection(connection),
     });
   }
 
@@ -266,10 +283,10 @@ export class WalletStore {
     if (!wallet) {
       return null;
     }
-    if (wallet.auth.kind !== "local-keystore") {
-      throw new Error(`Wallet "${name}" does not use local keystore auth`);
+    if (wallet.connection.mode !== "local") {
+      throw new Error(`Wallet "${name}" is not a local wallet`);
     }
-    return this.getKeystore(password).get(wallet.auth.keyRef);
+    return this.getKeystore(password).get(wallet.connection.keyRef);
   }
 
   async setActive(name: string): Promise<void> {

@@ -17,7 +17,7 @@ function createEvmRequest(): Extract<
       name: "policy-wallet",
       address: ZERO_ADDRESS,
       chain: "evm",
-      authKind: "local-keystore",
+      mode: "local",
     },
     origin: {
       group: "dex",
@@ -99,7 +99,7 @@ describe("evaluateSignerPolicy", () => {
         name: "policy-wallet",
         address: ZERO_ADDRESS,
         chain: "evm",
-        authKind: "local-keystore",
+        mode: "local",
       },
       origin: {
         group: "perps",
@@ -141,7 +141,7 @@ describe("evaluateSignerPolicy", () => {
         name: "sol-wallet",
         address: "11111111111111111111111111111111",
         chain: "solana",
-        authKind: "command",
+        mode: "remote",
       },
       origin: {
         group: "dex",

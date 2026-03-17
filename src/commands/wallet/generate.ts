@@ -35,7 +35,8 @@ export default defineCommand({
       name: wallet.name,
       address: wallet.address,
       chain: wallet.chain,
-      auth: wallet.authKind,
+      mode: wallet.mode,
+      ...(wallet.transport ? { transport: wallet.transport } : {}),
       active: wallet.active,
     });
   },

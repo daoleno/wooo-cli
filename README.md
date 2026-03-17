@@ -4,6 +4,11 @@
 
 Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, or route through the best supported DEX — without ever leaving your terminal. wooo brings CEX trading, DeFi, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
 
+Remote signer integrations:
+
+- overview and rollout guidance: [docs/remote-signer.md](./docs/remote-signer.md)
+- formal wire contract: [docs/remote-signer-v1.md](./docs/remote-signer-v1.md)
+
 ## Quick Start
 
 ```bash
@@ -194,7 +199,7 @@ wooo wallet import 0xprivatekey... --name imported
 `wooo wallet generate` and `wooo wallet import` prompt for the master password on
 TTYs. `WOOO_MASTER_PASSWORD` remains available for controlled local automation and tests.
 
-For an external wallet system, register a command-based signer:
+For a remote signer integrated outside `wooo`, register a command transport:
 
 ```bash
 wooo wallet connect signer-main \
@@ -203,14 +208,14 @@ wooo wallet connect signer-main \
   --command '["/usr/local/bin/wooo-signer","--profile","main"]'
 ```
 
-For an external wallet system that exposes a local service instead of a CLI command:
+For a remote signer system that exposes a local service instead of a CLI command:
 
 ```bash
 wooo wallet connect signer-service \
   --url http://127.0.0.1:8787/
 ```
 
-This repo also ships a reference command signer for local development and as an
+This repo also ships a reference remote signer over command transport for local development and as an
 implementation template:
 
 ```bash
@@ -222,7 +227,7 @@ wooo wallet connect signer-main \
   --command '["bun","run","src/examples/command-signer.ts"]'
 ```
 
-And a reference local signer service:
+And a reference remote signer service:
 
 ```bash
 export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
@@ -234,7 +239,7 @@ wooo wallet connect signer-service \
   --url http://127.0.0.1:8787/
 ```
 
-The external signer command receives `--request-file <path>` and
+The remote signer command receives `--request-file <path>` and
 `--response-file <path>` arguments. The request file contains a JSON payload
 describing the action to authorize. The signer command is expected to perform
 local confirmation or policy checks, sign or send the request, write a JSON
@@ -243,6 +248,11 @@ response file, and exit.
 For service-based signers, `wooo` sends the same JSON payload over HTTP `POST`
 to the configured local URL and expects the same JSON response contract.
 You can inspect signer service metadata first with `wooo wallet discover --url ...`.
+
+For teams integrating a remote signer with `wooo`, use:
+
+- [docs/remote-signer.md](./docs/remote-signer.md) for the integration guide
+- [docs/remote-signer-v1.md](./docs/remote-signer-v1.md) for the exact transport and payload contract
 
 The reference signer resolves its secret from, in order:
 
@@ -255,8 +265,8 @@ It is suitable for local development, testing, and as a template. For production
 replace secret resolution with a hardware wallet, OS keychain, HSM, MPC signer,
 or your own trusted local signing daemon.
 
-For local-keystore wallets, `wooo` applies signer policy and audit logging inside
-the signer subprocess. This keeps the main CLI process focused on planning and
+For local wallets, `wooo` applies signer policy and audit logging inside the
+signer subprocess. This keeps the main CLI process focused on planning and
 execution routing, not secret handling.
 
 Example signer policy:
@@ -292,21 +302,21 @@ wooo config set signerPolicy.agent-wallet.evm '{"allowChains":["arbitrum"],"appr
 ```
 
 Local signer audit records are appended to `~/.config/wooo/signer-audit.jsonl`.
-External signers should implement equivalent policy and audit controls on their side.
+Remote signers should implement equivalent policy and audit controls on their side.
 
 Security model:
 
 - The main CLI process never exposes private keys through the command surface.
-- Local-keystore wallets sign through an internal signer subprocess.
-- External signer wallets can keep keys entirely outside `wooo`, either as a local command or a local service.
+- Local wallets sign through an internal signer subprocess.
+- Remote signer wallets can keep keys entirely outside `wooo`, either as a command transport or a service transport.
 - `--yes` skips the CLI confirmation prompt, but signer-level authorization is still enforced by the signer backend.
 - `config.signerPolicy[walletName]` is enforced on the signer side, not in the planner.
 - Local signer approvals and rejections are logged to `~/.config/wooo/signer-audit.jsonl`.
-- External signer subprocesses do not inherit the full parent environment. `wooo` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
-- Signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
-- Service-based signers currently support EVM and Solana write flows. Hyperliquid still requires a synchronous signer transport, so use a command signer or local-keystore wallet there.
+- Remote signer subprocesses do not inherit the full parent environment. `wooo` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
+- Remote signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
+- Remote signers support EVM, Solana, and Hyperliquid signing flows through the same request/response contract.
 
-See [docs/external-signer.md](docs/external-signer.md) for the full external signer integration contract.
+See [docs/remote-signer.md](docs/remote-signer.md) for the full remote signer integration contract.
 
 ## Development
 

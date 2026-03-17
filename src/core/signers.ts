@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -31,7 +31,7 @@ export interface EvmSigner {
   signHyperliquidL1Action(
     request: HyperliquidActionSigningRequest,
     origin?: SignerRequestOrigin,
-  ): HyperliquidActionSignature;
+  ): Promise<HyperliquidActionSignature>;
   writeContract(
     chainName: string,
     request: EvmContractWriteRequest,
@@ -91,12 +91,15 @@ function getBuiltInSignerCommand(): string[] {
     throw new Error("Unable to determine current CLI entrypoint");
   }
 
-  return [process.execPath, scriptPath, "wallet", "__local-signer"];
+  return [process.execPath, scriptPath, "wallet", "__local-wallet-bridge"];
 }
 
 function getSignerCommand(wallet: WalletRecord): string[] {
-  if (wallet.auth.kind === "command") {
-    return wallet.auth.command;
+  if (
+    wallet.connection.mode === "remote" &&
+    wallet.connection.transport === "command"
+  ) {
+    return wallet.connection.command;
   }
   return getBuiltInSignerCommand();
 }
@@ -225,10 +228,7 @@ export function createSignerChildEnv(
     }
   }
 
-  if (
-    wallet.auth.kind === "local-keystore" &&
-    process.env.WOOO_MASTER_PASSWORD
-  ) {
+  if (wallet.connection.mode === "local" && process.env.WOOO_MASTER_PASSWORD) {
     env.WOOO_MASTER_PASSWORD = process.env.WOOO_MASTER_PASSWORD;
   }
 
@@ -263,11 +263,14 @@ async function invokeSignerService(
   wallet: WalletRecord,
   request: SignerCommandRequest,
 ): Promise<SignerCommandResponse> {
-  if (wallet.auth.kind !== "service") {
+  if (
+    wallet.connection.mode !== "remote" ||
+    wallet.connection.transport !== "service"
+  ) {
     throw new Error("Wallet is not configured for service-based signing");
   }
 
-  const response = await fetch(wallet.auth.url, {
+  const response = await fetch(wallet.connection.url, {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -279,7 +282,7 @@ async function invokeSignerService(
   const payload = await response.text();
   if (!payload.trim()) {
     throw new Error(
-      `Signer service at ${wallet.auth.url} returned an empty response`,
+      `Signer service at ${wallet.connection.url} returned an empty response`,
     );
   }
 
@@ -289,7 +292,7 @@ async function invokeSignerService(
       throw new Error(parsed.error);
     }
     throw new Error(
-      `Signer service at ${wallet.auth.url} returned HTTP ${response.status}`,
+      `Signer service at ${wallet.connection.url} returned HTTP ${response.status}`,
     );
   }
 
@@ -300,7 +303,10 @@ async function invokeSignerCommand(
   wallet: WalletRecord,
   request: SignerCommandRequest,
 ): Promise<SignerCommandResponse> {
-  if (wallet.auth.kind === "service") {
+  if (
+    wallet.connection.mode === "remote" &&
+    wallet.connection.transport === "service"
+  ) {
     return await invokeSignerService(wallet, request);
   }
 
@@ -338,51 +344,12 @@ async function invokeSignerCommand(
   }
 }
 
-function invokeSignerCommandSync(
-  wallet: WalletRecord,
-  request: SignerCommandRequest,
-): SignerCommandResponse {
-  if (wallet.auth.kind === "service") {
-    throw new Error(
-      "Service signers do not support synchronous signing. Use a command signer or local-keystore wallet for Hyperliquid.",
-    );
-  }
-
-  const paths = createInvocationPaths(request);
-  const command = [
-    ...getSignerCommand(wallet),
-    "--request-file",
-    paths.requestFile,
-    "--response-file",
-    paths.responseFile,
-  ];
-
-  try {
-    const result = spawnSync(command[0], command.slice(1), {
-      env: createSignerChildEnv(wallet),
-      stdio: "inherit",
-    });
-
-    const response = readSignerResponse(paths);
-    if (result.status !== 0) {
-      if (!response.ok) {
-        throw new Error(response.error);
-      }
-      throw new Error(`Signer exited with code ${result.status ?? 1}`);
-    }
-
-    return response;
-  } finally {
-    cleanupInvocationPaths(paths);
-  }
-}
-
 function toWalletContext(wallet: WalletRecord) {
   return {
     name: wallet.name,
     address: wallet.address,
     chain: wallet.chain,
-    authKind: wallet.auth.kind,
+    mode: wallet.connection.mode,
   } as const;
 }
 
@@ -408,8 +375,8 @@ export function createEvmSigner(wallet: WalletRecord): EvmSigner {
       }
       return response.txHash as Hash;
     },
-    signHyperliquidL1Action(request, origin) {
-      const response = invokeSignerCommandSync(wallet, {
+    async signHyperliquidL1Action(request, origin) {
+      const response = await invokeSignerCommand(wallet, {
         version: 1,
         kind: "hyperliquid-sign-l1-action",
         wallet: toWalletContext(wallet),

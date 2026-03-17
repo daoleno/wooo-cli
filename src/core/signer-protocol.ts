@@ -1,12 +1,12 @@
 import type { Abi, Address, Hash } from "viem";
 
-export type WalletAuthKind = "command" | "local-keystore" | "service";
+export type WalletMode = "local" | "remote";
 
 export interface SignerWalletContext {
   name: string;
   address: string;
   chain: string;
-  authKind: WalletAuthKind;
+  mode: WalletMode;
 }
 
 export type SignerPromptValue = boolean | number | string | null;

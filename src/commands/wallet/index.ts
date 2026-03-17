@@ -3,7 +3,8 @@ import { defineCommand } from "citty";
 export default defineCommand({
   meta: { name: "wallet", description: "Manage wallets" },
   subCommands: {
-    "__local-signer": () => import("./__local-signer").then((m) => m.default),
+    "__local-wallet-bridge": () =>
+      import("./__local-wallet-bridge").then((m) => m.default),
     connect: () => import("./connect").then((m) => m.default),
     discover: () => import("./discover").then((m) => m.default),
     generate: () => import("./generate").then((m) => m.default),

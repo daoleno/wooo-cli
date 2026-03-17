@@ -73,6 +73,7 @@ export function createHyperliquidOrderOperation(
         getOrderSide(prepared.side),
         Number(prepared.amount),
         prepared.sizeUsd,
+        prepared.ticker.last,
       );
     },
   };

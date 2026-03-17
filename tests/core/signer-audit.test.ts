@@ -38,7 +38,7 @@ describe("appendSignerAudit", () => {
         name: "audit-wallet",
         address: ZERO_ADDRESS,
         chain: "evm",
-        authKind: "local-keystore",
+        mode: "local",
       },
       origin: {
         group: "dex",

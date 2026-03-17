@@ -56,13 +56,14 @@ describe("signers", () => {
     }
   });
 
-  test("createSignerChildEnv strips master password for external signers", () => {
+  test("createSignerChildEnv strips master password for remote signers", () => {
     const env = createSignerChildEnv({
       name: "external",
       address: ZERO_ADDRESS,
       chain: "evm",
-      auth: {
-        kind: "command",
+      connection: {
+        mode: "remote",
+        transport: "command",
         command: ["bun", "run", FIXTURE_PATH],
       },
     });
@@ -77,8 +78,8 @@ describe("signers", () => {
       name: "local",
       address: ZERO_ADDRESS,
       chain: "evm",
-      auth: {
-        kind: "local-keystore",
+      connection: {
+        mode: "local",
         keyRef: "wallet:local",
       },
     });
@@ -86,13 +87,14 @@ describe("signers", () => {
     expect(env.WOOO_MASTER_PASSWORD).toBe("top-secret");
   });
 
-  test("createEvmSigner invokes the external command signer contract", async () => {
+  test("createEvmSigner invokes the remote signer command transport contract", async () => {
     const wallet: WalletRecord = {
       name: "external",
       address: ZERO_ADDRESS,
       chain: "evm",
-      auth: {
-        kind: "command",
+      connection: {
+        mode: "remote",
+        transport: "command",
         command: ["bun", "run", FIXTURE_PATH],
       },
     };
@@ -166,8 +168,9 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chain: "evm",
-        auth: {
-          kind: "service",
+        connection: {
+          mode: "remote",
+          transport: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
@@ -182,6 +185,65 @@ describe("signers", () => {
 
       expect(txHash).toBe(TEST_TX_HASH);
       expect(capturedRequest?.kind).toBe("evm-write-contract");
+      expect(capturedRequest?.wallet.name).toBe("service-wallet");
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("createEvmSigner supports Hyperliquid signatures via a local signer service", async () => {
+    let capturedRequest: SignerCommandRequest | null = null;
+    const signature = {
+      r: `0x${"34".repeat(32)}`,
+      s: `0x${"56".repeat(32)}`,
+      v: 27,
+    } as const;
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        capturedRequest = deserializeSignerPayload<SignerCommandRequest>(
+          await request.text(),
+        );
+        const response: SignerCommandResponse = {
+          ok: true,
+          signature,
+        };
+        return new Response(serializeSignerPayload(response), {
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      },
+    });
+
+    try {
+      const wallet: WalletRecord = {
+        name: "service-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        connection: {
+          mode: "remote",
+          transport: "service",
+          url: normalizeSignerServiceUrl(server.url.toString()),
+        },
+      };
+
+      const signer = createEvmSigner(wallet);
+      const result = await signer.signHyperliquidL1Action({
+        action: {
+          type: "order",
+        },
+        nonce: 123,
+        context: {
+          actionType: "order",
+          symbol: "BTC",
+        },
+      });
+
+      expect(result).toEqual(signature);
+      expect(capturedRequest?.kind).toBe("hyperliquid-sign-l1-action");
       expect(capturedRequest?.wallet.name).toBe("service-wallet");
     } finally {
       await server.stop(true);

@@ -21,7 +21,7 @@ async function getRequiredMasterPassword(): Promise<string> {
 
   if (!process.stdin.isTTY) {
     console.error(
-      "Error: Local keystore signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or an external signer wallet.",
+      "Error: Local wallet signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or a remote signer wallet.",
     );
     process.exit(3);
   }
@@ -92,9 +92,9 @@ export async function getActiveLocalSecret(
   requiredType?: WalletType,
 ): Promise<string> {
   const wallet = await getActiveWalletRecord(requiredType);
-  if (wallet.auth.kind !== "local-keystore") {
+  if (wallet.connection.mode !== "local") {
     console.error(
-      `Wallet "${wallet.name}" uses ${wallet.auth.kind} auth and has no local secret to export.`,
+      `Wallet "${wallet.name}" is a remote signer wallet and has no local secret to export.`,
     );
     process.exit(1);
   }
