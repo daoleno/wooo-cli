@@ -3,6 +3,67 @@ import { $ } from "bun";
 
 const MORPHO_ETHEREUM_WSTETH_USDC_MARKET =
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc";
+const MOCK_POLYMARKET_TOKEN_ID = "123456789";
+
+async function runCliJson<T>(
+  args: string[],
+  env?: Record<string, string>,
+): Promise<T> {
+  const proc = Bun.spawn({
+    cmd: [process.execPath, "run", "src/index.ts", ...args],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      ...env,
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    throw new Error(
+      `Command failed with exit code ${exitCode}: bun run src/index.ts ${args.join(
+        " ",
+      )}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+    );
+  }
+
+  return JSON.parse(stdout) as T;
+}
+
+async function withMockPolymarketClob<T>(
+  run: (baseUrl: string) => Promise<T>,
+): Promise<T> {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      const url = new URL(request.url);
+
+      if (request.method === "GET" && url.pathname === "/tick-size") {
+        return Response.json({ minimum_tick_size: "0.01" });
+      }
+
+      if (request.method === "GET" && url.pathname === "/neg-risk") {
+        return Response.json({ neg_risk: false });
+      }
+
+      return Response.json({ error: "not found" }, { status: 404 });
+    },
+  });
+
+  try {
+    return await run(`http://127.0.0.1:${server.port}`);
+  } finally {
+    server.stop(true);
+  }
+}
 
 describe("execution plan dry-run output", () => {
   test("aave supply returns an execution plan", async () => {
@@ -133,6 +194,117 @@ describe("execution plan dry-run output", () => {
     expect(parsed.steps).toHaveLength(1);
     expect(parsed.steps[0]?.kind).toBe("transaction");
   });
+
+  test(
+    "polymarket approval returns an execution plan",
+    async () => {
+      const result =
+        await $`bun run src/index.ts prediction polymarket approve set --dry-run --json`.text();
+      const parsed = JSON.parse(result) as {
+        kind: string;
+        operation: { group: string; protocol: string; command: string };
+        chain: string;
+        accountType: string;
+        steps: Array<{ kind: string }>;
+      };
+
+      expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("prediction");
+      expect(parsed.operation.protocol).toBe("polymarket");
+      expect(parsed.operation.command).toBe("approve");
+      expect(parsed.chain).toBe("polygon");
+      expect(parsed.accountType).toBe("evm");
+      expect(parsed.steps.length).toBeGreaterThanOrEqual(4);
+      expect(parsed.steps.every((step) => step.kind === "approval")).toBe(true);
+    },
+    { timeout: 60000 },
+  );
+
+  test(
+    "polymarket create-order returns an execution plan",
+    async () => {
+      const parsed = await withMockPolymarketClob((baseUrl) =>
+        runCliJson<{
+          kind: string;
+          operation: { group: string; protocol: string; command: string };
+          chain: string;
+          accountType: string;
+          steps: Array<{ kind: string }>;
+        }>(
+          [
+            "prediction",
+            "polymarket",
+            "clob",
+            "create-order",
+            "--token",
+            MOCK_POLYMARKET_TOKEN_ID,
+            "--side",
+            "buy",
+            "--price",
+            "0.5",
+            "--size",
+            "1",
+            "--dry-run",
+            "--json",
+          ],
+          { WOOO_POLYMARKET_CLOB_URL: baseUrl },
+        ),
+      );
+
+      expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("prediction");
+      expect(parsed.operation.protocol).toBe("polymarket");
+      expect(parsed.operation.command).toBe("create-order");
+      expect(parsed.chain).toBe("polygon");
+      expect(parsed.accountType).toBe("evm");
+      expect(parsed.steps).toHaveLength(2);
+      expect(parsed.steps[0]?.kind).toBe("transaction");
+      expect(parsed.steps[1]?.kind).toBe("transaction");
+    },
+    { timeout: 60000 },
+  );
+
+  test(
+    "polymarket market-order returns an execution plan",
+    async () => {
+      const parsed = await withMockPolymarketClob((baseUrl) =>
+        runCliJson<{
+          kind: string;
+          operation: { group: string; protocol: string; command: string };
+          chain: string;
+          accountType: string;
+          steps: Array<{ kind: string }>;
+        }>(
+          [
+            "prediction",
+            "polymarket",
+            "clob",
+            "market-order",
+            "--token",
+            MOCK_POLYMARKET_TOKEN_ID,
+            "--side",
+            "buy",
+            "--amount",
+            "1",
+            "--dry-run",
+            "--json",
+          ],
+          { WOOO_POLYMARKET_CLOB_URL: baseUrl },
+        ),
+      );
+
+      expect(parsed.kind).toBe("execution-plan");
+      expect(parsed.operation.group).toBe("prediction");
+      expect(parsed.operation.protocol).toBe("polymarket");
+      expect(parsed.operation.command).toBe("market-order");
+      expect(parsed.chain).toBe("polygon");
+      expect(parsed.accountType).toBe("evm");
+      expect(parsed.steps).toHaveLength(2);
+      expect(parsed.steps[0]?.kind).toBe("transaction");
+      expect(parsed.steps[1]?.kind).toBe("transaction");
+    },
+    { timeout: 60000 },
+  );
 
   test(
     "morpho supply returns an execution plan",

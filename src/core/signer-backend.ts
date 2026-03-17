@@ -1,9 +1,11 @@
 import ccxt from "ccxt";
+import { privateKeyToAccount } from "viem/accounts";
 import { loadWoooConfigSync } from "./config";
 import { getWalletClient } from "./evm";
 import { appendSignerAudit } from "./signer-audit";
 import { evaluateSignerPolicy, getWalletSignerPolicy } from "./signer-policy";
 import type {
+  EvmSignTypedDataCommandRequest,
   HyperliquidSignCommandRequest,
   SignerCommandRequest,
   SignerCommandResponse,
@@ -43,6 +45,26 @@ export function createSignerPrompt(request: SignerCommandRequest): {
   action: string;
   details: SignerPromptDetails;
 } {
+  if (request.kind === "evm-sign-typed-data") {
+    return {
+      action:
+        request.prompt?.action ||
+        `Authorize EVM typed data signature for ${request.wallet.name}`,
+      details: {
+        wallet: request.wallet.name,
+        protocol: request.origin?.protocol ?? "unknown",
+        command: request.origin?.command ?? "unknown",
+        chain: request.chainName,
+        primaryType: request.typedData.primaryType ?? "unknown",
+        domainName:
+          typeof request.typedData.domain.name === "string"
+            ? request.typedData.domain.name
+            : "unknown",
+        ...(request.prompt?.details ?? {}),
+      },
+    };
+  }
+
   if (request.kind === "evm-write-contract") {
     return {
       action:
@@ -137,6 +159,18 @@ export async function executeSignerRequest(
   request: SignerCommandRequest,
   secret: string,
 ): Promise<SignerCommandResponse> {
+  if (request.kind === "evm-sign-typed-data") {
+    const account = privateKeyToAccount(secret as `0x${string}`);
+    const typedDataRequest = request as EvmSignTypedDataCommandRequest;
+    const signatureHex = await account.signTypedData({
+      domain: typedDataRequest.typedData.domain,
+      types: typedDataRequest.typedData.types,
+      primaryType: typedDataRequest.typedData.primaryType,
+      message: typedDataRequest.typedData.message,
+    });
+    return { ok: true, signatureHex };
+  }
+
   if (request.kind === "evm-write-contract") {
     const walletClient = getWalletClient(secret, request.chainName);
     const txHash = await walletClient.writeContract({

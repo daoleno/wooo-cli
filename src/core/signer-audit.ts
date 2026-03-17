@@ -15,8 +15,10 @@ interface SignerAuditRequestDetails {
     functionName: string;
     value: string;
   };
+  domainName?: string;
   expiresAfter?: number;
   network?: string;
+  primaryType?: string;
   sandbox?: boolean;
   side?: string;
   sizeUsd?: number;
@@ -51,6 +53,16 @@ function getAuditPath(): string {
 function getRequestDetails(
   request: SignerCommandRequest,
 ): SignerAuditRequestDetails {
+  if (request.kind === "evm-sign-typed-data") {
+    return {
+      chainName: request.chainName,
+      primaryType: request.typedData.primaryType,
+      ...(typeof request.typedData.domain.name === "string"
+        ? { domainName: request.typedData.domain.name }
+        : {}),
+    };
+  }
+
   if (request.kind === "evm-write-contract") {
     return {
       chainName: request.chainName,

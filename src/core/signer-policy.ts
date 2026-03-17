@@ -139,7 +139,10 @@ export function evaluateSignerPolicy(
     }
   }
 
-  if (request.kind === "evm-write-contract") {
+  if (
+    request.kind === "evm-write-contract" ||
+    request.kind === "evm-sign-typed-data"
+  ) {
     const evmPolicy = policy.evm;
     if (evmPolicy) {
       const allowedChains = normalizeList(evmPolicy.allowChains);
@@ -150,6 +153,27 @@ export function evaluateSignerPolicy(
         reasons.push(
           `Chain "${request.chainName}" is not allowed by signer policy`,
         );
+      }
+
+      if (request.kind === "evm-sign-typed-data") {
+        const allowedDomains = normalizeList(evmPolicy.allowContracts);
+        const domainName =
+          typeof request.typedData.domain.name === "string"
+            ? request.typedData.domain.name
+            : null;
+        if (
+          allowedDomains.size > 0 &&
+          (!domainName || !allowedDomains.has(domainName.toLowerCase()))
+        ) {
+          reasons.push(
+            `Typed data domain "${domainName ?? "unknown"}" is not allowed by signer policy`,
+          );
+        }
+        return {
+          allowed: reasons.length === 0,
+          autoApprove: reasons.length === 0 && policy.autoApprove === true,
+          reasons,
+        };
       }
 
       const allowedContracts = normalizeList(evmPolicy.allowContracts);

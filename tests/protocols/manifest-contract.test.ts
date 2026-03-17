@@ -15,6 +15,7 @@ describe("protocol manifest contract", () => {
       binance: "exchange-api",
       bybit: "exchange-api",
       hyperliquid: "evm",
+      polymarket: "evm",
       uniswap: "evm",
       curve: "evm",
       jupiter: "solana",

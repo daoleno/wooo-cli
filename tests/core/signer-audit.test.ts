@@ -78,4 +78,61 @@ describe("appendSignerAudit", () => {
     expect(entry.request.contract.functionName).toBe("approve");
     expect(entry.request.approval.amount).toBe("123");
   });
+
+  test("writes typed data signer metadata without leaking the message body", () => {
+    const request: Extract<
+      SignerCommandRequest,
+      { kind: "evm-sign-typed-data" }
+    > = {
+      version: 1,
+      kind: "evm-sign-typed-data",
+      wallet: {
+        name: "audit-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        mode: "remote",
+      },
+      origin: {
+        group: "prediction",
+        protocol: "polymarket",
+        command: "auth",
+      },
+      chainName: "polygon",
+      typedData: {
+        domain: {
+          name: "ClobAuthDomain",
+          version: "1",
+          chainId: 137,
+        },
+        types: {
+          ClobAuth: [{ name: "address", type: "address" }],
+        },
+        primaryType: "ClobAuth",
+        message: {
+          address: ZERO_ADDRESS,
+          nonce: 7,
+        },
+      },
+    };
+
+    appendSignerAudit(request, "approved", false);
+
+    const auditPath = join(tempDir, "signer-audit.jsonl");
+    const lines = readFileSync(auditPath, "utf-8").trim().split("\n");
+    const entry = JSON.parse(lines[0] ?? "{}") as {
+      kind: string;
+      request: {
+        chainName: string;
+        domainName?: string;
+        message?: unknown;
+        primaryType?: string;
+      };
+    };
+
+    expect(entry.kind).toBe("evm-sign-typed-data");
+    expect(entry.request.chainName).toBe("polygon");
+    expect(entry.request.domainName).toBe("ClobAuthDomain");
+    expect(entry.request.primaryType).toBe("ClobAuth");
+    expect("message" in entry.request).toBe(false);
+  });
 });

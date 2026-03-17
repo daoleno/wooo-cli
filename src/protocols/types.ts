@@ -7,7 +7,8 @@ export type ProtocolType =
   | "lending"
   | "staking"
   | "bridge"
-  | "perps";
+  | "perps"
+  | "prediction";
 
 /** Maps protocol types to mutually exclusive CLI group names */
 export type ProtocolGroup =
@@ -16,7 +17,8 @@ export type ProtocolGroup =
   | "lend"
   | "stake"
   | "perps"
-  | "bridge";
+  | "bridge"
+  | "prediction";
 
 export const PROTOCOL_TYPE_TO_GROUP: Record<ProtocolType, ProtocolGroup> = {
   cex: "cex",
@@ -25,6 +27,7 @@ export const PROTOCOL_TYPE_TO_GROUP: Record<ProtocolType, ProtocolGroup> = {
   staking: "stake",
   perps: "perps",
   bridge: "bridge",
+  prediction: "prediction",
 };
 
 export const PROTOCOL_GROUP_DESCRIPTIONS: Record<ProtocolGroup, string> = {
@@ -34,6 +37,7 @@ export const PROTOCOL_GROUP_DESCRIPTIONS: Record<ProtocolGroup, string> = {
   stake: "Staking protocols (Lido, ...)",
   perps: "Perpetual DEXs (Hyperliquid, ...)",
   bridge: "Cross-chain bridges",
+  prediction: "Prediction markets (Polymarket, ...)",
 };
 
 export interface ProtocolManifest {

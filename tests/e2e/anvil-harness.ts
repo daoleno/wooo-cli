@@ -7,6 +7,7 @@ import { WalletStore } from "../../src/core/wallet-store";
 
 const MASTER_PASSWORD = "wooo-anvil-e2e-password";
 const DEFAULT_ETHEREUM_FORK_URL = "https://ethereum.publicnode.com";
+const DEFAULT_POLYGON_FORK_URL = "https://polygon-bor-rpc.publicnode.com";
 const DEFAULT_READY_TIMEOUT_MS = 90_000;
 const READY_POLL_INTERVAL_MS = 250;
 const MAX_CAPTURED_LOG_CHARS = 8_000;
@@ -19,6 +20,16 @@ export const ETHEREUM_USDC_ADDRESS =
   "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 export const ETHEREUM_USDT_ADDRESS =
   "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+
+interface EvmAnvilHarnessOptions {
+  chainId: number;
+  chainName: "ethereum" | "polygon";
+  configDirPrefix: string;
+  defaultForkUrl: string;
+  forkBlockNumberEnvKey: string;
+  forkUrlEnvKey: string;
+  walletName: string;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -176,13 +187,18 @@ async function waitForRpc(
   );
 }
 
-export class EthereumAnvilHarness {
+class EvmAnvilHarness {
   readonly address = ANVIL_DEFAULT_ADDRESS;
   readonly privateKey = ANVIL_DEFAULT_PRIVATE_KEY;
 
+  private readonly options: EvmAnvilHarnessOptions;
   private anvil?: Bun.Subprocess;
   private configDir?: string;
   private rpcUrl?: string;
+
+  constructor(options: EvmAnvilHarnessOptions) {
+    this.options = options;
+  }
 
   async start(): Promise<void> {
     const anvilPath = Bun.which("anvil");
@@ -191,10 +207,10 @@ export class EthereumAnvilHarness {
     }
 
     const forkUrl =
-      process.env.ANVIL_FORK_URL_ETHEREUM || DEFAULT_ETHEREUM_FORK_URL;
+      process.env[this.options.forkUrlEnvKey] ?? this.options.defaultForkUrl;
     if (!forkUrl) {
       throw new Error(
-        "No Ethereum fork URL configured. Set ANVIL_FORK_URL_ETHEREUM.",
+        `No ${this.options.chainName} fork URL configured. Set ${this.options.forkUrlEnvKey}.`,
       );
     }
 
@@ -203,11 +219,12 @@ export class EthereumAnvilHarness {
     this.rpcUrl = `http://127.0.0.1:${port}`;
 
     const cmd = [anvilPath, "--fork-url", forkUrl, "--port", String(port)];
-    const forkBlockNumber = process.env.ANVIL_FORK_BLOCK_NUMBER?.trim();
+    const forkBlockNumber =
+      process.env[this.options.forkBlockNumberEnvKey]?.trim();
     if (forkBlockNumber) {
       cmd.push("--fork-block-number", forkBlockNumber);
     }
-    cmd.push("--chain-id", "1", "--silent");
+    cmd.push("--chain-id", String(this.options.chainId), "--silent");
 
     this.anvil = Bun.spawn({
       cmd,
@@ -245,7 +262,7 @@ export class EthereumAnvilHarness {
       );
     }
 
-    this.configDir = mkdtempSync(join(tmpdir(), "wooo-anvil-e2e-"));
+    this.configDir = mkdtempSync(join(tmpdir(), this.options.configDirPrefix));
     writeFileSync(
       join(this.configDir, "wooo.config.json"),
       JSON.stringify(
@@ -253,13 +270,13 @@ export class EthereumAnvilHarness {
           ...CONFIG_DEFAULTS,
           default: {
             ...CONFIG_DEFAULTS.default,
-            chain: "ethereum",
+            chain: this.options.chainName,
             format: "json",
-            wallet: "anvil-default",
+            wallet: this.options.walletName,
           },
           chains: {
             ...CONFIG_DEFAULTS.chains,
-            ethereum: { rpc: this.rpcUrl },
+            [this.options.chainName]: { rpc: this.rpcUrl },
           },
         },
         null,
@@ -269,12 +286,12 @@ export class EthereumAnvilHarness {
 
     const walletStore = new WalletStore(join(this.configDir, "keystore"));
     await walletStore.importKey(
-      "anvil-default",
+      this.options.walletName,
       this.privateKey,
       "evm",
       MASTER_PASSWORD,
     );
-    await walletStore.setActive("anvil-default");
+    await walletStore.setActive(this.options.walletName);
   }
 
   async stop(): Promise<void> {
@@ -292,7 +309,7 @@ export class EthereumAnvilHarness {
 
   async runCli(args: string[]): Promise<string> {
     if (!this.configDir) {
-      throw new Error("EthereumAnvilHarness.start() must be called first");
+      throw new Error("Anvil harness start() must be called first");
     }
 
     const proc = Bun.spawn({
@@ -328,5 +345,33 @@ export class EthereumAnvilHarness {
   async runJson<T>(args: string[]): Promise<T> {
     const stdout = await this.runCli([...args, "--json"]);
     return JSON.parse(stdout) as T;
+  }
+}
+
+export class EthereumAnvilHarness extends EvmAnvilHarness {
+  constructor() {
+    super({
+      chainName: "ethereum",
+      chainId: 1,
+      configDirPrefix: "wooo-anvil-e2e-",
+      defaultForkUrl: DEFAULT_ETHEREUM_FORK_URL,
+      forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER",
+      forkUrlEnvKey: "ANVIL_FORK_URL_ETHEREUM",
+      walletName: "anvil-default",
+    });
+  }
+}
+
+export class PolygonAnvilHarness extends EvmAnvilHarness {
+  constructor() {
+    super({
+      chainName: "polygon",
+      chainId: 137,
+      configDirPrefix: "wooo-anvil-polygon-e2e-",
+      defaultForkUrl: DEFAULT_POLYGON_FORK_URL,
+      forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER_POLYGON",
+      forkUrlEnvKey: "ANVIL_FORK_URL_POLYGON",
+      walletName: "polygon-anvil-default",
+    });
   }
 }

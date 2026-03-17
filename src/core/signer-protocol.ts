@@ -1,4 +1,4 @@
-import type { Abi, Address, Hash } from "viem";
+import type { Abi, Address, Hash, Hex } from "viem";
 
 export type WalletMode = "local" | "remote";
 
@@ -34,6 +34,18 @@ export interface EvmApprovalRequest {
   amount: bigint;
   spender: Address;
   token: Address;
+}
+
+export interface EvmTypedDataField {
+  name: string;
+  type: string;
+}
+
+export interface EvmTypedDataSignRequest {
+  domain: Record<string, unknown>;
+  message: Record<string, unknown>;
+  primaryType: string;
+  types: Record<string, EvmTypedDataField[]>;
 }
 
 export interface HyperliquidActionContext {
@@ -74,12 +86,21 @@ export interface SignerServiceMetadata {
 
 interface SignerCommandRequestBase {
   kind:
+    | "evm-sign-typed-data"
     | "evm-write-contract"
     | "hyperliquid-sign-l1-action"
     | "solana-send-versioned-transaction";
   origin?: SignerRequestOrigin;
   version: 1;
   wallet: SignerWalletContext;
+}
+
+export interface EvmSignTypedDataCommandRequest
+  extends SignerCommandRequestBase {
+  kind: "evm-sign-typed-data";
+  chainName: string;
+  prompt?: SignerPrompt;
+  typedData: EvmTypedDataSignRequest;
 }
 
 export interface EvmWriteContractCommandRequest
@@ -106,6 +127,7 @@ export interface SolanaSendTransactionCommandRequest
 }
 
 export type SignerCommandRequest =
+  | EvmSignTypedDataCommandRequest
   | EvmWriteContractCommandRequest
   | HyperliquidSignCommandRequest
   | SolanaSendTransactionCommandRequest;
@@ -125,6 +147,12 @@ export interface SignerCommandSignatureResponse
   signature: HyperliquidActionSignature;
 }
 
+export interface SignerCommandHexSignatureResponse
+  extends SignerCommandResponseBase {
+  ok: true;
+  signatureHex: Hex | string;
+}
+
 export interface SignerCommandErrorResponse extends SignerCommandResponseBase {
   ok: false;
   error: string;
@@ -132,6 +160,7 @@ export interface SignerCommandErrorResponse extends SignerCommandResponseBase {
 
 export type SignerCommandResponse =
   | SignerCommandErrorResponse
+  | SignerCommandHexSignatureResponse
   | SignerCommandSignatureResponse
   | SignerCommandTxHashResponse;
 

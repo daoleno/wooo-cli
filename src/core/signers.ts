@@ -12,6 +12,7 @@ import type { Address, Hash } from "viem";
 import type {
   EvmApprovalRequest,
   EvmContractWriteRequest,
+  EvmTypedDataSignRequest,
   HyperliquidActionSignature,
   HyperliquidActionSigningRequest,
   SignerCommandRequest,
@@ -28,6 +29,14 @@ import type { WalletRecord } from "./wallet-store";
 
 export interface EvmSigner {
   address: Address;
+  signTypedData(
+    chainName: string,
+    request: EvmTypedDataSignRequest,
+    options?: {
+      origin?: SignerRequestOrigin;
+      prompt?: SignerPrompt;
+    },
+  ): Promise<`0x${string}`>;
   signHyperliquidL1Action(
     request: HyperliquidActionSigningRequest,
     origin?: SignerRequestOrigin,
@@ -80,6 +89,7 @@ const SAFE_SIGNER_ENV_KEYS = [
 ] as const;
 const LOCAL_SIGNER_SERVICE_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
+  "evm-sign-typed-data",
   "evm-write-contract",
   "hyperliquid-sign-l1-action",
   "solana-send-versioned-transaction",
@@ -356,6 +366,26 @@ function toWalletContext(wallet: WalletRecord) {
 export function createEvmSigner(wallet: WalletRecord): EvmSigner {
   return {
     address: wallet.address as Address,
+    async signTypedData(chainName, request, options) {
+      const response = await invokeSignerCommand(wallet, {
+        version: 1,
+        kind: "evm-sign-typed-data",
+        wallet: toWalletContext(wallet),
+        origin: options?.origin,
+        chainName,
+        typedData: request,
+        prompt: options?.prompt,
+      });
+
+      if (!response.ok || !("signatureHex" in response)) {
+        throw new Error(
+          response.ok
+            ? "Signer did not return typed data signature"
+            : response.error,
+        );
+      }
+      return response.signatureHex as `0x${string}`;
+    },
     async writeContract(chainName, request, options) {
       const response = await invokeSignerCommand(wallet, {
         version: 1,

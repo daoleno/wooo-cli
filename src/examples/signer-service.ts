@@ -76,7 +76,11 @@ async function main(): Promise<void> {
       ],
       supportedKinds:
         walletType === "evm"
-          ? ["evm-write-contract", "hyperliquid-sign-l1-action"]
+          ? [
+              "evm-sign-typed-data",
+              "evm-write-contract",
+              "hyperliquid-sign-l1-action",
+            ]
           : ["solana-send-versioned-transaction"],
     };
   }

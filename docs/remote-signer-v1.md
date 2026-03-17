@@ -140,6 +140,7 @@ Required payload:
   "version": 1,
   "kind": "wooo-signer-service",
   "supportedKinds": [
+    "evm-sign-typed-data",
     "evm-write-contract",
     "hyperliquid-sign-l1-action"
   ],
@@ -227,8 +228,8 @@ Every request extends the same base shape.
 | Field | Type | Required | Notes |
 |------|------|----------|------|
 | `command` | `string` | no | CLI command name |
-| `group` | `string` | no | Top-level group such as `dex`, `lend`, `perps` |
-| `protocol` | `string` | no | Protocol name such as `uniswap`, `aave`, `hyperliquid` |
+| `group` | `string` | no | Top-level group such as `dex`, `lend`, `perps`, or `prediction` |
+| `protocol` | `string` | no | Protocol name such as `uniswap`, `aave`, `hyperliquid`, or `polymarket` |
 
 Prompt schema used by some request kinds:
 
@@ -237,7 +238,79 @@ Prompt schema used by some request kinds:
 | `action` | `string` | yes | Human-facing summary |
 | `details` | `Record<string, boolean \| number \| string \| null>` | no | Human-facing structured context |
 
-### 7.2 `evm-write-contract`
+### 7.2 `evm-sign-typed-data`
+
+Use this request kind for EVM typed-data signing flows such as Polymarket CLOB
+authentication and order signing.
+
+Additional fields:
+
+| Field | Type | Required | Notes |
+|------|------|----------|------|
+| `chainName` | `string` | yes | Specific EVM chain, for example `polygon` |
+| `typedData` | object | yes | EIP-712 typed-data payload |
+| `prompt` | object | no | Human-facing signer prompt override |
+
+`typedData` schema:
+
+| Field | Type | Required | Notes |
+|------|------|----------|------|
+| `domain` | `object` | yes | EIP-712 domain |
+| `types` | `Record<string, { name: string, type: string }[]>` | yes | EIP-712 type definitions |
+| `primaryType` | `string` | yes | EIP-712 primary type |
+| `message` | `object` | yes | EIP-712 message body |
+
+Example:
+
+```json
+{
+  "version": 1,
+  "kind": "evm-sign-typed-data",
+  "wallet": {
+    "name": "prediction-main",
+    "address": "0x1111111111111111111111111111111111111111",
+    "chain": "evm",
+    "mode": "remote"
+  },
+  "origin": {
+    "group": "prediction",
+    "protocol": "polymarket",
+    "command": "order"
+  },
+  "chainName": "polygon",
+  "typedData": {
+    "domain": {
+      "name": "ClobAuthDomain",
+      "version": "1",
+      "chainId": 137
+    },
+    "types": {
+      "ClobAuth": [
+        { "name": "address", "type": "address" },
+        { "name": "timestamp", "type": "string" },
+        { "name": "nonce", "type": "uint256" },
+        { "name": "message", "type": "string" }
+      ]
+    },
+    "primaryType": "ClobAuth",
+    "message": {
+      "address": "0x1111111111111111111111111111111111111111",
+      "timestamp": "1700000000",
+      "nonce": 1,
+      "message": "This message attests that I control the given wallet"
+    }
+  },
+  "prompt": {
+    "action": "Authorize Polymarket CLOB authentication",
+    "details": {
+      "domain": "ClobAuthDomain",
+      "primaryType": "ClobAuth"
+    }
+  }
+}
+```
+
+### 7.3 `evm-write-contract`
 
 Use this request kind for EVM contract writes.
 
@@ -311,7 +384,7 @@ Example:
 }
 ```
 
-### 7.3 `solana-send-versioned-transaction`
+### 7.4 `solana-send-versioned-transaction`
 
 Use this request kind for Solana versioned transactions.
 
@@ -351,7 +424,7 @@ Example:
 }
 ```
 
-### 7.4 `hyperliquid-sign-l1-action`
+### 7.5 `hyperliquid-sign-l1-action`
 
 Use this request kind for Hyperliquid L1 action signing.
 
@@ -437,6 +510,17 @@ Use this for EVM and Solana execution results.
 
 ### 8.2 Signature Success
 
+Use this for EVM typed-data signing.
+
+```json
+{
+  "ok": true,
+  "signatureHex": "0xabc123..."
+}
+```
+
+### 8.3 Signature Success
+
 Use this for Hyperliquid action signing.
 
 ```json
@@ -450,7 +534,7 @@ Use this for Hyperliquid action signing.
 }
 ```
 
-### 8.3 Error Response
+### 8.4 Error Response
 
 Use this for rejection, policy denial, missing approval, unsupported request
 kind, or execution failure.
@@ -491,6 +575,7 @@ Current `wooo` support by wallet transport:
 
 | Capability | Local wallet | Remote signer (command) | Remote signer (service) |
 |------|------|------|------|
+| EVM typed-data signing | yes | yes | yes |
 | EVM writes | yes | yes | yes |
 | Solana writes | yes | yes | yes |
 | Hyperliquid L1 action signing | yes | yes | yes |

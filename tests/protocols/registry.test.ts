@@ -14,6 +14,7 @@ describe("protocol registry", () => {
       "binance",
       "bybit",
       "hyperliquid",
+      "polymarket",
       "uniswap",
       "curve",
       "jupiter",
@@ -45,15 +46,18 @@ describe("protocol registry", () => {
     expect(getProtocol("morpho")?.type).toBe("lending");
     expect(getProtocol("lido")?.type).toBe("staking");
     expect(getProtocol("hyperliquid")?.type).toBe("perps");
+    expect(getProtocol("polymarket")?.type).toBe("prediction");
     expect(getProtocol("uniswap")?.writeAccountType).toBe("evm");
     expect(getProtocol("jupiter")?.writeAccountType).toBe("solana");
     expect(getProtocol("morpho")?.writeAccountType).toBe("evm");
+    expect(getProtocol("polymarket")?.writeAccountType).toBe("evm");
   });
 
   test("listProtocolsByGroup groups correctly", () => {
     const groups = listProtocolsByGroup();
     expect(groups.cex.map((p) => p.name)).toEqual(["okx", "binance", "bybit"]);
     expect(groups.perps.map((p) => p.name)).toEqual(["hyperliquid"]);
+    expect(groups.prediction.map((p) => p.name)).toEqual(["polymarket"]);
     expect(groups.dex.map((p) => p.name)).toEqual([
       "uniswap",
       "curve",

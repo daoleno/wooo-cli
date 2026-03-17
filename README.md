@@ -2,7 +2,7 @@
 
 **All of crypto, one command away — your terminal-native copilot for trading, DeFi, and on-chain execution.**
 
-Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, or route through the best supported DEX — without ever leaving your terminal. wooo brings CEX trading, DeFi, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
+Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, query Polymarket, or route through the best supported DEX without ever leaving your terminal. wooo brings CEX trading, DeFi, prediction markets, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
 
 Remote signer integrations:
 
@@ -35,6 +35,7 @@ wooo lend morpho markets --chain ethereum
 | **Lending** | Aave V3, Morpho Markets V1 | Aave supply/borrow/rates/positions, Morpho market discovery, positions, and market-native lend/borrow writes |
 | **Staking** | Lido | Stake ETH, view stETH balance & rewards |
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
+| **Prediction Markets** | Polymarket | Gamma discovery, positions, CLOB market data, approvals, and signer-backed trading |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
@@ -117,6 +118,15 @@ wooo perps hyperliquid long BTC 1000 --leverage 5 --yes
 wooo perps hyperliquid positions
 ```
 
+### Prediction Markets
+
+```bash
+wooo prediction polymarket markets list --limit 10
+wooo prediction polymarket events get 2890
+wooo prediction polymarket clob ok
+wooo prediction polymarket approve check
+```
+
 ### On-Chain Utilities
 
 ```bash
@@ -152,6 +162,8 @@ wooo
 │   └── lido     — stake, balance, rewards
 ├── perps
 │   └── hyperliquid — long, short, positions, funding
+├── prediction
+│   └── polymarket — gamma data, CLOB market data, approvals, authenticated trading
 ```
 
 ## Global Flags
@@ -314,7 +326,7 @@ Security model:
 - Local signer approvals and rejections are logged to `~/.config/wooo/signer-audit.jsonl`.
 - Remote signer subprocesses do not inherit the full parent environment. `wooo` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
 - Remote signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
-- Remote signers support EVM, Solana, and Hyperliquid signing flows through the same request/response contract.
+- Remote signers support EVM writes, EVM typed-data signing, Solana sends, and Hyperliquid signing through the same request/response contract.
 
 See [docs/remote-signer.md](docs/remote-signer.md) for the full remote signer integration contract.
 
@@ -336,9 +348,11 @@ bun test
 # EVM fork e2e via anvil
 bun run test:e2e:anvil
 
-# Optional: pin a custom upstream RPC / block number
+# Optional: pin custom upstream RPCs / block numbers
 ANVIL_FORK_URL_ETHEREUM=https://ethereum.publicnode.com \
 ANVIL_FORK_BLOCK_NUMBER=24652791 \
+ANVIL_FORK_URL_POLYGON=https://polygon-bor-rpc.publicnode.com \
+ANVIL_FORK_BLOCK_NUMBER_POLYGON=69400000 \
 bun run test:e2e:anvil
 
 # Type check
@@ -358,7 +372,7 @@ Each protocol exports a manifest from `commands.ts`, keeps protocol I/O in `clie
 and can expose reusable write flows in `operations.ts` when the same behavior is shared
 across direct protocol commands and aggregated commands such as `wooo swap`.
 
-Protocols are grouped into mutually exclusive CLI buckets (`dex`, `lend`, `stake`, `perps`, `cex`) and auto-registered into the command tree.
+Protocols are grouped into mutually exclusive CLI buckets (`dex`, `lend`, `stake`, `perps`, `prediction`, `cex`) and auto-registered into the command tree.
 Every write command returns an `ExecutionPlan` on `--dry-run --json`.
 
 See [docs/architecture.md](docs/architecture.md) for details.

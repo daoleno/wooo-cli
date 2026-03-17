@@ -72,6 +72,51 @@ describe("evaluateSignerPolicy", () => {
     expect(decision.autoApprove).toBe(true);
   });
 
+  test("denies typed data signing for disallowed EVM chains", () => {
+    const request: Extract<
+      SignerCommandRequest,
+      { kind: "evm-sign-typed-data" }
+    > = {
+      version: 1,
+      kind: "evm-sign-typed-data",
+      wallet: {
+        name: "policy-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        mode: "local",
+      },
+      origin: {
+        group: "prediction",
+        protocol: "polymarket",
+        command: "auth",
+      },
+      chainName: "polygon",
+      typedData: {
+        domain: {
+          name: "ClobAuthDomain",
+          version: "1",
+          chainId: 137,
+        },
+        types: {
+          ClobAuth: [{ name: "address", type: "address" }],
+        },
+        primaryType: "ClobAuth",
+        message: {
+          address: ZERO_ADDRESS,
+        },
+      },
+    };
+
+    const decision = evaluateSignerPolicy(request, {
+      evm: {
+        allowChains: ["arbitrum"],
+      },
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.reasons[0]).toContain('Chain "polygon"');
+  });
+
   test("denies expired policy windows", () => {
     const request = createEvmRequest();
 

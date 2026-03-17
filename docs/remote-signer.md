@@ -97,6 +97,7 @@ Once the wallet is connected, humans can use it directly through the CLI:
 wooo wallet switch signer-service
 wooo swap ETH USDC 1 --chain ethereum --yes
 wooo dex uniswap swap ETH USDC 1 --chain ethereum --yes
+wooo prediction polymarket markets list --limit 5
 wooo dex jupiter swap SOL USDC 10 --yes
 ```
 
@@ -154,6 +155,7 @@ Current `wooo` transport support is:
 
 | Capability | Local wallet | Remote signer (command) | Remote signer (service) |
 |------|------|------|------|
+| EVM typed-data signing for Polymarket CLOB auth and orders | yes | yes | yes |
 | EVM writes | yes | yes | yes |
 | Solana writes | yes | yes | yes |
 | Hyperliquid L1 action signing | yes | yes | yes |

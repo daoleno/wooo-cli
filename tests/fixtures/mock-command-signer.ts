@@ -12,6 +12,7 @@ const TEST_SIGNATURE = {
   s: `0x${"56".repeat(32)}`,
   v: 27,
 } as const;
+const TEST_SIGNATURE_HEX = `0x${"78".repeat(65)}`;
 
 function getFlagValue(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -62,7 +63,9 @@ async function main(): Promise<void> {
   const response: SignerCommandResponse =
     request.kind === "hyperliquid-sign-l1-action"
       ? { ok: true, signature: TEST_SIGNATURE }
-      : { ok: true, txHash: TEST_TX_HASH };
+      : request.kind === "evm-sign-typed-data"
+        ? { ok: true, signatureHex: TEST_SIGNATURE_HEX }
+        : { ok: true, txHash: TEST_TX_HASH };
 
   await Bun.write(responseFile, serializeSignerPayload(response));
 }
