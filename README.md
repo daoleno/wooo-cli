@@ -457,7 +457,7 @@ bun test
 bun run test:e2e:anvil
 
 # Optional: pin custom upstream RPCs / block numbers
-ANVIL_FORK_URL_ETHEREUM=https://ethereum.publicnode.com \
+ANVIL_FORK_URLS_ETHEREUM="https://ethereum.publicnode.com https://rpc.flashbots.net" \
 ANVIL_FORK_BLOCK_NUMBER=24652791 \
 ANVIL_FORK_URL_POLYGON=https://polygon-bor-rpc.publicnode.com \
 ANVIL_FORK_BLOCK_NUMBER_POLYGON=69400000 \
@@ -472,6 +472,9 @@ bun run lint:fix
 
 The anvil e2e flow uses a local Ethereum fork and an ephemeral wallet, so it exercises
 real EVM write paths for `chain`, `dex uniswap`, and `lend aave` without using real funds.
+It supports fork RPC fallback lists through `ANVIL_FORK_URLS_ETHEREUM` and
+`ANVIL_FORK_URLS_POLYGON`, and still accepts the single-URL overrides
+`ANVIL_FORK_URL_ETHEREUM` and `ANVIL_FORK_URL_POLYGON`.
 
 ## Release
 

@@ -55,7 +55,9 @@ jobs:
     timeout-minutes: 30
     needs: quality
     env:
-      ANVIL_FORK_URL_ETHEREUM: https://rpc.flashbots.net
+      ANVIL_FORK_URLS_ETHEREUM: |
+        https://ethereum.publicnode.com
+        https://rpc.flashbots.net
 
     steps:
       - name: Check out repository

@@ -27,12 +27,37 @@ interface EvmAnvilHarnessOptions {
   configDirPrefix: string;
   defaultForkUrl: string;
   forkBlockNumberEnvKey: string;
+  forkUrlsEnvKey: string;
   forkUrlEnvKey: string;
   walletName: string;
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function parseForkUrlList(rawValue: string): string[] {
+  return rawValue
+    .split(/[\n,\s]+/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+export function resolveForkUrls(options: EvmAnvilHarnessOptions): string[] {
+  const explicitList = process.env[options.forkUrlsEnvKey]?.trim();
+  if (explicitList) {
+    const urls = parseForkUrlList(explicitList);
+    if (urls.length > 0) {
+      return urls;
+    }
+  }
+
+  const explicitSingle = process.env[options.forkUrlEnvKey]?.trim();
+  if (explicitSingle) {
+    return [explicitSingle];
+  }
+
+  return [options.defaultForkUrl];
 }
 
 function getReadyTimeoutMs(): number {
@@ -206,59 +231,78 @@ class EvmAnvilHarness {
       throw new Error("Foundry `anvil` was not found on PATH");
     }
 
-    const forkUrl =
-      process.env[this.options.forkUrlEnvKey] ?? this.options.defaultForkUrl;
-    if (!forkUrl) {
+    const forkUrls = resolveForkUrls(this.options);
+    if (forkUrls.length === 0) {
       throw new Error(
-        `No ${this.options.chainName} fork URL configured. Set ${this.options.forkUrlEnvKey}.`,
+        `No ${this.options.chainName} fork URL configured. Set ${this.options.forkUrlsEnvKey} or ${this.options.forkUrlEnvKey}.`,
       );
     }
 
     const port = await findFreePort();
     const readyTimeoutMs = getReadyTimeoutMs();
     this.rpcUrl = `http://127.0.0.1:${port}`;
-
-    const cmd = [anvilPath, "--fork-url", forkUrl, "--port", String(port)];
     const forkBlockNumber =
       process.env[this.options.forkBlockNumberEnvKey]?.trim();
-    if (forkBlockNumber) {
-      cmd.push("--fork-block-number", forkBlockNumber);
-    }
-    cmd.push("--chain-id", String(this.options.chainId), "--silent");
+    const failures: string[] = [];
+    let started = false;
 
-    this.anvil = Bun.spawn({
-      cmd,
-      cwd: process.cwd(),
-      env: process.env,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    let anvilExitCode: number | null = null;
-    const anvilExited = this.anvil.exited.then((exitCode) => {
-      anvilExitCode = exitCode;
-      return exitCode;
-    });
-    const anvilStdout = readPipe(this.anvil.stdout, "anvil stdout");
-    const anvilStderr = readPipe(this.anvil.stderr, "anvil stderr");
-
-    try {
-      await waitForRpc(this.rpcUrl, readyTimeoutMs, () => anvilExitCode);
-    } catch (error) {
-      if (anvilExitCode === null) {
-        this.anvil.kill();
+    for (const forkUrl of forkUrls) {
+      const cmd = [anvilPath, "--fork-url", forkUrl, "--port", String(port)];
+      if (forkBlockNumber) {
+        cmd.push("--fork-block-number", forkBlockNumber);
       }
+      cmd.push("--chain-id", String(this.options.chainId), "--silent");
 
-      await anvilExited;
+      this.anvil = Bun.spawn({
+        cmd,
+        cwd: process.cwd(),
+        env: process.env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
 
-      const [stdout, stderr] = await Promise.all([anvilStdout, anvilStderr]);
-      const reason = error instanceof Error ? error.message : String(error);
-      throw createStartupError(
-        this.rpcUrl,
-        reason,
-        anvilExitCode,
-        stdout,
-        stderr,
+      let anvilExitCode: number | null = null;
+      const anvilExited = this.anvil.exited.then((exitCode) => {
+        anvilExitCode = exitCode;
+        return exitCode;
+      });
+      const anvilStdout = readPipe(this.anvil.stdout, "anvil stdout");
+      const anvilStderr = readPipe(this.anvil.stderr, "anvil stderr");
+
+      try {
+        await waitForRpc(this.rpcUrl, readyTimeoutMs, () => anvilExitCode);
+        started = true;
+        break;
+      } catch (error) {
+        if (anvilExitCode === null) {
+          this.anvil.kill();
+        }
+
+        await anvilExited;
+
+        const [stdout, stderr] = await Promise.all([anvilStdout, anvilStderr]);
+        const reason = error instanceof Error ? error.message : String(error);
+        failures.push(
+          createStartupError(
+            this.rpcUrl,
+            `${reason}\nFork URL: ${forkUrl}`,
+            anvilExitCode,
+            stdout,
+            stderr,
+          ).message,
+        );
+        this.anvil = undefined;
+      }
+    }
+
+    if (!started) {
+      throw new Error(
+        [
+          `All configured ${this.options.chainName} fork RPCs failed for Anvil startup.`,
+          ...failures.map(
+            (failure, index) => `Attempt ${index + 1}\n${failure}`,
+          ),
+        ].join("\n\n"),
       );
     }
 
@@ -356,6 +400,7 @@ export class EthereumAnvilHarness extends EvmAnvilHarness {
       configDirPrefix: "wooo-anvil-e2e-",
       defaultForkUrl: DEFAULT_ETHEREUM_FORK_URL,
       forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER",
+      forkUrlsEnvKey: "ANVIL_FORK_URLS_ETHEREUM",
       forkUrlEnvKey: "ANVIL_FORK_URL_ETHEREUM",
       walletName: "anvil-default",
     });
@@ -370,6 +415,7 @@ export class PolygonAnvilHarness extends EvmAnvilHarness {
       configDirPrefix: "wooo-anvil-polygon-e2e-",
       defaultForkUrl: DEFAULT_POLYGON_FORK_URL,
       forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER_POLYGON",
+      forkUrlsEnvKey: "ANVIL_FORK_URLS_POLYGON",
       forkUrlEnvKey: "ANVIL_FORK_URL_POLYGON",
       walletName: "polygon-anvil-default",
     });

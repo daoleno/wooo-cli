@@ -20,7 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      ANVIL_FORK_URL_ETHEREUM: https://rpc.flashbots.net
+      ANVIL_FORK_URLS_ETHEREUM: |
+        https://ethereum.publicnode.com
+        https://rpc.flashbots.net
 
     steps:
       - name: Check out repository
