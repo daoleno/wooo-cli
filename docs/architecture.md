@@ -28,19 +28,19 @@ src/
 │   ├── output.ts         # Structured output (table, JSON)
 │   ├── signer-audit.ts   # Local signer JSONL audit log
 │   ├── signer-policy.ts  # Signer-side policy evaluation
-│   ├── signer-protocol.ts # Remote signer request / response contract
-│   ├── signers.ts        # Wallet signer adapters (local wallet bridge / remote signer transports)
+│   ├── signer-protocol.ts # External wallet request / response contract
+│   ├── signers.ts        # Wallet signer adapters (local wallet bridge / external wallet transports)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
 │   ├── solana.ts         # Shared Solana connection and keypair helpers
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
 │   └── write-operation.ts # Shared write-command runner
 ├── commands/             # Cross-protocol commands
-│   ├── chain/            # wooo chain tx/balance/ens/call
-│   ├── config/           # wooo config init/set/get/list
-│   ├── market/           # wooo market price/search
-│   ├── portfolio/        # wooo portfolio overview
-│   ├── swap/             # wooo swap (aggregated route selection)
-│   └── wallet/           # wooo wallet connect/generate/import/list/balance/switch
+│   ├── chain/            # wooo-cli chain tx/balance/ens/call
+│   ├── config/           # wooo-cli config init/set/get/list
+│   ├── market/           # wooo-cli market price/search
+│   ├── portfolio/        # wooo-cli portfolio overview
+│   ├── swap/             # wooo-cli swap (aggregated route selection)
+│   └── wallet/           # wooo-cli wallet connect/generate/import/list/balance/switch
 ├── protocols/            # Protocol modules
 │   ├── types.ts          # ProtocolManifest, ProtocolType, ProtocolGroup
 │   ├── registry.ts       # Protocol registration, listProtocolsByGroup()
@@ -136,7 +136,7 @@ Common files:
 
 Examples:
 
-- Uniswap / Curve / Jupiter expose swap operations that are used both by direct protocol commands and by aggregated `wooo swap`
+- Uniswap / Curve / Jupiter expose swap operations that are used both by direct protocol commands and by aggregated `wooo-cli swap`
 - `cex-base/` centralizes reusable CEX order operations for OKX, Binance, and Bybit
 - Hyperliquid is split into multiple command files because long/short/funding/positions are distinct user surfaces
 
@@ -144,7 +144,7 @@ Internal layout is flexible as long as the public surface remains stable.
 
 ## Aggregated Swap
 
-`wooo swap` does not implement bespoke execution logic anymore.
+`wooo-cli swap` does not implement bespoke execution logic anymore.
 It consumes protocol-level swap operations:
 
 - Solana: Jupiter operation
@@ -167,24 +167,32 @@ Wallet metadata and signer connection are separate concerns.
 
 - Wallet registry stores `name`, `address`, `chain`, and signer connection config
 - Local wallets keep encrypted secrets in the keystore, but signing is delegated to an internal signer subprocess
-- Remote signers are integrated through a command or local-service transport
+- External wallets are integrated through a command signer, local signer service, or wallet broker transport
 - The main CLI never needs a raw private key in protocol execution code
 - Local signer policy is configured per wallet via `config.signerPolicy[walletName]`
 - Local signer approvals and rejections are appended to `~/.config/wooo/signer-audit.jsonl`
 
-The command transport for remote signers is file-based:
+The command transport for external wallets is file-based:
 
 1. CLI writes a JSON request file
 2. CLI invokes the signer command with `--request-file` and `--response-file`
 3. Signer performs local confirmation / policy checks
 4. Signer writes a JSON response file containing a tx hash or signature
 
-Remote signers using service transport use the same request / response payloads over local HTTP:
+External wallets using service transport use the same request / response payloads over local HTTP:
 
 1. CLI serializes the same JSON signer request
 2. CLI `POST`s it to the configured local signer service URL
-3. Service performs local confirmation / policy checks
-4. Service returns the same JSON response contract
+3. Service either completes immediately or accepts the request asynchronously
+4. If the service responds with `pending`, CLI polls `GET /requests/:requestId`
+5. Service eventually returns the same terminal signer response contract
+
+Broker-backed wallets use the same HTTP request / response payloads, but with a different trust model:
+
+1. CLI `POST`s the signer request to the configured broker URL
+2. Broker authenticates the caller, correlates the wallet session, and either completes immediately or returns `pending`
+3. If the broker responds with `pending`, CLI polls `GET /requests/:requestId`
+4. Broker coordinates user approval in the external wallet system and eventually returns the same terminal signer response contract
 
 `--yes` only bypasses the CLI confirmation layer. Signer-side policy and signer-side
 approval still apply.
@@ -196,10 +204,14 @@ Signer subprocess environment is intentionally constrained:
 - common shell / terminal variables such as `PATH`, `HOME`, and `TERM` are forwarded
 - the rest of the parent environment is not inherited by default
 
-This keeps unrelated parent-process secrets from leaking into remote signer commands.
+This keeps unrelated parent-process secrets from leaking into external command signer processes.
 
-Signer service URLs are restricted to local hosts. `wooo` does not treat arbitrary
+Signer service URLs are restricted to local hosts. `wooo-cli` does not treat arbitrary
 remote HTTP endpoints as trusted signer backends.
+
+Broker URLs are explicit remote coordination endpoints. They may be remote, but
+non-local brokers must use `https://`, and any auth token is resolved from an env var
+configured on the wallet record instead of being stored in the wallet manifest.
 
 For the built-in local signer:
 
@@ -208,26 +220,31 @@ For the built-in local signer:
 - Hyperliquid requests can be constrained by action type, symbol, leverage, and order size
 - Matching requests can be auto-approved within an explicit time window
 
-Remote signers use the same request / response contract and are responsible for
+External wallet transports use the same request / response contract and are responsible for
 enforcing equivalent confirmation, policy, and audit behavior inside their own
 trusted environment.
 
 `src/examples/command-signer.ts` is the in-repo reference implementation of that
 contract. It shares the same signer-side policy and audit runtime as the built-in
 local signer, but resolves the signing secret from signer-local inputs instead of
-from the `wooo` keystore.
+from the `wooo-cli` keystore.
 
 `src/examples/signer-service.ts` provides the equivalent reference implementation
 for non-CLI wallet systems that expose a local signer service.
 
-`wooo wallet discover --url <local-service>` lets users inspect signer service
+`src/examples/signer-broker.ts` provides the equivalent reference coordinator for
+external wallet systems that approve outside the CLI host and return asynchronous
+results through the broker contract.
+
+`wooo-cli wallet discover --url <local-service>` and
+`wooo-cli wallet discover --broker-url <broker>` let users inspect advertised wallet
 metadata before connecting it as a wallet.
 
 Current transport support:
 
-- EVM works with local wallets and remote signers
-- Solana works with local wallets and remote signers
-- Hyperliquid works with local wallets and remote signers
+- EVM works with local wallets, external command signers, local signer services, and wallet brokers
+- Solana works with local wallets, external command signers, local signer services, and wallet brokers
+- Hyperliquid works with local wallets, external command signers, local signer services, and wallet brokers
 
 ### EVM
 

@@ -90,7 +90,7 @@ describe("appendSignerAudit", () => {
         name: "audit-wallet",
         address: ZERO_ADDRESS,
         chain: "evm",
-        mode: "remote",
+        mode: "external",
       },
       origin: {
         group: "prediction",

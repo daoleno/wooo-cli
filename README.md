@@ -1,29 +1,29 @@
-# wooo
+# wooo-cli
 
 **All of crypto, one command away — your terminal-native copilot for trading, DeFi, and on-chain execution.**
 
-Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, query Polymarket, or route through the best supported DEX without ever leaving your terminal. wooo brings CEX trading, DeFi, prediction markets, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
+Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, query Polymarket, or route through the best supported DEX without ever leaving your terminal. wooo-cli brings CEX trading, DeFi, prediction markets, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
 
-Remote signer integrations:
+External wallet integrations:
 
-- overview and rollout guidance: [docs/remote-signer.md](./docs/remote-signer.md)
-- formal wire contract: [docs/remote-signer-v1.md](./docs/remote-signer-v1.md)
+- overview and rollout guidance: [docs/external-wallet.md](./docs/external-wallet.md)
+- formal wire contract: [docs/wallet-transport-v1.md](./docs/wallet-transport-v1.md)
 
 ## Quick Start
 
 ```bash
 # Install
-bun install -g wooo-cli
+npm install -g wooo-cli
 
 # Set up a local wallet
-wooo config init
-wooo wallet generate my-wallet   # prompts for the master password unless WOOO_MASTER_PASSWORD is set
+wooo-cli config init
+wooo-cli wallet generate my-wallet   # prompts for the master password unless WOOO_MASTER_PASSWORD is set
 
 # Start using
-wooo market price BTC
-wooo swap USDC ETH 100 --chain arbitrum --dry-run
-wooo lend aave rates USDC --chain ethereum --market AaveV3Ethereum
-wooo lend morpho markets --chain ethereum
+wooo-cli market price BTC
+wooo-cli swap USDC ETH 100 --chain arbitrum --dry-run
+wooo-cli lend aave rates USDC --chain ethereum --market AaveV3Ethereum
+wooo-cli lend morpho markets --chain ethereum
 ```
 
 ## What Can It Do?
@@ -36,7 +36,7 @@ wooo lend morpho markets --chain ethereum
 | **Staking** | Lido | Stake ETH, view stETH balance & rewards |
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Prediction Markets** | Polymarket | Gamma discovery, positions, CLOB market data, approvals, and signer-backed trading |
-| **Onchain Data** | OKX Onchain OS | Token search, token metadata, market metrics, portfolio balances, tx history |
+| **Onchain Data** | OKX Onchain OS | Token search, market metrics, portfolio balances and PnL analysis, tx history |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
@@ -49,118 +49,138 @@ Common EVM chain aliases are supported in CLI flags, for example `eth`,
 ### Wallet Management
 
 ```bash
-wooo wallet generate trading-wallet
-wooo wallet import 0xprivatekey... --name imported
-wooo wallet discover --url http://127.0.0.1:8787/ --json
-wooo wallet connect ledger-main --chain ethereum --address 0xabc... --command '["/usr/local/bin/wooo-signer-ledger","--profile","main"]'
-wooo wallet connect signer-service --url http://127.0.0.1:8787/
-wooo wallet list
-wooo wallet switch trading-wallet
-wooo wallet balance
+wooo-cli wallet generate trading-wallet
+wooo-cli wallet import 0xprivatekey... --name imported
+wooo-cli wallet discover --url http://127.0.0.1:8787/ --json
+wooo-cli wallet discover --broker-url https://broker.example.com/ --auth-env WOOO_BROKER_TOKEN --json
+wooo-cli wallet connect ledger-main --chain ethereum --address 0xabc... --command '["/usr/local/bin/wooo-signer-ledger","--profile","main"]'
+wooo-cli wallet connect signer-service --url http://127.0.0.1:8787/
+wooo-cli wallet connect broker-main --broker-url https://broker.example.com/ --auth-env WOOO_BROKER_TOKEN
+wooo-cli wallet list
+wooo-cli wallet switch trading-wallet
+wooo-cli wallet balance
 ```
 
 ### Market Data
 
 ```bash
-wooo market price BTC          # Aggregated price across exchanges
-wooo market price ETH/USDT     # Specific pair
-wooo market search DOGE         # Search markets
-wooo market okx chains
-wooo market okx search weth --chains ethereum,optimism
-wooo market okx token ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
-wooo market okx metrics base 0x4200000000000000000000000000000000000006
+wooo-cli market price BTC          # Aggregated price across exchanges
+wooo-cli market price ETH/USDT     # Specific pair
+wooo-cli market search DOGE         # Search markets
+wooo-cli market okx chains
+wooo-cli market okx search weth --chains ethereum,optimism
+wooo-cli market okx token ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo-cli market okx metrics base 0x4200000000000000000000000000000000000006
+wooo-cli market okx trades ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --limit 20
+wooo-cli market okx candles ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --bar 15m
+wooo-cli market okx holders solana EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+wooo-cli market okx ranking --chains solana,base --sort volume --window 24h
+wooo-cli portfolio okx chains
+wooo-cli portfolio okx overview 0xabc... ethereum --window 7d
+wooo-cli portfolio okx recent-pnl 0xabc... ethereum --limit 20
+wooo-cli portfolio okx latest-pnl 0xabc... ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo-cli portfolio okx dex-history 0xabc... ethereum 1700000000000 1710000000000 --type buy,sell
 ```
 
 ### Swapping Tokens
 
 ```bash
 # Aggregated swap — auto-picks best DEX
-wooo swap ETH USDC 1 --chain ethereum --dry-run
-wooo swap SOL USDC 10 --chain solana --yes
+wooo-cli swap ETH USDC 1 --chain ethereum --dry-run
+wooo-cli swap SOL USDC 10 --chain solana --yes
 
 # Direct protocol access
-wooo dex uniswap swap ETH USDC 1 --chain arbitrum --yes
-wooo dex curve swap USDT USDC 1000 --dry-run
-wooo dex jupiter swap SOL USDC 10 --yes
+wooo-cli dex uniswap swap ETH USDC 1 --chain arbitrum --yes
+wooo-cli dex curve swap USDT USDC 1000 --dry-run
+wooo-cli dex jupiter swap SOL USDC 10 --yes
 ```
 
 ### Lending and Staking
 
 ```bash
 # Aave V3 — lending & borrowing
-wooo lend aave markets --chain ethereum
-wooo lend aave markets --chain ethereum --market AaveV3Ethereum
-wooo lend aave rates USDC --chain ethereum --market AaveV3Ethereum
-wooo lend aave supply USDC 1000 --chain ethereum --market AaveV3Ethereum --yes
-wooo lend aave withdraw USDC 250 --chain ethereum --market AaveV3Ethereum --yes
-wooo lend aave borrow ETH 0.5 --chain ethereum --market AaveV3Ethereum --yes
-wooo lend aave repay ETH 0.1 --chain ethereum --market AaveV3Ethereum --yes
-wooo lend aave positions --chain ethereum --market AaveV3Ethereum
+wooo-cli lend aave markets --chain ethereum
+wooo-cli lend aave markets --chain ethereum --market AaveV3Ethereum
+wooo-cli lend aave rates USDC --chain ethereum --market AaveV3Ethereum
+wooo-cli lend aave supply USDC 1000 --chain ethereum --market AaveV3Ethereum --yes
+wooo-cli lend aave withdraw USDC 250 --chain ethereum --market AaveV3Ethereum --yes
+wooo-cli lend aave borrow ETH 0.5 --chain ethereum --market AaveV3Ethereum --yes
+wooo-cli lend aave repay ETH 0.1 --chain ethereum --market AaveV3Ethereum --yes
+wooo-cli lend aave positions --chain ethereum --market AaveV3Ethereum
 
 # Morpho Markets V1 — market discovery, positions, and market-native writes
-wooo lend morpho markets --chain ethereum
-wooo lend morpho market 0x0123...abcd --chain ethereum
-wooo lend morpho positions --chain ethereum
-wooo lend morpho supply 0xb323...86cc 100 --chain ethereum --yes
-wooo lend morpho supply-collateral 0xb323...86cc 0.1 --chain ethereum --yes
-wooo lend morpho borrow 0xb323...86cc 10 --chain ethereum --yes
-wooo lend morpho repay 0xb323...86cc --all --chain ethereum --yes
+wooo-cli lend morpho markets --chain ethereum
+wooo-cli lend morpho market 0x0123...abcd --chain ethereum
+wooo-cli lend morpho positions --chain ethereum
+wooo-cli lend morpho supply 0xb323...86cc 100 --chain ethereum --yes
+wooo-cli lend morpho supply-collateral 0xb323...86cc 0.1 --chain ethereum --yes
+wooo-cli lend morpho borrow 0xb323...86cc 10 --chain ethereum --yes
+wooo-cli lend morpho repay 0xb323...86cc --all --chain ethereum --yes
 
 # Lido — liquid staking
-wooo stake lido stake 5 --yes
-wooo stake lido balance
-wooo stake lido rewards
+wooo-cli stake lido stake 5 --yes
+wooo-cli stake lido balance
+wooo-cli stake lido rewards
 ```
 
 For chains with multiple Aave markets, token-specific and account-specific
-commands require `--market`. Use `wooo lend aave markets --chain <chain>` to
+commands require `--market`. Use `wooo-cli lend aave markets --chain <chain>` to
 discover available market names and pool addresses.
 
 ### Perpetual Futures
 
 ```bash
-wooo perps hyperliquid long BTC 1000 --leverage 5 --yes
-wooo perps hyperliquid positions
+wooo-cli perps hyperliquid long BTC 1000 --leverage 5 --yes
+wooo-cli perps hyperliquid positions
 ```
 
 ### Prediction Markets
 
 ```bash
-wooo prediction polymarket markets list --limit 10
-wooo prediction polymarket events get 2890
-wooo prediction polymarket clob ok
-wooo prediction polymarket approve check
+wooo-cli prediction polymarket markets list --limit 10
+wooo-cli prediction polymarket events get 2890
+wooo-cli prediction polymarket clob ok
+wooo-cli prediction polymarket approve check
 ```
 
 ### On-Chain Utilities
 
 ```bash
-wooo chain tx 0xabc123...                          # View transaction
-wooo chain balance 0xabc... --chain ethereum        # Native balance
-wooo chain balance 0xabc... --token 0xerc20...      # Token balance
-wooo chain ens vitalik.eth                          # ENS lookup
-wooo chain call 0x... "totalSupply()(uint256)"      # Read contract
-wooo chain okx history 0xabc... --chains ethereum,base
-wooo chain okx tx arbitrum 0xabc123...
+wooo-cli chain tx 0xabc123...                          # View transaction
+wooo-cli chain balance 0xabc... --chain ethereum        # Native balance
+wooo-cli chain balance 0xabc... --token 0xerc20...      # Token balance
+wooo-cli chain ens vitalik.eth                          # ENS lookup
+wooo-cli chain call 0x... "totalSupply()(uint256)"      # Read contract
+wooo-cli chain okx history 0xabc... --chains ethereum,base
+wooo-cli chain okx tx arbitrum 0xabc123...
 ```
 
 ### OKX Onchain Data
 
 ```bash
-wooo market okx chains
-wooo market okx search weth --chains ethereum,optimism
-wooo market okx price ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
-wooo portfolio okx value 0xabc... --chains ethereum,base
-wooo portfolio okx balances 0xabc... --chains ethereum,base
-wooo portfolio okx balance 0xabc... ethereum native
-wooo chain okx history 0xabc... --chains ethereum,base --limit 20
-wooo chain okx tx ethereum 0xabc123...
+wooo-cli market okx chains
+wooo-cli market okx search weth --chains ethereum,optimism
+wooo-cli market okx price ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo-cli market okx trades ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --limit 20
+wooo-cli market okx candles ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --bar 15m
+wooo-cli market okx holders ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --tag whale
+wooo-cli market okx ranking --chains ethereum,base --sort volume --window 24h
+wooo-cli portfolio okx chains
+wooo-cli portfolio okx overview 0xabc... ethereum --window 7d
+wooo-cli portfolio okx recent-pnl 0xabc... ethereum --limit 20
+wooo-cli portfolio okx latest-pnl 0xabc... ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo-cli portfolio okx dex-history 0xabc... ethereum 1700000000000 1710000000000 --type buy,sell
+wooo-cli portfolio okx value 0xabc... --chains ethereum,base
+wooo-cli portfolio okx balances 0xabc... --chains ethereum,base
+wooo-cli portfolio okx balance 0xabc... ethereum native
+wooo-cli chain okx history 0xabc... --chains ethereum,base --limit 20
+wooo-cli chain okx tx ethereum 0xabc123...
 ```
 
 ## Command Structure
 
 ```
-wooo
+wooo-cli
 ├── config       — init, set, get, list
 ├── wallet       — connect, generate, import, list, balance, switch
 ├── market       — price, search, okx
@@ -200,7 +220,7 @@ wooo
 
 ### CEX API Keys
 
-Set via environment variables or `wooo config set`:
+Set via environment variables or `wooo-cli config set`:
 
 ```bash
 # OKX
@@ -234,9 +254,9 @@ export WOOO_OKX_ONCHAIN_BASE_URL=http://127.0.0.1:8787
 Equivalent config keys:
 
 ```bash
-wooo config set okxOnchain.apiKey ...
-wooo config set okxOnchain.secret ...
-wooo config set okxOnchain.passphrase ...
+wooo-cli config set okxOnchain.apiKey ...
+wooo-cli config set okxOnchain.secret ...
+wooo-cli config set okxOnchain.passphrase ...
 ```
 
 ### On-Chain Protocols
@@ -246,67 +266,112 @@ On-chain operations execute through a signer backend, not through private key ex
 For a local encrypted wallet:
 
 ```bash
-wooo wallet generate my-wallet
-wooo wallet import 0xprivatekey... --name imported
+wooo-cli wallet generate my-wallet
+wooo-cli wallet import 0xprivatekey... --name imported
 ```
 
-`wooo wallet generate` and `wooo wallet import` prompt for the master password on
+`wooo-cli wallet generate` and `wooo-cli wallet import` prompt for the master password on
 TTYs. `WOOO_MASTER_PASSWORD` remains available for controlled local automation and tests.
 
-For a remote signer integrated outside `wooo`, register a command transport:
+For an external wallet that exposes a local command signer, register a command transport:
 
 ```bash
-wooo wallet connect signer-main \
+wooo-cli wallet connect signer-main \
   --chain ethereum \
   --address 0xabc123... \
   --command '["/usr/local/bin/wooo-signer","--profile","main"]'
 ```
 
-For a remote signer system that exposes a local service instead of a CLI command:
+For an external wallet system that exposes a local signer service instead of a CLI command:
 
 ```bash
-wooo wallet connect signer-service \
+wooo-cli wallet connect signer-service \
   --url http://127.0.0.1:8787/
 ```
 
-This repo also ships a reference remote signer over command transport for local development and as an
+For a wallet system that coordinates approval through a remote backend plus frontend wallet:
+
+```bash
+wooo-cli wallet connect broker-main \
+  --broker-url https://broker.example.com/ \
+  --auth-env WOOO_BROKER_TOKEN
+```
+
+This repo also ships a reference external signer over command transport for local development and as an
 implementation template:
 
 ```bash
 export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
 
-wooo wallet connect signer-main \
+wooo-cli wallet connect signer-main \
   --chain ethereum \
   --address 0xabc123... \
   --command '["bun","run","src/examples/command-signer.ts"]'
 ```
 
-And a reference remote signer service:
+And a reference local signer service:
 
 ```bash
 export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
 bun run src/examples/signer-service.ts --port 8787
 
-wooo wallet connect signer-service \
+wooo-cli wallet connect signer-service \
   --chain ethereum \
   --address 0xabc123... \
   --url http://127.0.0.1:8787/
 ```
 
-The remote signer command receives `--request-file <path>` and
+And a reference wallet broker that demonstrates the async `pending` flow used by
+backend-plus-frontend wallet systems:
+
+```bash
+export WOOO_BROKER_AUTH_TOKEN=dev-broker-token
+bun run src/examples/signer-broker.ts \
+  --address 0xabc123... \
+  --chain ethereum \
+  --port 8788
+
+wooo-cli wallet connect broker-dev \
+  --broker-url http://127.0.0.1:8788/ \
+  --auth-env WOOO_BROKER_AUTH_TOKEN
+```
+
+The command signer receives `--request-file <path>` and
 `--response-file <path>` arguments. The request file contains a JSON payload
 describing the action to authorize. The signer command is expected to perform
 local confirmation or policy checks, sign or send the request, write a JSON
 response file, and exit.
 
-For service-based signers, `wooo` sends the same JSON payload over HTTP `POST`
+For service-based signers, `wooo-cli` sends the same JSON payload over HTTP `POST`
 to the configured local URL and expects the same JSON response contract.
-You can inspect signer service metadata first with `wooo wallet discover --url ...`.
+You can inspect signer service metadata first with `wooo-cli wallet discover --url ...`.
 
-For teams integrating a remote signer with `wooo`, use:
+For wallet broker transports, `wooo-cli` uses the same JSON signer request/response
+contract over HTTP, but talks to an explicit remote broker URL and reads the
+bearer token from the configured env var instead of storing it in wallet config.
 
-- [docs/remote-signer.md](./docs/remote-signer.md) for the integration guide
-- [docs/remote-signer-v1.md](./docs/remote-signer-v1.md) for the exact transport and payload contract
+The reference broker does not hold a secret. It queues requests, exposes
+`GET /requests/:requestId` for polling, and lets you resolve them through a dev
+endpoint so you can model a browser-wallet or app-wallet approval loop before
+swapping in your real backend.
+
+For local testing, inspect and resolve pending broker requests with:
+
+```bash
+curl -H "Authorization: Bearer $WOOO_BROKER_AUTH_TOKEN" \
+  http://127.0.0.1:8788/dev/requests
+
+curl -X POST \
+  -H "Authorization: Bearer $WOOO_BROKER_AUTH_TOKEN" \
+  -H "content-type: application/json" \
+  http://127.0.0.1:8788/dev/requests/<request-id>/resolve \
+  --data '{"ok":true,"txHash":"0x..."}'
+```
+
+For teams integrating an external wallet with `wooo-cli`, use:
+
+- [docs/external-wallet.md](./docs/external-wallet.md) for the integration guide
+- [docs/wallet-transport-v1.md](./docs/wallet-transport-v1.md) for the exact transport and payload contract
 
 The reference signer resolves its secret from, in order:
 
@@ -319,7 +384,7 @@ It is suitable for local development, testing, and as a template. For production
 replace secret resolution with a hardware wallet, OS keychain, HSM, MPC signer,
 or your own trusted local signing daemon.
 
-For local wallets, `wooo` applies signer policy and audit logging inside the
+For local wallets, `wooo-cli` applies signer policy and audit logging inside the
 signer subprocess. This keeps the main CLI process focused on planning and
 execution routing, not secret handling.
 
@@ -346,31 +411,32 @@ Example signer policy:
 }
 ```
 
-You can write these values with `wooo config set`, including JSON arrays and
+You can write these values with `wooo-cli config set`, including JSON arrays and
 objects:
 
 ```bash
-wooo config set signerPolicy.agent-wallet.autoApprove true
-wooo config set signerPolicy.agent-wallet.allowProtocols '["uniswap"]'
-wooo config set signerPolicy.agent-wallet.evm '{"allowChains":["arbitrum"],"approvals":{"denyUnlimited":true}}'
+wooo-cli config set signerPolicy.agent-wallet.autoApprove true
+wooo-cli config set signerPolicy.agent-wallet.allowProtocols '["uniswap"]'
+wooo-cli config set signerPolicy.agent-wallet.evm '{"allowChains":["arbitrum"],"approvals":{"denyUnlimited":true}}'
 ```
 
 Local signer audit records are appended to `~/.config/wooo/signer-audit.jsonl`.
-Remote signers should implement equivalent policy and audit controls on their side.
+External wallet transports should implement equivalent policy and audit controls on their side.
 
 Security model:
 
 - The main CLI process never exposes private keys through the command surface.
 - Local wallets sign through an internal signer subprocess.
-- Remote signer wallets can keep keys entirely outside `wooo`, either as a command transport or a service transport.
+- External wallets can keep keys entirely outside `wooo-cli`, either as a command transport, a local signer service transport, or a broker transport.
 - `--yes` skips the CLI confirmation prompt, but signer-level authorization is still enforced by the signer backend.
 - `config.signerPolicy[walletName]` is enforced on the signer side, not in the planner.
 - Local signer approvals and rejections are logged to `~/.config/wooo/signer-audit.jsonl`.
-- Remote signer subprocesses do not inherit the full parent environment. `wooo` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
-- Remote signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
-- Remote signers support EVM writes, EVM typed-data signing, Solana sends, and Hyperliquid signing through the same request/response contract.
+- External command signer subprocesses do not inherit the full parent environment. `wooo-cli` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
+- Local signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
+- Wallet broker URLs may be remote, but non-local brokers must use `https://`, and broker auth only authorizes request creation, not approval bypass.
+- External wallet transports support EVM writes, EVM typed-data signing, Solana sends, and Hyperliquid signing through the same request/response contract.
 
-See [docs/remote-signer.md](docs/remote-signer.md) for the full remote signer integration contract.
+See [docs/external-wallet.md](docs/external-wallet.md) for the full external wallet integration contract.
 
 ## Development
 
@@ -409,10 +475,10 @@ real EVM write paths for `chain`, `dex uniswap`, and `lend aave` without using r
 
 ## Architecture
 
-wooo is built around a protocol registry plus a shared write-command contract.
+wooo-cli is built around a protocol registry plus a shared write-command contract.
 Each protocol exports a manifest from `commands.ts`, keeps protocol I/O in `client.ts`,
 and can expose reusable write flows in `operations.ts` when the same behavior is shared
-across direct protocol commands and aggregated commands such as `wooo swap`.
+across direct protocol commands and aggregated commands such as `wooo-cli swap`.
 
 Protocols are grouped into mutually exclusive CLI buckets (`dex`, `lend`, `stake`, `perps`, `prediction`, `cex`) and auto-registered into the command tree.
 Every write command returns an `ExecutionPlan` on `--dry-run --json`.

@@ -262,7 +262,7 @@ export async function resolveExchangeAuthFromConfig(
       `Error: ${exchangeId.toUpperCase()} API credentials not configured.`,
     );
     console.error(
-      `Set ${prefix}API_KEY and ${prefix}API_SECRET env vars, or run: wooo config set ${exchangeId}.apiKey <key>`,
+      `Set ${prefix}API_KEY and ${prefix}API_SECRET env vars, or run: wooo-cli config set ${exchangeId}.apiKey <key>`,
     );
     process.exit(3);
   }

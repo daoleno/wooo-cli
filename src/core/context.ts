@@ -21,7 +21,7 @@ async function getRequiredMasterPassword(): Promise<string> {
 
   if (!process.stdin.isTTY) {
     console.error(
-      "Error: Local wallet signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or a remote signer wallet.",
+      "Error: Local wallet signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or an external wallet.",
     );
     process.exit(3);
   }
@@ -44,7 +44,9 @@ export async function getActiveWallet(
   const store = getWalletStore();
   const active = await store.getActive();
   if (!active) {
-    console.error("No active wallet. Run `wooo wallet generate` first.");
+    console.error(
+      "No active wallet. Run `wooo-cli wallet generate` for a local wallet or `wooo-cli wallet connect` for an external wallet.",
+    );
     process.exit(1);
   }
 
@@ -94,7 +96,7 @@ export async function getActiveLocalSecret(
   const wallet = await getActiveWalletRecord(requiredType);
   if (wallet.connection.mode !== "local") {
     console.error(
-      `Wallet "${wallet.name}" is a remote signer wallet and has no local secret to export.`,
+      `Wallet "${wallet.name}" is an external wallet and has no local secret to export.`,
     );
     process.exit(1);
   }

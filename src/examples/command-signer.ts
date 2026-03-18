@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import {
   authorizeSignerRequest,
   executeSignerRequest,
@@ -38,7 +39,7 @@ function parseArgs(args: string[]): ParsedArgs {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const request = deserializeSignerPayload<SignerCommandRequest>(
-    await Bun.file(args.requestFile).text(),
+    await readFile(args.requestFile, "utf8"),
   );
 
   let response: SignerCommandResponse;
@@ -58,7 +59,7 @@ async function main(): Promise<void> {
     recordSignerAudit(request, "rejected", autoApproved, response.error);
   }
 
-  await Bun.write(args.responseFile, serializeSignerPayload(response));
+  await writeFile(args.responseFile, serializeSignerPayload(response));
   if (!response.ok) {
     process.exit(1);
   }

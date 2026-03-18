@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { $ } from "bun";
 
 describe("wooo-cli smoke tests", () => {
   test("shows help with grouped command structure", async () => {
     const result = await $`bun run src/index.ts --help`.text();
-    expect(result).toContain("wooo");
+    expect(result).toContain("wooo-cli");
     expect(result).toContain("config");
     expect(result).toContain("wallet");
     expect(result).toContain("market");
@@ -161,11 +162,28 @@ describe("wooo-cli smoke tests", () => {
   test("wallet help shows subcommands", async () => {
     const result = await $`bun run src/index.ts wallet --help`.text();
     expect(result).toContain("connect");
+    expect(result).toContain("discover");
     expect(result).toContain("generate");
     expect(result).toContain("import");
     expect(result).toContain("list");
     expect(result).toContain("balance");
     expect(result).toContain("switch");
+  });
+
+  test("wallet connect help shows external wallet transport options", async () => {
+    const result = await $`bun run src/index.ts wallet connect --help`.text();
+    expect(result).toContain("command");
+    expect(result).toContain("broker-url");
+    expect(result).toContain("auth-env");
+    expect(result).toContain("local signer service");
+  });
+
+  test("wallet discover help shows service and broker options", async () => {
+    const result = await $`bun run src/index.ts wallet discover --help`.text();
+    expect(result).toContain("broker-url");
+    expect(result).toContain("auth-env");
+    expect(result).toContain("signer service");
+    expect(result).toContain("wallet broker");
   });
 
   test("market help shows subcommands", async () => {
@@ -188,11 +206,19 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("token");
     expect(result).toContain("metrics");
     expect(result).toContain("price");
+    expect(result).toContain("trades");
+    expect(result).toContain("candles");
+    expect(result).toContain("holders");
+    expect(result).toContain("ranking");
   });
 
   test("portfolio okx help shows subcommands", async () => {
     const result = await $`bun run src/index.ts portfolio okx --help`.text();
     expect(result).toContain("chains");
+    expect(result).toContain("overview");
+    expect(result).toContain("recent-pnl");
+    expect(result).toContain("latest-pnl");
+    expect(result).toContain("dex-history");
     expect(result).toContain("value");
     expect(result).toContain("balances");
     expect(result).toContain("balance");
@@ -219,5 +245,16 @@ describe("wooo-cli smoke tests", () => {
     const parsed = JSON.parse(result) as { chain: string; tokens: string[] };
     expect(parsed.chain).toBe("ethereum");
     expect(parsed.tokens).toContain("USDC");
+  });
+
+  test("package manifest exposes a node-executable wooo-cli bin", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      bin?: Record<string, string>;
+    };
+    const wrapper = readFileSync("bin/wooo-cli.mjs", "utf8");
+
+    expect(manifest.bin?.["wooo-cli"]).toBe("./bin/wooo-cli.mjs");
+    expect(wrapper.startsWith("#!/usr/bin/env node")).toBe(true);
+    expect(wrapper).toContain("../dist/index.mjs");
   });
 });

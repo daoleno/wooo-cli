@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Abi } from "viem";
 import {
   deserializeSignerPayload,
+  type SignerBrokerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
   type SignerServiceMetadata,
@@ -13,7 +14,9 @@ import {
 import {
   createEvmSigner,
   createSignerChildEnv,
+  fetchSignerBrokerMetadata,
   fetchSignerServiceMetadata,
+  normalizeSignerBrokerUrl,
   normalizeSignerServiceUrl,
 } from "../../src/core/signers";
 import type { WalletRecord } from "../../src/core/wallet-store";
@@ -33,7 +36,11 @@ describe("signers", () => {
     WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR,
     WOOO_MASTER_PASSWORD: process.env.WOOO_MASTER_PASSWORD,
     WOOO_SIGNER_CAPTURE_PATH: process.env.WOOO_SIGNER_CAPTURE_PATH,
+    WOOO_HTTP_SIGNER_POLL_INTERVAL_MS:
+      process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS,
+    WOOO_HTTP_SIGNER_TIMEOUT_MS: process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS,
     WOOO_SIGNER_TEST_VALUE: process.env.WOOO_SIGNER_TEST_VALUE,
+    WOOO_BROKER_TOKEN: process.env.WOOO_BROKER_TOKEN,
   };
 
   let tempDir: string;
@@ -44,6 +51,7 @@ describe("signers", () => {
     process.env.WOOO_MASTER_PASSWORD = "top-secret";
     process.env.WOOO_SIGNER_TEST_VALUE = "signer-visible";
     process.env.WOOO_SIGNER_CAPTURE_PATH = join(tempDir, "capture.json");
+    process.env.WOOO_BROKER_TOKEN = "broker-token-test";
   });
 
   afterEach(() => {
@@ -57,13 +65,13 @@ describe("signers", () => {
     }
   });
 
-  test("createSignerChildEnv strips master password for remote signers", () => {
+  test("createSignerChildEnv strips master password for external wallet transports", () => {
     const env = createSignerChildEnv({
       name: "external",
       address: ZERO_ADDRESS,
       chain: "evm",
       connection: {
-        mode: "remote",
+        mode: "external",
         transport: "command",
         command: ["bun", "run", FIXTURE_PATH],
       },
@@ -88,13 +96,13 @@ describe("signers", () => {
     expect(env.WOOO_MASTER_PASSWORD).toBe("top-secret");
   });
 
-  test("createEvmSigner invokes the remote signer command transport contract", async () => {
+  test("createEvmSigner invokes the external command signer transport contract", async () => {
     const wallet: WalletRecord = {
       name: "external",
       address: ZERO_ADDRESS,
       chain: "evm",
       connection: {
-        mode: "remote",
+        mode: "external",
         transport: "command",
         command: ["bun", "run", FIXTURE_PATH],
       },
@@ -140,7 +148,7 @@ describe("signers", () => {
       address: ZERO_ADDRESS,
       chain: "evm",
       connection: {
-        mode: "remote",
+        mode: "external",
         transport: "command",
         command: ["bun", "run", FIXTURE_PATH],
       },
@@ -203,6 +211,18 @@ describe("signers", () => {
     ).toThrow(/local host/);
   });
 
+  test("normalizeSignerBrokerUrl allows https remotes and rejects insecure remote http", () => {
+    expect(normalizeSignerBrokerUrl("https://broker.example.com/signer")).toBe(
+      "https://broker.example.com/signer",
+    );
+    expect(normalizeSignerBrokerUrl("http://127.0.0.1:8788")).toBe(
+      "http://127.0.0.1:8788/",
+    );
+    expect(() =>
+      normalizeSignerBrokerUrl("http://broker.example.com/signer"),
+    ).toThrow(/https/);
+  });
+
   test("createEvmSigner invokes a local signer service", async () => {
     let capturedRequest: SignerCommandRequest | null = null;
     const server = Bun.serve({
@@ -230,7 +250,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chain: "evm",
         connection: {
-          mode: "remote",
+          mode: "external",
           transport: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
@@ -247,6 +267,173 @@ describe("signers", () => {
       expect(txHash).toBe(TEST_TX_HASH);
       expect(capturedRequest?.kind).toBe("evm-write-contract");
       expect(capturedRequest?.wallet.name).toBe("service-wallet");
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("createEvmSigner waits for an async local signer service result", async () => {
+    process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS = "1";
+    process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS = "250";
+
+    let capturedRequest: SignerCommandRequest | null = null;
+    let statusChecks = 0;
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        if (request.method === "POST" && url.pathname === "/") {
+          capturedRequest = deserializeSignerPayload<SignerCommandRequest>(
+            await request.text(),
+          );
+          const response: SignerCommandResponse = {
+            ok: true,
+            status: "pending",
+            requestId: "req-async-1",
+            pollAfterMs: 0,
+          };
+          return new Response(serializeSignerPayload(response), {
+            status: 202,
+            headers: {
+              "content-type": "application/json",
+            },
+          });
+        }
+
+        if (
+          request.method === "GET" &&
+          url.pathname === "/requests/req-async-1"
+        ) {
+          statusChecks += 1;
+          const response: SignerCommandResponse =
+            statusChecks < 2
+              ? {
+                  ok: true,
+                  status: "pending",
+                  requestId: "req-async-1",
+                  pollAfterMs: 0,
+                }
+              : {
+                  ok: true,
+                  txHash: TEST_TX_HASH,
+                };
+          return new Response(serializeSignerPayload(response), {
+            status: statusChecks < 2 ? 202 : 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          });
+        }
+
+        return new Response(
+          serializeSignerPayload({
+            ok: false,
+            error: `Unexpected route: ${request.method} ${url.pathname}`,
+          }),
+          {
+            status: 404,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      },
+    });
+
+    try {
+      const wallet: WalletRecord = {
+        name: "service-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        connection: {
+          mode: "external",
+          transport: "service",
+          url: normalizeSignerServiceUrl(server.url.toString()),
+        },
+      };
+
+      const signer = createEvmSigner(wallet);
+      const txHash = await signer.writeContract("ethereum", {
+        address: ZERO_ADDRESS,
+        abi: [] as Abi,
+        functionName: "approve",
+        args: [],
+      });
+
+      expect(txHash).toBe(TEST_TX_HASH);
+      expect(capturedRequest?.kind).toBe("evm-write-contract");
+      expect(statusChecks).toBe(2);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("createEvmSigner times out when an async signer service never completes", async () => {
+    process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS = "1";
+    process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS = "10";
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (
+          (request.method === "POST" && url.pathname === "/") ||
+          (request.method === "GET" && url.pathname === "/requests/req-stuck-1")
+        ) {
+          const response: SignerCommandResponse = {
+            ok: true,
+            status: "pending",
+            requestId: "req-stuck-1",
+            pollAfterMs: 0,
+          };
+          return new Response(serializeSignerPayload(response), {
+            status: 202,
+            headers: {
+              "content-type": "application/json",
+            },
+          });
+        }
+
+        return new Response(
+          serializeSignerPayload({
+            ok: false,
+            error: `Unexpected route: ${request.method} ${url.pathname}`,
+          }),
+          {
+            status: 404,
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      },
+    });
+
+    try {
+      const wallet: WalletRecord = {
+        name: "service-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        connection: {
+          mode: "external",
+          transport: "service",
+          url: normalizeSignerServiceUrl(server.url.toString()),
+        },
+      };
+
+      const signer = createEvmSigner(wallet);
+
+      await expect(
+        signer.writeContract("ethereum", {
+          address: ZERO_ADDRESS,
+          abi: [] as Abi,
+          functionName: "approve",
+          args: [],
+        }),
+      ).rejects.toThrow(/timed out/);
     } finally {
       await server.stop(true);
     }
@@ -285,7 +472,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chain: "evm",
         connection: {
-          mode: "remote",
+          mode: "external",
           transport: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
@@ -339,7 +526,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chain: "evm",
         connection: {
-          mode: "remote",
+          mode: "external",
           transport: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
@@ -364,6 +551,60 @@ describe("signers", () => {
       expect(signatureHex).toBe(TEST_SIGNATURE_HEX);
       expect(capturedRequest?.kind).toBe("evm-sign-typed-data");
       expect(capturedRequest?.wallet.name).toBe("service-wallet");
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("createEvmSigner invokes a broker transport with bearer auth", async () => {
+    let capturedAuthHeader: string | null = null;
+    let capturedRequest: SignerCommandRequest | null = null;
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        capturedAuthHeader = request.headers.get("authorization");
+        capturedRequest = deserializeSignerPayload<SignerCommandRequest>(
+          await request.text(),
+        );
+        const response: SignerCommandResponse = {
+          ok: true,
+          txHash: TEST_TX_HASH,
+        };
+        return new Response(serializeSignerPayload(response), {
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      },
+    });
+
+    try {
+      const wallet: WalletRecord = {
+        name: "broker-wallet",
+        address: ZERO_ADDRESS,
+        chain: "evm",
+        connection: {
+          mode: "external",
+          transport: "broker",
+          url: normalizeSignerBrokerUrl(server.url.toString()),
+          authEnv: "WOOO_BROKER_TOKEN",
+        },
+      };
+
+      const signer = createEvmSigner(wallet);
+      const txHash = await signer.writeContract("ethereum", {
+        address: ZERO_ADDRESS,
+        abi: [] as Abi,
+        functionName: "approve",
+        args: [],
+      });
+
+      expect(txHash).toBe(TEST_TX_HASH);
+      expect(capturedAuthHeader).toBe("Bearer broker-token-test");
+      expect(capturedRequest?.kind).toBe("evm-write-contract");
+      expect(capturedRequest?.wallet.name).toBe("broker-wallet");
     } finally {
       await server.stop(true);
     }
@@ -397,6 +638,45 @@ describe("signers", () => {
       const metadata = await fetchSignerServiceMetadata(server.url.toString());
       expect(metadata.wallets[0]?.address).toBe(ZERO_ADDRESS);
       expect(metadata.supportedKinds).toEqual(["evm-write-contract"]);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test("fetchSignerBrokerMetadata loads metadata with bearer auth", async () => {
+    let capturedAuthHeader: string | null = null;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        capturedAuthHeader = request.headers.get("authorization");
+        const metadata: SignerBrokerMetadata = {
+          version: 1,
+          kind: "wooo-wallet-broker",
+          wallets: [
+            {
+              address: ZERO_ADDRESS,
+              chain: "evm",
+            },
+          ],
+          supportedKinds: ["evm-write-contract"],
+        };
+        return new Response(JSON.stringify(metadata), {
+          headers: {
+            "content-type": "application/json",
+          },
+        });
+      },
+    });
+
+    try {
+      const metadata = await fetchSignerBrokerMetadata(
+        server.url.toString(),
+        "WOOO_BROKER_TOKEN",
+      );
+      expect(capturedAuthHeader).toBe("Bearer broker-token-test");
+      expect(metadata.wallets[0]?.address).toBe(ZERO_ADDRESS);
+      expect(metadata.kind).toBe("wooo-wallet-broker");
     } finally {
       await server.stop(true);
     }

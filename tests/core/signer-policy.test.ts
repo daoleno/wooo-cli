@@ -186,7 +186,7 @@ describe("evaluateSignerPolicy", () => {
         name: "sol-wallet",
         address: "11111111111111111111111111111111",
         chain: "solana",
-        mode: "remote",
+        mode: "external",
       },
       origin: {
         group: "dex",

@@ -13,16 +13,22 @@ import type {
   EvmApprovalRequest,
   EvmContractWriteRequest,
   EvmTypedDataSignRequest,
+  HttpSignerMetadata,
+  HttpSignerMetadataKind,
   HyperliquidActionSignature,
   HyperliquidActionSigningRequest,
+  SignerBrokerMetadata,
   SignerCommandRequest,
   SignerCommandResponse,
+  SignerCommandTerminalResponse,
   SignerPrompt,
   SignerRequestOrigin,
   SignerServiceMetadata,
 } from "./signer-protocol";
 import {
   deserializeSignerPayload,
+  isSignerCommandPendingResponse,
+  isSignerCommandResponse,
   serializeSignerPayload,
 } from "./signer-protocol";
 import type { WalletRecord } from "./wallet-store";
@@ -94,6 +100,8 @@ const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
   "hyperliquid-sign-l1-action",
   "solana-send-versioned-transaction",
 ]);
+const DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS = 1_000;
+const DEFAULT_HTTP_SIGNER_TIMEOUT_MS = 5 * 60 * 1_000;
 
 function getBuiltInSignerCommand(): string[] {
   const scriptPath = process.argv[1];
@@ -106,7 +114,7 @@ function getBuiltInSignerCommand(): string[] {
 
 function getSignerCommand(wallet: WalletRecord): string[] {
   if (
-    wallet.connection.mode === "remote" &&
+    wallet.connection.mode === "external" &&
     wallet.connection.transport === "command"
   ) {
     return wallet.connection.command;
@@ -114,33 +122,67 @@ function getSignerCommand(wallet: WalletRecord): string[] {
   return getBuiltInSignerCommand();
 }
 
-export function normalizeSignerServiceUrl(rawUrl: string): string {
+function normalizeHttpSignerUrl(
+  rawUrl: string,
+  options: {
+    allowRemoteHosts: boolean;
+    label: string;
+  },
+): string {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid signer service URL: ${message}`);
+    throw new Error(`Invalid ${options.label} URL: ${message}`);
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(
-      `Unsupported signer service protocol: ${url.protocol}. Use http:// or https:// for a local service.`,
+      `Unsupported ${options.label} protocol: ${url.protocol}. Use http:// or https://.`,
     );
   }
 
-  if (!LOCAL_SIGNER_SERVICE_HOSTS.has(url.hostname)) {
+  if (
+    !options.allowRemoteHosts &&
+    !LOCAL_SIGNER_SERVICE_HOSTS.has(url.hostname)
+  ) {
     throw new Error(
-      `Signer service URL must point to a local host. Received host "${url.hostname}".`,
+      `${options.label} URL must point to a local host. Received host "${url.hostname}".`,
+    );
+  }
+
+  if (
+    options.allowRemoteHosts &&
+    url.protocol === "http:" &&
+    !LOCAL_SIGNER_SERVICE_HOSTS.has(url.hostname)
+  ) {
+    throw new Error(
+      `${options.label} URL must use https:// unless it points to a local host.`,
     );
   }
 
   return url.toString();
 }
 
-function isSignerServiceMetadata(
+export function normalizeSignerServiceUrl(rawUrl: string): string {
+  return normalizeHttpSignerUrl(rawUrl, {
+    allowRemoteHosts: false,
+    label: "Signer service",
+  });
+}
+
+export function normalizeSignerBrokerUrl(rawUrl: string): string {
+  return normalizeHttpSignerUrl(rawUrl, {
+    allowRemoteHosts: true,
+    label: "Wallet broker",
+  });
+}
+
+function isHttpSignerMetadata(
   value: unknown,
-): value is SignerServiceMetadata {
+  expectedKind: HttpSignerMetadataKind,
+): value is HttpSignerMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -154,7 +196,7 @@ function isSignerServiceMetadata(
 
   return (
     metadata.version === 1 &&
-    metadata.kind === "wooo-signer-service" &&
+    metadata.kind === expectedKind &&
     Array.isArray(metadata.supportedKinds) &&
     metadata.supportedKinds.every(
       (item) =>
@@ -177,21 +219,59 @@ function isSignerServiceMetadata(
   );
 }
 
-export async function fetchSignerServiceMetadata(
-  rawUrl: string,
-): Promise<SignerServiceMetadata> {
-  const url = normalizeSignerServiceUrl(rawUrl);
+function resolveBrokerAuthToken(authEnv?: string): string | null {
+  if (!authEnv) {
+    return null;
+  }
+
+  const value = process.env[authEnv];
+  if (!value?.trim()) {
+    throw new Error(
+      `Wallet broker auth env "${authEnv}" is not set or is empty.`,
+    );
+  }
+
+  return value.trim();
+}
+
+function createHttpSignerHeaders(options?: {
+  authEnv?: string;
+  includeJsonContentType?: boolean;
+}): Record<string, string> {
+  const headers: Record<string, string> = {
+    accept: "application/json",
+  };
+
+  if (options?.includeJsonContentType) {
+    headers["content-type"] = "application/json";
+  }
+
+  const token = resolveBrokerAuthToken(options?.authEnv);
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+async function fetchHttpSignerMetadata(
+  url: string,
+  options: {
+    authEnv?: string;
+    expectedKind: HttpSignerMetadataKind;
+  },
+): Promise<HttpSignerMetadata> {
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      accept: "application/json",
-    },
+    headers: createHttpSignerHeaders({
+      authEnv: options.authEnv,
+    }),
   });
 
   const payload = await response.text();
   if (!response.ok) {
     throw new Error(
-      `Signer service metadata request failed with HTTP ${response.status}: ${payload || "<empty>"}`,
+      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} metadata request failed with HTTP ${response.status}: ${payload || "<empty>"}`,
     );
   }
 
@@ -201,19 +281,43 @@ export async function fetchSignerServiceMetadata(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Signer service returned invalid JSON metadata: ${message}`,
+      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} returned invalid JSON metadata: ${message}`,
     );
   }
 
-  if (!isSignerServiceMetadata(parsed)) {
-    throw new Error("Signer service returned an invalid metadata payload");
+  if (!isHttpSignerMetadata(parsed, options.expectedKind)) {
+    throw new Error(
+      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} returned an invalid metadata payload`,
+    );
   }
 
   if (parsed.wallets.length === 0) {
-    throw new Error("Signer service did not advertise any wallets");
+    throw new Error(
+      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} did not advertise any wallets`,
+    );
   }
 
   return parsed;
+}
+
+export async function fetchSignerServiceMetadata(
+  rawUrl: string,
+): Promise<SignerServiceMetadata> {
+  const url = normalizeSignerServiceUrl(rawUrl);
+  return (await fetchHttpSignerMetadata(url, {
+    expectedKind: "wooo-signer-service",
+  })) as SignerServiceMetadata;
+}
+
+export async function fetchSignerBrokerMetadata(
+  rawUrl: string,
+  authEnv?: string,
+): Promise<SignerBrokerMetadata> {
+  const url = normalizeSignerBrokerUrl(rawUrl);
+  return (await fetchHttpSignerMetadata(url, {
+    expectedKind: "wooo-wallet-broker",
+    authEnv,
+  })) as SignerBrokerMetadata;
 }
 
 export function createSignerChildEnv(
@@ -269,44 +373,218 @@ function cleanupInvocationPaths(paths: CommandInvocationPaths): void {
   rmSync(paths.dir, { recursive: true, force: true });
 }
 
-async function invokeSignerService(
-  wallet: WalletRecord,
-  request: SignerCommandRequest,
-): Promise<SignerCommandResponse> {
-  if (
-    wallet.connection.mode !== "remote" ||
-    wallet.connection.transport !== "service"
-  ) {
-    throw new Error("Wallet is not configured for service-based signing");
+function parsePositiveIntegerEnv(envKey: string, fallback: number): number {
+  const value = process.env[envKey];
+  if (!value) {
+    return fallback;
   }
 
-  const response = await fetch(wallet.connection.url, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-    },
-    body: serializeSignerPayload(request),
-  });
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
 
+  return parsed;
+}
+
+function getHttpSignerPollIntervalMs(): number {
+  return parsePositiveIntegerEnv(
+    "WOOO_HTTP_SIGNER_POLL_INTERVAL_MS",
+    DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS,
+  );
+}
+
+function getHttpSignerTimeoutMs(): number {
+  return parsePositiveIntegerEnv(
+    "WOOO_HTTP_SIGNER_TIMEOUT_MS",
+    DEFAULT_HTTP_SIGNER_TIMEOUT_MS,
+  );
+}
+
+function createHttpSignerRequestStatusUrl(
+  endpointUrl: string,
+  requestId: string,
+): string {
+  const url = new URL(endpointUrl);
+  const basePath = url.pathname.endsWith("/")
+    ? url.pathname
+    : `${url.pathname}/`;
+  url.pathname = `${basePath}requests/${encodeURIComponent(requestId)}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function parseHttpSignerResponse(
+  url: string,
+  response: Response,
+  transportLabel: string,
+): Promise<SignerCommandResponse> {
   const payload = await response.text();
   if (!payload.trim()) {
+    throw new Error(`${transportLabel} at ${url} returned an empty response`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = deserializeSignerPayload<unknown>(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Signer service at ${wallet.connection.url} returned an empty response`,
+      `${transportLabel} at ${url} returned invalid JSON: ${message}`,
     );
   }
 
-  const parsed = deserializeSignerPayload<SignerCommandResponse>(payload);
+  if (!isSignerCommandResponse(parsed)) {
+    throw new Error(
+      `${transportLabel} at ${url} returned an invalid signer response payload`,
+    );
+  }
+
+  return parsed;
+}
+
+function assertTerminalHttpSignerResponse(
+  response: SignerCommandResponse,
+  transportLabel: string,
+): asserts response is SignerCommandTerminalResponse {
+  if (!isSignerCommandPendingResponse(response)) {
+    return;
+  }
+
+  throw new Error(
+    `${transportLabel} request ${response.requestId} remained pending without a terminal result`,
+  );
+}
+
+async function pollHttpSignerResponse(
+  endpointUrl: string,
+  initialResponse: SignerCommandResponse,
+  options?: {
+    authEnv?: string;
+    transportLabel?: string;
+  },
+): Promise<SignerCommandTerminalResponse> {
+  const transportLabel = options?.transportLabel ?? "Signer transport";
+  if (!isSignerCommandPendingResponse(initialResponse)) {
+    assertTerminalHttpSignerResponse(initialResponse, transportLabel);
+    return initialResponse;
+  }
+
+  const pollIntervalMs = getHttpSignerPollIntervalMs();
+  const timeoutMs = getHttpSignerTimeoutMs();
+  const deadline = Date.now() + timeoutMs;
+  let pendingResponse = initialResponse;
+
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(
+        `${transportLabel} request ${pendingResponse.requestId} timed out after ${timeoutMs}ms`,
+      );
+    }
+
+    const delayMs = Math.min(
+      Math.max(pendingResponse.pollAfterMs ?? pollIntervalMs, 0),
+      remainingMs,
+    );
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+
+    const statusUrl = createHttpSignerRequestStatusUrl(
+      endpointUrl,
+      pendingResponse.requestId,
+    );
+    const response = await fetch(statusUrl, {
+      method: "GET",
+      headers: createHttpSignerHeaders({
+        authEnv: options?.authEnv,
+      }),
+    });
+    const parsed = await parseHttpSignerResponse(
+      statusUrl,
+      response,
+      transportLabel,
+    );
+
+    if (!response.ok) {
+      if (!parsed.ok) {
+        throw new Error(parsed.error);
+      }
+      throw new Error(
+        `${transportLabel} at ${statusUrl} returned HTTP ${response.status}`,
+      );
+    }
+
+    if (isSignerCommandPendingResponse(parsed)) {
+      pendingResponse = parsed;
+      continue;
+    }
+
+    return parsed;
+  }
+}
+
+async function invokeHttpSigner(
+  wallet: WalletRecord,
+  request: SignerCommandRequest,
+): Promise<SignerCommandTerminalResponse> {
+  if (
+    wallet.connection.mode !== "external" ||
+    (wallet.connection.transport !== "service" &&
+      wallet.connection.transport !== "broker")
+  ) {
+    throw new Error("Wallet is not configured for HTTP signer transport");
+  }
+
+  const transportLabel =
+    wallet.connection.transport === "broker"
+      ? "Wallet broker"
+      : "Signer service";
+  const response = await fetch(wallet.connection.url, {
+    method: "POST",
+    headers: createHttpSignerHeaders({
+      authEnv:
+        wallet.connection.transport === "broker"
+          ? wallet.connection.authEnv
+          : undefined,
+      includeJsonContentType: true,
+    }),
+    body: serializeSignerPayload(request),
+  });
+  const parsed = await parseHttpSignerResponse(
+    wallet.connection.url,
+    response,
+    transportLabel,
+  );
+
   if (!response.ok) {
     if (!parsed.ok) {
       throw new Error(parsed.error);
     }
     throw new Error(
-      `Signer service at ${wallet.connection.url} returned HTTP ${response.status}`,
+      `${transportLabel} at ${wallet.connection.url} returned HTTP ${response.status}`,
     );
   }
 
-  return parsed;
+  if (!parsed.ok) {
+    throw new Error(parsed.error);
+  }
+
+  return await pollHttpSignerResponse(wallet.connection.url, parsed, {
+    authEnv:
+      wallet.connection.transport === "broker"
+        ? wallet.connection.authEnv
+        : undefined,
+    transportLabel,
+  });
 }
 
 async function invokeSignerCommand(
@@ -314,10 +592,11 @@ async function invokeSignerCommand(
   request: SignerCommandRequest,
 ): Promise<SignerCommandResponse> {
   if (
-    wallet.connection.mode === "remote" &&
-    wallet.connection.transport === "service"
+    wallet.connection.mode === "external" &&
+    (wallet.connection.transport === "service" ||
+      wallet.connection.transport === "broker")
   ) {
-    return await invokeSignerService(wallet, request);
+    return await invokeHttpSigner(wallet, request);
   }
 
   const paths = createInvocationPaths(request);

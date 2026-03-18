@@ -163,8 +163,89 @@ describe("wallet connect command", () => {
       expect(output.name).toBe("service-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.mode).toBe("remote");
+      expect(output.mode).toBe("external");
       expect(output.transport).toBe("service");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("auto-discovers a wallet broker transport from broker metadata", async () => {
+    let capturedAuthHeader: string | null = null;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        capturedAuthHeader = request.headers.get("authorization");
+        return new Response(
+          JSON.stringify({
+            version: 1,
+            kind: "wooo-wallet-broker",
+            wallets: [
+              {
+                address: ZERO_ADDRESS,
+                chain: "evm",
+              },
+            ],
+            supportedKinds: ["evm-write-contract"],
+          }),
+          {
+            headers: {
+              "content-type": "application/json",
+            },
+          },
+        );
+      },
+    });
+
+    try {
+      const result = Bun.spawn({
+        cmd: [
+          "bun",
+          "run",
+          "src/index.ts",
+          "wallet",
+          "connect",
+          "broker-wallet",
+          "--broker-url",
+          server.url.toString(),
+          "--auth-env",
+          "WOOO_BROKER_TOKEN",
+          "--json",
+        ],
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          WOOO_CONFIG_DIR: tempDir,
+          WOOO_BROKER_TOKEN: "broker-token-test",
+        },
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(result.stdout).text(),
+        new Response(result.stderr).text(),
+        result.exited,
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderr.trim()).toBe("");
+      expect(capturedAuthHeader).toBe("Bearer broker-token-test");
+
+      const output = JSON.parse(stdout) as {
+        address: string;
+        chain: string;
+        mode: string;
+        name: string;
+        transport: string | null;
+      };
+
+      expect(output.name).toBe("broker-wallet");
+      expect(output.address).toBe(ZERO_ADDRESS);
+      expect(output.chain).toBe("evm");
+      expect(output.mode).toBe("external");
+      expect(output.transport).toBe("broker");
     } finally {
       server.stop(true);
     }

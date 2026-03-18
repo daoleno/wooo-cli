@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { getConfigDir } from "../../core/config";
 import {
@@ -63,7 +64,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const request = deserializeSignerPayload<SignerCommandRequest>(
-      await Bun.file(args["request-file"]).text(),
+      await readFile(args["request-file"], "utf8"),
     );
 
     let response: SignerCommandResponse;
@@ -83,7 +84,7 @@ export default defineCommand({
       recordSignerAudit(request, "rejected", autoApproved, response.error);
     }
 
-    await Bun.write(args["response-file"], serializeSignerPayload(response));
+    await writeFile(args["response-file"], serializeSignerPayload(response));
     if (!response.ok) {
       process.exit(1);
     }

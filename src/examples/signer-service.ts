@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { getAccountAddress } from "../core/evm";
 import {
   authorizeSignerRequest,
@@ -85,64 +86,82 @@ async function main(): Promise<void> {
     };
   }
 
-  const server = Bun.serve({
-    hostname: host,
-    port,
-    async fetch(request) {
-      if (request.method === "GET") {
-        return new Response(serializeSignerPayload(await createMetadata()), {
-          headers: {
-            "content-type": "application/json",
-          },
-        });
-      }
-
-      if (request.method !== "POST") {
-        return new Response("Method Not Allowed", { status: 405 });
-      }
-
-      let signerRequest: SignerCommandRequest;
-      try {
-        signerRequest = deserializeSignerPayload<SignerCommandRequest>(
-          await request.text(),
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return new Response(message, { status: 400 });
-      }
-
-      let response: SignerCommandResponse;
-      let autoApproved = false;
-      try {
-        autoApproved = await authorizeSignerRequest(signerRequest);
-        response = await executeSignerRequest(signerRequest, await getSecret());
-        recordSignerAudit(signerRequest, "approved", autoApproved);
-      } catch (error) {
-        response = {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-        recordSignerAudit(
-          signerRequest,
-          "rejected",
-          autoApproved,
-          response.error,
-        );
-      }
-
-      return new Response(serializeSignerPayload(response), {
-        headers: {
-          "content-type": "application/json",
-        },
-        status: response.ok ? 200 : 400,
+  const server = createServer(async (request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, {
+        "content-type": "application/json",
       });
-    },
+      response.end(serializeSignerPayload(await createMetadata()));
+      return;
+    }
+
+    if (request.method !== "POST") {
+      response.writeHead(405, {
+        "content-type": "text/plain; charset=utf-8",
+      });
+      response.end("Method Not Allowed");
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    let signerRequest: SignerCommandRequest;
+    try {
+      signerRequest = deserializeSignerPayload<SignerCommandRequest>(
+        Buffer.concat(chunks).toString("utf8"),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      response.writeHead(400, {
+        "content-type": "text/plain; charset=utf-8",
+      });
+      response.end(message);
+      return;
+    }
+
+    let signerResult: SignerCommandResponse;
+    let autoApproved = false;
+    try {
+      autoApproved = await authorizeSignerRequest(signerRequest);
+      signerResult = await executeSignerRequest(
+        signerRequest,
+        await getSecret(),
+      );
+      recordSignerAudit(signerRequest, "approved", autoApproved);
+    } catch (error) {
+      signerResult = {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      recordSignerAudit(
+        signerRequest,
+        "rejected",
+        autoApproved,
+        signerResult.error,
+      );
+    }
+
+    response.writeHead(signerResult.ok ? 200 : 400, {
+      "content-type": "application/json",
+    });
+    response.end(serializeSignerPayload(signerResult));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      resolve();
+    });
   });
 
   console.error(`Reference signer service listening on http://${host}:${port}`);
 
   await new Promise(() => {});
-  server.stop();
+  server.close();
 }
 
 await main();

@@ -44,7 +44,7 @@ export default defineCommand({
 
     if (configured.length === 0) {
       out.warn(
-        "No exchanges configured. Set API keys via env vars (WOOO_OKX_API_KEY, etc.) or wooo config set.",
+        "No exchanges configured. Set API keys via env vars (WOOO_OKX_API_KEY, etc.) or wooo-cli config set.",
       );
       return;
     }

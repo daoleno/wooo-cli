@@ -80,8 +80,8 @@ describe("WalletStore", () => {
     expect(secret).toBe(pk);
   });
 
-  test("connects a remote command wallet", async () => {
-    const wallet = await store.connectRemoteWallet(
+  test("connects an external command wallet", async () => {
+    const wallet = await store.connectExternalWallet(
       "external",
       "0x000000000000000000000000000000000000dEaD",
       "evm",
@@ -90,12 +90,12 @@ describe("WalletStore", () => {
         command: ["/usr/local/bin/mock-signer", "--profile", "test"],
       },
     );
-    expect(wallet.mode).toBe("remote");
+    expect(wallet.mode).toBe("external");
     expect(wallet.transport).toBe("command");
   });
 
-  test("connects a remote signer service wallet", async () => {
-    const wallet = await store.connectRemoteWallet(
+  test("connects a local signer service wallet", async () => {
+    const wallet = await store.connectExternalWallet(
       "service-wallet",
       "0x000000000000000000000000000000000000dEaD",
       "evm",
@@ -104,8 +104,23 @@ describe("WalletStore", () => {
         url: "http://127.0.0.1:8787/",
       },
     );
-    expect(wallet.mode).toBe("remote");
+    expect(wallet.mode).toBe("external");
     expect(wallet.transport).toBe("service");
+  });
+
+  test("connects a wallet broker transport", async () => {
+    const wallet = await store.connectExternalWallet(
+      "broker-wallet",
+      "0x000000000000000000000000000000000000dEaD",
+      "evm",
+      {
+        transport: "broker",
+        url: "https://broker.example.com/",
+        authEnv: "WOOO_BROKER_TOKEN",
+      },
+    );
+    expect(wallet.mode).toBe("external");
+    expect(wallet.transport).toBe("broker");
   });
 
   test("switches active wallet", async () => {

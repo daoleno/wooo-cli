@@ -1,6 +1,6 @@
 import type { Abi, Address, Hash, Hex } from "viem";
 
-export type WalletMode = "local" | "remote";
+export type WalletMode = "local" | "external";
 
 export interface SignerWalletContext {
   name: string;
@@ -72,17 +72,31 @@ export interface HyperliquidActionSignature {
   v: number;
 }
 
-export interface SignerServiceWalletDescriptor {
+export interface AdvertisedWalletDescriptor {
   address: string;
   chain: "evm" | "solana";
 }
 
-export interface SignerServiceMetadata {
-  kind: "wooo-signer-service";
+export type HttpSignerMetadataKind =
+  | "wooo-signer-service"
+  | "wooo-wallet-broker";
+
+interface HttpSignerMetadataBase {
+  kind: HttpSignerMetadataKind;
   supportedKinds: SignerCommandRequestBase["kind"][];
   version: 1;
-  wallets: SignerServiceWalletDescriptor[];
+  wallets: AdvertisedWalletDescriptor[];
 }
+
+export interface SignerServiceMetadata extends HttpSignerMetadataBase {
+  kind: "wooo-signer-service";
+}
+
+export interface SignerBrokerMetadata extends HttpSignerMetadataBase {
+  kind: "wooo-wallet-broker";
+}
+
+export type HttpSignerMetadata = SignerServiceMetadata | SignerBrokerMetadata;
 
 interface SignerCommandRequestBase {
   kind:
@@ -136,6 +150,14 @@ interface SignerCommandResponseBase {
   ok: boolean;
 }
 
+export interface SignerCommandPendingResponse
+  extends SignerCommandResponseBase {
+  ok: true;
+  pollAfterMs?: number;
+  requestId: string;
+  status: "pending";
+}
+
 export interface SignerCommandTxHashResponse extends SignerCommandResponseBase {
   ok: true;
   txHash: Hash | string;
@@ -158,11 +180,72 @@ export interface SignerCommandErrorResponse extends SignerCommandResponseBase {
   error: string;
 }
 
-export type SignerCommandResponse =
+export type SignerCommandTerminalResponse =
   | SignerCommandErrorResponse
   | SignerCommandHexSignatureResponse
   | SignerCommandSignatureResponse
   | SignerCommandTxHashResponse;
+
+export type SignerCommandResponse =
+  | SignerCommandPendingResponse
+  | SignerCommandTerminalResponse;
+
+export function isSignerCommandPendingResponse(
+  value: SignerCommandResponse,
+): value is SignerCommandPendingResponse {
+  return value.ok === true && "status" in value && value.status === "pending";
+}
+
+export function isSignerCommandResponse(
+  value: unknown,
+): value is SignerCommandResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const response = value as Record<string, unknown>;
+  if (response.ok === false) {
+    return typeof response.error === "string";
+  }
+
+  if (response.ok !== true) {
+    return false;
+  }
+
+  if (response.status === "pending") {
+    return (
+      typeof response.requestId === "string" &&
+      (response.pollAfterMs === undefined ||
+        (typeof response.pollAfterMs === "number" &&
+          Number.isFinite(response.pollAfterMs) &&
+          response.pollAfterMs >= 0))
+    );
+  }
+
+  if (typeof response.txHash === "string") {
+    return true;
+  }
+
+  if (typeof response.signatureHex === "string") {
+    return true;
+  }
+
+  if (
+    response.signature &&
+    typeof response.signature === "object" &&
+    !Array.isArray(response.signature)
+  ) {
+    const signature = response.signature as Record<string, unknown>;
+    return (
+      typeof signature.r === "string" &&
+      typeof signature.s === "string" &&
+      typeof signature.v === "number" &&
+      Number.isFinite(signature.v)
+    );
+  }
+
+  return false;
+}
 
 function jsonReplacer(_key: string, value: unknown): unknown {
   if (typeof value === "bigint") {

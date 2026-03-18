@@ -14,7 +14,9 @@ export default defineCommand({
     const outputOptions = resolveOutputOptions(args);
     const out = createOutput(outputOptions);
     if (wallets.length === 0) {
-      out.warn("No wallets found. Run `wooo wallet generate` to create one.");
+      out.warn(
+        "No wallets found. Run `wooo-cli wallet generate` for a local wallet or `wooo-cli wallet connect` for an external wallet.",
+      );
       return;
     }
     const includeTransport = wallets.some((wallet) => wallet.transport);

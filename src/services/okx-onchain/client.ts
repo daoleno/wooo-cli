@@ -53,7 +53,7 @@ type OkxOnchainQueryValue = boolean | number | string | undefined;
 type OkxOnchainQuery = Record<string, OkxOnchainQueryValue>;
 
 interface OkxOnchainEnvelope<T> {
-  code: string;
+  code: number | string;
   data: T;
   msg?: string;
 }
@@ -75,6 +75,12 @@ export interface OkxOnchainChainRecord {
   logoUrl?: string;
   name?: string;
   shortName?: string;
+}
+
+interface OkxOnchainPortfolioSupportedChainRecord {
+  chainIndex: string;
+  chainLogo?: string;
+  chainName?: string;
 }
 
 export interface OkxOnchainTokenTagList {
@@ -131,6 +137,168 @@ export interface OkxOnchainTokenPriceInfo {
   volume24H?: string;
   volume4H?: string;
   volume5M?: string;
+}
+
+export interface OkxOnchainTradeTokenInfo {
+  amount?: string;
+  tokenContractAddress?: string;
+  tokenSymbol?: string;
+}
+
+export interface OkxOnchainTrade {
+  chainIndex: string;
+  changedTokenInfo?: OkxOnchainTradeTokenInfo[];
+  dexName?: string;
+  id: string;
+  isFiltered?: string;
+  poolLogoUrl?: string;
+  price?: string;
+  time?: string;
+  tokenContractAddress: string;
+  txHashUrl?: string;
+  type?: string;
+  userAddress?: string;
+  volume?: string;
+}
+
+export interface OkxOnchainHistoricalCandle {
+  close: string;
+  confirm?: string;
+  high: string;
+  low: string;
+  open: string;
+  timestamp: string;
+  volume: string;
+  volumeUsd: string;
+}
+
+export interface OkxOnchainTokenHolder {
+  avgBuyPrice?: string;
+  avgSellPrice?: string;
+  boughtAmount?: string;
+  fundingSource?: string;
+  holdAmount?: string;
+  holdPercent?: string;
+  holderWalletAddress?: string;
+  nativeTokenBalance?: string;
+  realizedPnlUsd?: string;
+  totalPnlUsd?: string;
+  totalSellAmount?: string;
+  unrealizedPnlUsd?: string;
+}
+
+export interface OkxOnchainTokenRankingEntry {
+  chainIndex: string;
+  change?: string;
+  firstTradeTime?: string;
+  holders?: string;
+  liquidity?: string;
+  marketCap?: string;
+  price?: string;
+  tokenContractAddress: string;
+  tokenLogoUrl?: string;
+  tokenSymbol?: string;
+  txs?: string;
+  txsBuy?: string;
+  txsSell?: string;
+  uniqueTraders?: string;
+  volume?: string;
+}
+
+export interface OkxOnchainPortfolioOverviewTopToken {
+  tokenContractAddress?: string;
+  tokenPnLPercent?: string;
+  tokenPnLUsd?: string;
+  tokenSymbol?: string;
+}
+
+export interface OkxOnchainPortfolioOverviewPnlBuckets {
+  over500Percent?: string;
+  overMinus50Percent?: string;
+  zeroTo500Percent?: string;
+  zeroToMinus50Percent?: string;
+}
+
+export interface OkxOnchainPortfolioOverviewBuyMarketCapStat {
+  buyCount?: string;
+  marketCapRange?: string;
+}
+
+export interface OkxOnchainPortfolioOverview {
+  avgBuyValueUsd?: string;
+  buyTxCount?: string;
+  buyTxVolume?: string;
+  buysByMarketCap?: OkxOnchainPortfolioOverviewBuyMarketCapStat[];
+  preferredMarketCap?: string;
+  realizedPnlUsd?: string;
+  sellTxCount?: string;
+  sellTxVolume?: string;
+  tokenCountByPnlPercent?: OkxOnchainPortfolioOverviewPnlBuckets;
+  top3PnlTokenPercent?: string;
+  top3PnlTokenSumUsd?: string;
+  topPnlTokenList?: OkxOnchainPortfolioOverviewTopToken[];
+  winRate?: string;
+}
+
+export interface OkxOnchainPortfolioRecentPnlDuration {
+  holdingTimestamp?: string;
+  sellOffTimestamp?: string;
+}
+
+export interface OkxOnchainPortfolioRecentPnlEntry {
+  buyAvgPrice?: string;
+  buyTxCount?: string;
+  buyTxVolume?: string;
+  chainIndex: string;
+  lastActiveTimestamp?: string;
+  realizedPnlPercent?: string;
+  realizedPnlUsd?: string;
+  sellAvgPrice?: string;
+  sellTxCount?: string;
+  sellTxVolume?: string;
+  tokenBalanceAmount?: string;
+  tokenBalanceUsd?: string;
+  tokenContractAddress: string;
+  tokenPositionDuration?: OkxOnchainPortfolioRecentPnlDuration;
+  tokenPositionPercent?: string;
+  tokenSymbol?: string;
+  totalPnlPercent?: string;
+  totalPnlUsd?: string;
+  unrealizedPnlPercent?: string;
+  unrealizedPnlUsd?: string;
+}
+
+export interface OkxOnchainPortfolioRecentPnlPage {
+  cursor?: string;
+  pnlList?: OkxOnchainPortfolioRecentPnlEntry[];
+}
+
+export interface OkxOnchainPortfolioLatestPnl {
+  isPnlSupported?: boolean;
+  realizedPnlPercent?: string;
+  realizedPnlUsd?: string;
+  totalPnlPercent?: string;
+  totalPnlUsd?: string;
+  unrealizedPnlPercent?: string;
+  unrealizedPnlUsd?: string;
+}
+
+export interface OkxOnchainPortfolioDexHistoryEntry {
+  amount?: string;
+  chainIndex: string;
+  marketCap?: string;
+  pnlUsd?: string;
+  price?: string;
+  time?: string;
+  tokenContractAddress: string;
+  tokenSymbol?: string;
+  type?: string;
+  valueUsd?: string;
+}
+
+export interface OkxOnchainPortfolioDexHistoryPage {
+  cursor?: string;
+  transactionList?: OkxOnchainPortfolioDexHistoryEntry[];
 }
 
 export interface OkxOnchainBalanceAsset {
@@ -235,6 +403,13 @@ function sanitizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeOkxOnchainRequestTokenAddress(value: string): string {
+  if (/^0x[0-9a-fA-F]{40}$/.test(value)) {
+    return value.toLowerCase();
+  }
+  return value;
+}
+
 function encodeQuery(query?: OkxOnchainQuery): URLSearchParams {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -314,7 +489,7 @@ export function normalizeOkxOnchainTokenAddress(value: string): string {
   if (normalized.toLowerCase() === "native") {
     return "";
   }
-  return normalized;
+  return normalizeOkxOnchainRequestTokenAddress(normalized);
 }
 
 export function createOkxOnchainSignature(
@@ -349,9 +524,9 @@ export async function resolveOkxOnchainClientOptionsFromConfig(): Promise<OkxOnc
     console.error(
       "Set WOOO_OKX_ONCHAIN_API_KEY, WOOO_OKX_ONCHAIN_SECRET, and WOOO_OKX_ONCHAIN_PASSPHRASE, or run:",
     );
-    console.error("  wooo config set okxOnchain.apiKey <key>");
-    console.error("  wooo config set okxOnchain.secret <secret>");
-    console.error("  wooo config set okxOnchain.passphrase <passphrase>");
+    console.error("  wooo-cli config set okxOnchain.apiKey <key>");
+    console.error("  wooo-cli config set okxOnchain.secret <secret>");
+    console.error("  wooo-cli config set okxOnchain.passphrase <passphrase>");
     process.exit(3);
   }
 
@@ -391,6 +566,18 @@ export class OkxOnchainClient {
     );
   }
 
+  async listPortfolioSupportedChains(): Promise<OkxOnchainChainRecord[]> {
+    const chains = await this.request<
+      OkxOnchainPortfolioSupportedChainRecord[]
+    >("GET", "/api/v6/dex/market/portfolio/supported/chain");
+
+    return chains.map((chain) => ({
+      chainIndex: chain.chainIndex,
+      logoUrl: chain.chainLogo,
+      name: chain.chainName,
+    }));
+  }
+
   async searchTokens(params: {
     chains: string;
     search: string;
@@ -410,7 +597,14 @@ export class OkxOnchainClient {
       "POST",
       "/api/v6/dex/market/token/basic-info",
       undefined,
-      [params],
+      [
+        {
+          ...params,
+          tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+            params.tokenContractAddress,
+          ),
+        },
+      ],
     );
     return result[0] ?? null;
   }
@@ -423,9 +617,160 @@ export class OkxOnchainClient {
       "POST",
       "/api/v6/dex/market/price-info",
       undefined,
-      [params],
+      [
+        {
+          ...params,
+          tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+            params.tokenContractAddress,
+          ),
+        },
+      ],
     );
     return result[0] ?? null;
+  }
+
+  async getTrades(params: {
+    after?: string;
+    chainIndex: string;
+    limit?: string;
+    tagFilter?: string;
+    tokenContractAddress: string;
+    walletAddressFilter?: string;
+  }): Promise<OkxOnchainTrade[]> {
+    return await this.request<OkxOnchainTrade[]>(
+      "GET",
+      "/api/v6/dex/market/trades",
+      {
+        ...params,
+        tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+          params.tokenContractAddress,
+        ),
+      },
+    );
+  }
+
+  async getHistoricalCandles(params: {
+    after?: string;
+    bar?: string;
+    before?: string;
+    chainIndex: string;
+    limit?: string;
+    tokenContractAddress: string;
+  }): Promise<OkxOnchainHistoricalCandle[]> {
+    const result = await this.request<string[][]>(
+      "GET",
+      "/api/v6/dex/market/historical-candles",
+      {
+        ...params,
+        tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+          params.tokenContractAddress,
+        ),
+      },
+    );
+
+    return result.map((row) => ({
+      timestamp: row[0] ?? "",
+      open: row[1] ?? "",
+      high: row[2] ?? "",
+      low: row[3] ?? "",
+      close: row[4] ?? "",
+      volume: row[5] ?? "",
+      volumeUsd: row[6] ?? "",
+      confirm: row[7],
+    }));
+  }
+
+  async getTokenHolders(params: {
+    chainIndex: string;
+    tagFilter?: string;
+    tokenContractAddress: string;
+  }): Promise<OkxOnchainTokenHolder[]> {
+    return await this.request<OkxOnchainTokenHolder[]>(
+      "GET",
+      "/api/v6/dex/market/token/holder",
+      {
+        ...params,
+        tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+          params.tokenContractAddress,
+        ),
+      },
+    );
+  }
+
+  async getTokenRanking(params: {
+    chains: string;
+    sortBy: string;
+    timeFrame: string;
+  }): Promise<OkxOnchainTokenRankingEntry[]> {
+    return await this.request<OkxOnchainTokenRankingEntry[]>(
+      "GET",
+      "/api/v6/dex/market/token/toplist",
+      params,
+    );
+  }
+
+  async getPortfolioOverview(params: {
+    chainIndex: string;
+    timeFrame: string;
+    walletAddress: string;
+  }): Promise<OkxOnchainPortfolioOverview | null> {
+    return await this.request<OkxOnchainPortfolioOverview | null>(
+      "GET",
+      "/api/v6/dex/market/portfolio/overview",
+      params,
+    );
+  }
+
+  async getPortfolioRecentPnl(params: {
+    chainIndex: string;
+    cursor?: string;
+    limit?: string;
+    walletAddress: string;
+  }): Promise<OkxOnchainPortfolioRecentPnlPage> {
+    return await this.request<OkxOnchainPortfolioRecentPnlPage>(
+      "GET",
+      "/api/v6/dex/market/portfolio/recent-pnl",
+      params,
+    );
+  }
+
+  async getPortfolioLatestPnl(params: {
+    chainIndex: string;
+    tokenContractAddress: string;
+    walletAddress: string;
+  }): Promise<OkxOnchainPortfolioLatestPnl | null> {
+    return await this.request<OkxOnchainPortfolioLatestPnl | null>(
+      "GET",
+      "/api/v6/dex/market/portfolio/token/latest-pnl",
+      {
+        ...params,
+        tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+          params.tokenContractAddress,
+        ),
+      },
+    );
+  }
+
+  async getPortfolioDexHistory(params: {
+    begin: string;
+    chainIndex: string;
+    cursor?: string;
+    end: string;
+    limit?: string;
+    tokenContractAddress?: string;
+    type?: string;
+    walletAddress: string;
+  }): Promise<OkxOnchainPortfolioDexHistoryPage> {
+    return await this.request<OkxOnchainPortfolioDexHistoryPage>(
+      "GET",
+      "/api/v6/dex/market/portfolio/dex-history",
+      {
+        ...params,
+        tokenContractAddress: params.tokenContractAddress
+          ? normalizeOkxOnchainRequestTokenAddress(params.tokenContractAddress)
+          : undefined,
+      },
+    );
   }
 
   async getTotalValue(params: {
@@ -476,7 +821,12 @@ export class OkxOnchainClient {
       {
         address: params.address,
         excludeRiskToken: params.includeRisk ? "1" : undefined,
-        tokenContractAddresses: params.tokens,
+        tokenContractAddresses: params.tokens.map((token) => ({
+          ...token,
+          tokenContractAddress: normalizeOkxOnchainRequestTokenAddress(
+            token.tokenContractAddress,
+          ),
+        })),
       },
     );
     return result[0]?.tokenAssets ?? [];
@@ -497,7 +847,12 @@ export class OkxOnchainClient {
     const result = await this.request<OkxOnchainTransactionHistoryPage[]>(
       "GET",
       "/api/v6/dex/post-transaction/transactions-by-address",
-      params,
+      {
+        ...params,
+        tokenContractAddress: params.tokenContractAddress
+          ? normalizeOkxOnchainRequestTokenAddress(params.tokenContractAddress)
+          : undefined,
+      },
     );
 
     const page = result[0];
@@ -567,7 +922,7 @@ export class OkxOnchainClient {
       );
     }
 
-    if (parsed.code !== "0") {
+    if (String(parsed.code) !== "0") {
       throw new Error(
         `OKX Onchain error ${parsed.code}: ${sanitizeText(parsed.msg || "unknown error")}`,
       );

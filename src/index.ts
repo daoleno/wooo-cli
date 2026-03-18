@@ -7,7 +7,7 @@ import {
   type ProtocolGroup,
 } from "./protocols/types";
 
-// Build group commands: wooo cex okx ..., wooo lend aave ..., wooo stake lido ...
+// Build group commands: wooo-cli cex okx ..., wooo-cli lend aave ..., wooo-cli stake lido ...
 const groupCommands: SubCommandsDef = {};
 const groups = listProtocolsByGroup();
 
@@ -31,7 +31,7 @@ for (const [group, protocols] of Object.entries(groups)) {
 
 const main = defineCommand({
   meta: {
-    name: "wooo",
+    name: "wooo-cli",
     version: "0.1.0",
     description: "Crypto All-in-One CLI",
   },
@@ -49,7 +49,7 @@ const main = defineCommand({
   run({ rawArgs }) {
     const hasSubcommand = rawArgs.some((arg) => !arg.startsWith("-"));
     if (!hasSubcommand) {
-      console.log("wooo-cli v0.1.0 — run `wooo --help` for commands");
+      console.log("wooo-cli v0.1.0 — run `wooo-cli --help` for commands");
     }
   },
 });

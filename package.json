@@ -2,9 +2,18 @@
   "name": "wooo-cli",
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "wooo": "./dist/index.mjs"
+  "engines": {
+    "node": ">=20"
   },
+  "bin": {
+    "wooo-cli": "./bin/wooo-cli.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "tsdown src/index.ts --format esm --dts",
@@ -12,7 +21,11 @@
     "lint": "biome check src tests",
     "lint:fix": "biome check --write src tests",
     "test": "bun test",
-    "test:e2e:anvil": "bun test ./tests/e2e/*.e2e.ts"
+    "test:e2e:anvil": "bun test ./tests/e2e/*.e2e.ts",
+    "prepublishOnly": "bun run build && bun run lint && bun run type-check && bun test"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

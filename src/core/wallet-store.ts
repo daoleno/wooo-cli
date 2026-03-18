@@ -8,44 +8,59 @@ import type { WalletMode } from "./signer-protocol";
 import { getSolanaKeypair } from "./solana";
 
 export type WalletType = "evm" | "solana";
-export type RemoteSignerTransport = "command" | "service";
+export type ExternalWalletTransport = "command" | "service" | "broker";
 
 export interface LocalWalletConnection {
   keyRef: string;
   mode: "local";
 }
 
-export interface RemoteCommandWalletConnection {
+export interface ExternalCommandWalletConnection {
   command: string[];
-  mode: "remote";
+  mode: "external";
   transport: "command";
 }
 
-export interface RemoteServiceWalletConnection {
-  mode: "remote";
+export interface ExternalServiceWalletConnection {
+  mode: "external";
   transport: "service";
   url: string;
 }
 
-export type RemoteWalletConnection =
-  | RemoteCommandWalletConnection
-  | RemoteServiceWalletConnection;
+export interface ExternalBrokerWalletConnection {
+  authEnv?: string;
+  mode: "external";
+  transport: "broker";
+  url: string;
+}
 
-export interface RemoteCommandWalletConfig {
+export type ExternalWalletConnection =
+  | ExternalCommandWalletConnection
+  | ExternalServiceWalletConnection
+  | ExternalBrokerWalletConnection;
+
+export interface ExternalCommandWalletConfig {
   command: string[];
   transport: "command";
 }
 
-export interface RemoteServiceWalletConfig {
+export interface ExternalServiceWalletConfig {
   transport: "service";
   url: string;
 }
 
-export type RemoteWalletConfig =
-  | RemoteCommandWalletConfig
-  | RemoteServiceWalletConfig;
+export interface ExternalBrokerWalletConfig {
+  authEnv?: string;
+  transport: "broker";
+  url: string;
+}
 
-export type WalletConnection = LocalWalletConnection | RemoteWalletConnection;
+export type ExternalWalletConfig =
+  | ExternalCommandWalletConfig
+  | ExternalServiceWalletConfig
+  | ExternalBrokerWalletConfig;
+
+export type WalletConnection = LocalWalletConnection | ExternalWalletConnection;
 
 export interface WalletRecord {
   address: string;
@@ -60,7 +75,7 @@ export interface WalletInfo {
   chain: string;
   mode: WalletMode;
   name: string;
-  transport?: RemoteSignerTransport;
+  transport?: ExternalWalletTransport;
 }
 
 interface WalletManifest {
@@ -97,36 +112,51 @@ function toWalletInfo(
     address: wallet.address,
     chain: wallet.chain,
     mode: wallet.connection.mode,
-    ...(wallet.connection.mode === "remote"
+    ...(wallet.connection.mode === "external"
       ? { transport: wallet.connection.transport }
       : {}),
     active: activeName === wallet.name,
   };
 }
 
-function toRemoteWalletConnection(
-  connection: RemoteWalletConfig,
-): RemoteWalletConnection {
+function toExternalWalletConnection(
+  connection: ExternalWalletConfig,
+): ExternalWalletConnection {
   if (connection.transport === "command") {
     if (connection.command.length === 0) {
       throw new Error("Signer command cannot be empty");
     }
 
     return {
-      mode: "remote",
+      mode: "external",
       transport: "command",
       command: [...connection.command],
     };
   }
 
   if (!connection.url.trim()) {
-    throw new Error("Signer service URL cannot be empty");
+    throw new Error(
+      connection.transport === "service"
+        ? "Signer service URL cannot be empty"
+        : "Wallet broker URL cannot be empty",
+    );
+  }
+
+  if (connection.transport === "service") {
+    return {
+      mode: "external",
+      transport: "service",
+      url: connection.url.trim(),
+    };
   }
 
   return {
-    mode: "remote",
-    transport: "service",
+    mode: "external",
+    transport: "broker",
     url: connection.url.trim(),
+    ...(connection.authEnv?.trim()
+      ? { authEnv: connection.authEnv.trim() }
+      : {}),
   };
 }
 
@@ -228,11 +258,11 @@ export class WalletStore {
     });
   }
 
-  async connectRemoteWallet(
+  async connectExternalWallet(
     name: string,
     address: string,
     chain: string,
-    connection: RemoteWalletConfig,
+    connection: ExternalWalletConfig,
   ): Promise<WalletInfo> {
     const walletType = resolveWalletType(chain);
     if (!walletType) {
@@ -243,7 +273,7 @@ export class WalletStore {
       name,
       address: address.trim(),
       chain: walletType,
-      connection: toRemoteWalletConnection(connection),
+      connection: toExternalWalletConnection(connection),
     });
   }
 

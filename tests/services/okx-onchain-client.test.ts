@@ -148,4 +148,135 @@ describe("OKX Onchain client", () => {
       "1,8453",
     );
   });
+
+  test("maps historical candle arrays into structured candle objects", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return Response.json({
+          code: "0",
+          data: [
+            ["1710000000000", "10", "12", "9", "11", "100", "1100", "1"],
+            ["1709999940000", "11", "13", "10", "12", "90", "1000", "0"],
+          ],
+          msg: "",
+        });
+      },
+    });
+
+    try {
+      const client = new OkxOnchainClient({
+        apiKey: "test-api-key",
+        secret: "test-secret",
+        passphrase: "test-passphrase",
+        baseUrl: `http://127.0.0.1:${server.port}`,
+      });
+
+      const candles = await client.getHistoricalCandles({
+        chainIndex: "1",
+        tokenContractAddress: "0x4200000000000000000000000000000000000006",
+        bar: "1m",
+      });
+
+      expect(candles).toEqual([
+        {
+          timestamp: "1710000000000",
+          open: "10",
+          high: "12",
+          low: "9",
+          close: "11",
+          volume: "100",
+          volumeUsd: "1100",
+          confirm: "1",
+        },
+        {
+          timestamp: "1709999940000",
+          open: "11",
+          high: "13",
+          low: "10",
+          close: "12",
+          volume: "90",
+          volumeUsd: "1000",
+          confirm: "0",
+        },
+      ]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("maps portfolio chains and accepts numeric success codes", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+
+        if (url.pathname === "/api/v6/dex/market/portfolio/supported/chain") {
+          return Response.json({
+            code: "0",
+            data: [
+              {
+                chainIndex: "1",
+                chainName: "Ethereum",
+                chainLogo: "https://example.com/eth.png",
+              },
+            ],
+            msg: "",
+          });
+        }
+
+        if (url.pathname === "/api/v6/dex/market/portfolio/token/latest-pnl") {
+          expect(url.searchParams.get("tokenContractAddress")).toBe(
+            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          );
+
+          return Response.json({
+            code: 0,
+            data: {
+              totalPnlUsd: "1371.68",
+              totalPnlPercent: "20.22",
+              isPnlSupported: true,
+            },
+            msg: "",
+          });
+        }
+
+        return Response.json(
+          { code: "404", data: null, msg: "not found" },
+          { status: 404 },
+        );
+      },
+    });
+
+    try {
+      const client = new OkxOnchainClient({
+        apiKey: "test-api-key",
+        secret: "test-secret",
+        passphrase: "test-passphrase",
+        baseUrl: `http://127.0.0.1:${server.port}`,
+      });
+
+      const chains = await client.listPortfolioSupportedChains();
+      const latestPnl = await client.getPortfolioLatestPnl({
+        chainIndex: "1",
+        tokenContractAddress: "0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2",
+        walletAddress: "0xabc",
+      });
+
+      expect(chains).toEqual([
+        {
+          chainIndex: "1",
+          logoUrl: "https://example.com/eth.png",
+          name: "Ethereum",
+        },
+      ]);
+      expect(latestPnl?.totalPnlUsd).toBe("1371.68");
+      expect(latestPnl?.totalPnlPercent).toBe("20.22");
+      expect(latestPnl?.isPnlSupported).toBe(true);
+    } finally {
+      server.stop(true);
+    }
+  });
 });
