@@ -1,5 +1,7 @@
 # wooo-cli
 
+[![npm version](https://img.shields.io/npm/v/wooo-cli?logo=npm)](https://www.npmjs.com/package/wooo-cli)
+
 **All of crypto, one command away — your terminal-native copilot for trading, DeFi, and on-chain execution.**
 
 Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, query Polymarket, or route through the best supported DEX without ever leaving your terminal. wooo-cli brings CEX trading, DeFi, prediction markets, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
