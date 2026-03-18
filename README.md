@@ -473,6 +473,29 @@ bun run lint:fix
 The anvil e2e flow uses a local Ethereum fork and an ephemeral wallet, so it exercises
 real EVM write paths for `chain`, `dex uniswap`, and `lend aave` without using real funds.
 
+## Release
+
+This repo ships two GitHub Actions workflows:
+
+- `.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch. It installs dependencies, runs build/lint/type-check/unit tests, performs `npm pack --dry-run`, and then runs the Anvil fork E2E suite.
+- `.github/workflows/publish.yml` runs on semver tags such as `v0.1.0` and publishes the package to the public npm registry after repeating release verification and Anvil fork E2E.
+
+Release flow:
+
+```bash
+# 1. Bump package.json version
+npm version patch
+
+# 2. Push the branch and semver tag
+git push origin main --follow-tags
+```
+
+The publish workflow verifies that the pushed git tag matches `package.json`.
+
+For npm authentication, configure npm trusted publishing for the
+`publish.yml` workflow. The workflow is set up for GitHub Actions OIDC publishing
+and does not require an `NPM_TOKEN` repository secret.
+
 ## Architecture
 
 wooo-cli is built around a protocol registry plus a shared write-command contract.

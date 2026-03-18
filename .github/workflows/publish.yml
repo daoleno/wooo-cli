@@ -1,0 +1,86 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ANVIL_FORK_URL_ETHEREUM: https://rpc.flashbots.net
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Show tool versions
+        run: |
+          node --version
+          npm --version
+          bun --version
+          anvil --version
+          cast --version
+
+      - name: Verify publish ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Manual publishes must run from the main branch."
+            exit 1
+          fi
+
+      - name: Verify git tag matches package version
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+
+          if [[ "${TAG_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+            echo "Git tag ${GITHUB_REF_NAME} does not match package.json version ${PACKAGE_VERSION}."
+            exit 1
+          fi
+
+      - name: Run release verification
+        run: bun run release:verify
+
+      - name: Run anvil fork e2e
+        run: bun run test:e2e:anvil
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public

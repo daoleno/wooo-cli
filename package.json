@@ -1,7 +1,16 @@
 {
   "name": "wooo-cli",
   "version": "0.1.0",
+  "description": "Terminal-native copilot for trading, DeFi, and on-chain execution.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daoleno/wooo-cli.git"
+  },
+  "homepage": "https://github.com/daoleno/wooo-cli#readme",
+  "bugs": {
+    "url": "https://github.com/daoleno/wooo-cli/issues"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -22,7 +31,10 @@
     "lint:fix": "biome check --write src tests",
     "test": "bun test",
     "test:e2e:anvil": "bun test ./tests/e2e/*.e2e.ts",
-    "prepublishOnly": "bun run build && bun run lint && bun run type-check && bun test"
+    "ci:check": "bun run build && bun run lint && bun run type-check && bun test",
+    "package:check": "npm pack --dry-run",
+    "release:verify": "bun run ci:check && npm run package:check",
+    "prepublishOnly": "bun run release:verify"
   },
   "publishConfig": {
     "access": "public"
