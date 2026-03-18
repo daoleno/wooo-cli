@@ -493,11 +493,14 @@ npm version patch
 git push origin main --follow-tags
 ```
 
-The publish workflow verifies that the pushed git tag matches `package.json`.
+The publish workflow verifies that the pushed git tag matches `package.json`
+and skips the publish step when the target version already exists on npm.
 
 For npm authentication, configure npm trusted publishing for the
 `publish.yml` workflow. The workflow is set up for GitHub Actions OIDC publishing
 and does not require an `NPM_TOKEN` repository secret.
+For the initial package bootstrap and other maintainer release notes, see
+[`docs/release.md`](docs/release.md).
 
 ## Architecture
 
