@@ -2,10 +2,7 @@ import {
   type Cluster,
   Connection,
   clusterApiUrl,
-  Keypair,
-  type PublicKey,
 } from "@solana/web3.js";
-import bs58 from "bs58";
 import { loadWoooConfigSync } from "./config";
 
 const RPC_URLS: Record<string, string> = {
@@ -21,17 +18,4 @@ export function getSolanaConnection(network = "mainnet-beta"): Connection {
     RPC_URLS[network] ||
     clusterApiUrl(network as Cluster);
   return new Connection(url, "confirmed");
-}
-
-export function getSolanaKeypair(privateKey: string): Keypair {
-  // Support both base58 and hex formats
-  if (privateKey.startsWith("0x")) {
-    const bytes = Buffer.from(privateKey.slice(2), "hex");
-    return Keypair.fromSecretKey(bytes);
-  }
-  return Keypair.fromSecretKey(bs58.decode(privateKey));
-}
-
-export function getSolanaAddress(privateKey: string): PublicKey {
-  return getSolanaKeypair(privateKey).publicKey;
 }

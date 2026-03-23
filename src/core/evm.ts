@@ -1,15 +1,11 @@
 import {
-  type Address,
   type Chain,
   createPublicClient,
-  createWalletClient,
   http,
   type PublicClient,
-  type WalletClient,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { arbitrum, base, mainnet, optimism, polygon, tempo } from "viem/chains";
-import { formatSupportedChains, normalizeChainName } from "./chains";
+import { formatSupportedChains, normalizeChainName } from "./chain-ids";
 import { loadWoooConfigSync } from "./config";
 
 export const CHAIN_MAP: Record<string, Chain> = {
@@ -70,22 +66,4 @@ export function getPublicClient(chainName: string): PublicClient {
     chain,
     transport: createHttpTransport(chainName),
   });
-}
-
-export function getWalletClient(
-  privateKey: string,
-  chainName: string,
-): WalletClient {
-  const chain = getChain(chainName);
-  const account = privateKeyToAccount(privateKey as `0x${string}`);
-  return createWalletClient({
-    account,
-    chain,
-    transport: createHttpTransport(chainName),
-  });
-}
-
-export function getAccountAddress(privateKey: string): Address {
-  const account = privateKeyToAccount(privateKey as `0x${string}`);
-  return account.address;
 }
