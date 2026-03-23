@@ -1,119 +1,258 @@
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { getConfigDir } from "./config";
-import { createEvmSigner, createSolanaSigner } from "./signers";
 import {
-  resolveWalletType,
-  type WalletInfo,
-  type WalletRecord,
-  WalletStore,
-  type WalletType,
-} from "./wallet-store";
+  getWallet,
+  listWallets,
+  exportWallet,
+} from "@open-wallet-standard/core";
+import { password } from "@clack/prompts";
+import { loadWoooConfigSync } from "./config";
+import {
+  resolveChainId,
+  getChainFamily,
+  type ChainFamily,
+} from "./chain-ids";
+import { ExternalWalletRegistry } from "./external-wallets";
+import { createSigner, type ResolvedWallet, type WoooSigner } from "./signers";
 
-export function getWalletStore(): WalletStore {
-  return new WalletStore(join(getConfigDir(), "keystore"));
+// ---------------------------------------------------------------------------
+// Config dir helper
+// ---------------------------------------------------------------------------
+
+function getConfigDir(): string {
+  return process.env.WOOO_CONFIG_DIR ?? join(homedir(), ".config", "wooo");
 }
 
-async function getRequiredMasterPassword(): Promise<string> {
-  const password = process.env.WOOO_MASTER_PASSWORD;
-  if (password) {
-    return password;
+// ---------------------------------------------------------------------------
+// Singleton external wallet registry
+// ---------------------------------------------------------------------------
+
+let _externalRegistry: ExternalWalletRegistry | undefined;
+
+export function getExternalWalletRegistry(): ExternalWalletRegistry {
+  if (!_externalRegistry) {
+    _externalRegistry = new ExternalWalletRegistry(getConfigDir());
+  }
+  return _externalRegistry;
+}
+
+// ---------------------------------------------------------------------------
+// Passphrase resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the OWS passphrase for signing operations:
+ *   1. OWS_API_KEY present → agent mode, no passphrase needed → undefined
+ *   2. OWS_PASSPHRASE env set → use it directly
+ *   3. Otherwise → interactive prompt via @clack/prompts
+ */
+export async function resolvePassphrase(): Promise<string | undefined> {
+  // Agent / API-key mode: OWS handles auth internally, no passphrase needed
+  if (process.env.OWS_API_KEY) {
+    return undefined;
   }
 
-  if (!process.stdin.isTTY) {
-    console.error(
-      "Error: Local wallet signing requires an interactive master password prompt, WOOO_MASTER_PASSWORD, or an external wallet.",
-    );
-    process.exit(3);
+  // Explicit passphrase from environment
+  if (process.env.OWS_PASSPHRASE) {
+    return process.env.OWS_PASSPHRASE;
   }
 
-  const clack = await import("@clack/prompts");
-  const value = await clack.password({
-    message: "Enter WOOO master password:",
+  // Interactive prompt
+  const result = await password({
+    message: "Enter wallet passphrase:",
   });
-  if (!value || typeof value === "symbol") {
-    console.error("Error: No master password provided.");
-    process.exit(3);
+
+  if (typeof result === "symbol") {
+    throw new Error("Passphrase input was cancelled");
   }
 
-  return value;
+  return result;
 }
 
-export async function getActiveWallet(
-  requiredType?: WalletType,
-): Promise<WalletInfo> {
-  const store = getWalletStore();
-  const active = await store.getActive();
-  if (!active) {
-    console.error(
-      "No active wallet. Run `wooo-cli wallet generate` for a local wallet or `wooo-cli wallet connect` for an external wallet.",
+// ---------------------------------------------------------------------------
+// Core wallet resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a wallet by name + chain to a ResolvedWallet.
+ *
+ * Resolution order:
+ *   1. OWS vault — matched by chain FAMILY (all eip155:* share the same EVM address)
+ *   2. External wallet registry
+ *
+ * The vault path is passed to every OWS call so it respects WOOO_CONFIG_DIR.
+ */
+export async function resolveWallet(
+  name?: string,
+  chain?: string,
+): Promise<ResolvedWallet> {
+  const config = loadWoooConfigSync();
+  const walletName = name ?? config.default?.wallet ?? "main";
+  const chainAlias = chain ?? config.default?.chain ?? "ethereum";
+  const chainId = resolveChainId(chainAlias);
+  const chainFamily = getChainFamily(chainId);
+  const vaultPath = join(getConfigDir(), "vault");
+
+  // Try OWS vault first
+  try {
+    const owsWallet = getWallet(walletName, vaultPath);
+    // Match by chain family: same EVM address across all eip155:* chains
+    const account = owsWallet.accounts.find(
+      (a) => {
+        try {
+          return getChainFamily(a.chainId) === chainFamily;
+        } catch {
+          return false;
+        }
+      },
     );
-    process.exit(1);
+    if (!account) {
+      throw new Error(
+        `Wallet "${walletName}" has no ${chainFamily} account`,
+      );
+    }
+    return {
+      source: "ows",
+      name: walletName,
+      walletId: owsWallet.id,
+      address: account.address,
+      chainId,
+    };
+  } catch (err) {
+    // If the error is the chain-family mismatch we surfaced ourselves, re-throw
+    if (err instanceof Error && err.message.includes("has no")) {
+      throw err;
+    }
+    // Otherwise assume wallet isn't in OWS — fall through to external registry
   }
 
-  const walletType = resolveWalletType(active.chain);
-  if (!walletType) {
-    console.error(
-      `Unsupported wallet type for "${active.name}": ${active.chain}`,
-    );
-    process.exit(1);
-  }
-  if (requiredType && walletType !== requiredType) {
-    console.error(
-      `Active wallet "${active.name}" is ${walletType}, but this command requires a ${requiredType} wallet.`,
-    );
-    process.exit(1);
-  }
-
-  return active;
-}
-
-export async function getActiveWalletRecord(
-  requiredType?: WalletType,
-): Promise<WalletRecord> {
-  const store = getWalletStore();
-  const active = await getActiveWallet(requiredType);
-  const wallet = await store.get(active.name);
-  if (!wallet) {
-    console.error(`Wallet "${active.name}" not found in wallet store.`);
-    process.exit(1);
-  }
-  return wallet;
-}
-
-export async function getActiveEvmSigner() {
-  const wallet = await getActiveWalletRecord("evm");
-  return createEvmSigner(wallet);
-}
-
-export async function getActiveSolanaSigner() {
-  const wallet = await getActiveWalletRecord("solana");
-  return createSolanaSigner(wallet);
-}
-
-export async function getActiveLocalSecret(
-  requiredType?: WalletType,
-): Promise<string> {
-  const wallet = await getActiveWalletRecord(requiredType);
-  if (wallet.connection.mode !== "local") {
-    console.error(
-      `Wallet "${wallet.name}" is an external wallet and has no local secret to export.`,
-    );
-    process.exit(1);
+  // Try external registry
+  const extWallet = getExternalWalletRegistry().get(walletName);
+  if (extWallet) {
+    if (extWallet.chainType !== chainFamily) {
+      throw new Error(
+        `Wallet "${walletName}" is ${extWallet.chainType}, but chain ${chainAlias} requires ${chainFamily}`,
+      );
+    }
+    return {
+      source: "external",
+      name: walletName,
+      address: extWallet.address,
+      chainId,
+      transport: extWallet.transport,
+    };
   }
 
-  const secret = await getWalletStore().getLocalSecret(
-    wallet.name,
-    await getRequiredMasterPassword(),
+  throw new Error(
+    `Wallet "${walletName}" not found. Run \`wooo wallet generate\` to create a new wallet or \`wooo wallet connect\` to add an external wallet.`,
   );
-  if (!secret) {
-    console.error(
-      `Could not retrieve local secret for wallet "${wallet.name}".`,
-    );
-    process.exit(1);
-  }
-  return secret;
 }
 
-export async function requireMasterPassword(): Promise<string> {
-  return await getRequiredMasterPassword();
+// ---------------------------------------------------------------------------
+// Public helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only wallet info (name + address + chainId) for protocols that only need
+ * an address, without requiring signing capability.
+ */
+export async function getActiveWallet(
+  requiredType?: ChainFamily,
+): Promise<{ name: string; address: string; chainId: string }> {
+  const config = loadWoooConfigSync();
+  const chainAlias = config.default?.chain ?? "ethereum";
+  const wallet = await resolveWallet(undefined, chainAlias);
+
+  if (requiredType) {
+    const family = getChainFamily(wallet.chainId);
+    if (family !== requiredType) {
+      throw new Error(
+        `Active wallet "${wallet.name}" is ${family}, but this command requires a ${requiredType} wallet.`,
+      );
+    }
+  }
+
+  return {
+    name: wallet.name,
+    address: wallet.address,
+    chainId: wallet.chainId,
+  };
+}
+
+/**
+ * Obtain a WoooSigner for signing operations on the active wallet.
+ *
+ * @param chainType - "evm" or "solana"
+ */
+export async function getActiveSigner(
+  chainType: ChainFamily,
+): Promise<WoooSigner> {
+  const config = loadWoooConfigSync();
+  const chainAlias = config.default?.chain ?? "ethereum";
+  const wallet = await resolveWallet(undefined, chainAlias);
+  return createSigner(wallet);
+}
+
+// ---------------------------------------------------------------------------
+// Raw private key export (for x402 / mpp — they need a viem LocalAccount)
+// ---------------------------------------------------------------------------
+
+function ensureHexPrefix(hex: string): `0x${string}` {
+  return (hex.startsWith("0x") ? hex : `0x${hex}`) as `0x${string}`;
+}
+
+/**
+ * Export the raw private key for the active wallet.
+ *
+ * Only available for OWS-managed wallets. External wallets do not expose raw keys.
+ *
+ * - Mnemonic wallets: derive key via @scure/bip32 + @scure/bip39
+ * - Private-key wallets: parse the exported JSON and return the key directly
+ *
+ * @param chainType - "evm" or "solana"
+ */
+export async function getActivePrivateKey(
+  chainType: ChainFamily,
+): Promise<`0x${string}`> {
+  const wallet = await resolveWallet();
+
+  if (wallet.source === "external") {
+    throw new Error(
+      `Raw key export is not available for external wallet "${wallet.name}".`,
+    );
+  }
+
+  const vaultPath = join(getConfigDir(), "vault");
+  const passphrase = await resolvePassphrase();
+  const exported = exportWallet(wallet.name, passphrase, vaultPath);
+
+  // Try JSON (private-key import format: { secp256k1: "...", ed25519: "..." })
+  try {
+    const parsed = JSON.parse(exported) as Record<string, unknown>;
+    if (chainType === "evm" && typeof parsed.secp256k1 === "string") {
+      return ensureHexPrefix(parsed.secp256k1);
+    }
+    if (chainType === "solana" && typeof parsed.ed25519 === "string") {
+      return ensureHexPrefix(parsed.ed25519);
+    }
+  } catch {
+    // Not JSON — treat as mnemonic (fall through)
+  }
+
+  // Derive from mnemonic using BIP-39 / BIP-44
+  if (chainType === "evm") {
+    const { HDKey } = await import("@scure/bip32");
+    const { mnemonicToSeedSync } = await import("@scure/bip39");
+    const seed = mnemonicToSeedSync(exported);
+    const hd = HDKey.fromMasterSeed(seed);
+    const derived = hd.derive("m/44'/60'/0'/0/0");
+    if (!derived.privateKey) {
+      throw new Error("Failed to derive EVM private key from mnemonic");
+    }
+    return `0x${Buffer.from(derived.privateKey).toString("hex")}` as `0x${string}`;
+  }
+
+  throw new Error(
+    `Private key derivation for ${chainType} from mnemonic is not yet supported.`,
+  );
 }
