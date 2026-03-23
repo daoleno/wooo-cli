@@ -4,7 +4,7 @@ import { formatEther, isAddress } from "viem";
 import {
   EVM_OR_SOLANA_CHAIN_HELP_TEXT,
   normalizeChainName,
-} from "../../core/chains";
+} from "../../core/chain-ids";
 import { loadWoooConfig } from "../../core/config";
 import { getActiveWallet } from "../../core/context";
 import { getChain, getPublicClient } from "../../core/evm";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatSupportedChains, normalizeChainName } from "./chains";
+import { formatSupportedChains, normalizeChainName } from "./chain-ids";
 
 // --- Zod Schemas ---
 

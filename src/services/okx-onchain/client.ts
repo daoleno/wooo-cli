@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { normalizeChainName } from "../../core/chains";
+import { normalizeChainName } from "../../core/chain-ids";
 import { loadWoooConfig } from "../../core/config";
 
 const DEFAULT_OKX_ONCHAIN_BASE_URL = "https://web3.okx.com";

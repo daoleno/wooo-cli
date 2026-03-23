@@ -8,7 +8,7 @@ import {
   parseAbi,
 } from "viem";
 import { parseAbiArguments } from "../../core/abi";
-import { evmChainArg, normalizeChainName } from "../../core/chains";
+import { evmChainArg, normalizeChainName } from "../../core/chain-ids";
 import { getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 

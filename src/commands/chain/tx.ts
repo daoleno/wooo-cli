@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { formatEther, formatGwei } from "viem";
-import { evmChainArg, normalizeChainName } from "../../core/chains";
+import { evmChainArg, normalizeChainName } from "../../core/chain-ids";
 import { getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 

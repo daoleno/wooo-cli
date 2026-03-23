@@ -1,6 +1,6 @@
 import ansis from "ansis";
 import { defineCommand } from "citty";
-import { SWAP_CHAIN_HELP_TEXT_WITH_DEFAULT } from "../../core/chains";
+import { SWAP_CHAIN_HELP_TEXT_WITH_DEFAULT } from "../../core/chain-ids";
 import type { ExecutionPlan } from "../../core/execution-plan";
 import {
   validateAmount,

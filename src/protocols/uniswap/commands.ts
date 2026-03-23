@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { evmChainArg, normalizeChainName } from "../../core/chains";
+import { evmChainArg, normalizeChainName } from "../../core/chain-ids";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   validateAmount,

@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { evmChainArg } from "../../core/chains";
+import { evmChainArg } from "../../core/chain-ids";
 import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {

@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { EVM_CHAIN_HELP_TEXT_WITH_DEFAULT } from "../../core/chains";
+import { EVM_CHAIN_HELP_TEXT_WITH_DEFAULT } from "../../core/chain-ids";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";

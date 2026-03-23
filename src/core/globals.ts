@@ -1,4 +1,4 @@
-import { CHAIN_HELP_TEXT_WITH_CONFIG_DEFAULT } from "./chains";
+import { CHAIN_HELP_TEXT_WITH_CONFIG_DEFAULT } from "./chain-ids";
 
 export const globalArgs = {
   json: {
