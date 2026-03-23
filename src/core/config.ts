@@ -2,44 +2,6 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export interface SignerApprovalPolicy {
-  allow?: boolean;
-  allowSpenders?: string[];
-  allowTokens?: string[];
-  denyUnlimited?: boolean;
-  maxAmount?: string;
-}
-
-export interface EvmSignerPolicy {
-  allowChains?: string[];
-  allowContracts?: string[];
-  allowFunctions?: string[];
-  approvals?: SignerApprovalPolicy;
-  denyFunctions?: string[];
-  maxNativeValueWei?: string;
-}
-
-export interface SolanaSignerPolicy {
-  allowNetworks?: string[];
-}
-
-export interface HyperliquidSignerPolicy {
-  allowActions?: string[];
-  allowSymbols?: string[];
-  maxLeverage?: number;
-  maxOrderSizeUsd?: number;
-}
-
-export interface WalletSignerPolicy {
-  allowCommands?: string[];
-  allowProtocols?: string[];
-  autoApprove?: boolean;
-  evm?: EvmSignerPolicy;
-  expiresAt?: string;
-  hyperliquid?: HyperliquidSignerPolicy;
-  solana?: SolanaSignerPolicy;
-}
-
 export interface WoooConfig {
   default?: {
     chain?: string;
@@ -53,7 +15,6 @@ export interface WoooConfig {
     passphrase?: string;
     baseUrl?: string;
   };
-  signerPolicy?: Record<string, WalletSignerPolicy>;
   [protocol: string]: unknown;
 }
 
