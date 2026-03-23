@@ -3,14 +3,15 @@ import { defineCommand } from "citty";
 import { formatEther, isAddress } from "viem";
 import {
   EVM_OR_SOLANA_CHAIN_HELP_TEXT,
+  getChainFamily,
   normalizeChainName,
+  resolveChainId,
 } from "../../core/chain-ids";
 import { loadWoooConfig } from "../../core/config";
 import { getActiveWallet } from "../../core/context";
 import { getChain, getPublicClient } from "../../core/evm";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { getSolanaConnection } from "../../core/solana";
-import { resolveWalletType } from "../../core/wallet-store";
 
 export default defineCommand({
   meta: { name: "balance", description: "Check wallet balance" },
@@ -48,7 +49,8 @@ export default defineCommand({
     } else {
       const active = await getActiveWallet();
       address = active.address;
-      walletType = resolveWalletType(active.chain) || "evm";
+      const family = getChainFamily(active.chainId);
+      walletType = family;
     }
 
     if (walletType === "solana") {
@@ -74,7 +76,15 @@ export default defineCommand({
       args.chain ||
       (configuredDefaultChain &&
       configuredDefaultChain !== "solana" &&
-      resolveWalletType(configuredDefaultChain) === "evm"
+      (() => {
+        try {
+          return (
+            getChainFamily(resolveChainId(configuredDefaultChain)) === "evm"
+          );
+        } catch {
+          return false;
+        }
+      })()
         ? configuredDefaultChain
         : "ethereum");
     const chain = normalizeChainName(chainInput);

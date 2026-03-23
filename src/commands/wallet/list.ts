@@ -1,5 +1,8 @@
+import { join } from "node:path";
+import { listWallets } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
-import { getWalletStore } from "../../core/context";
+import { getConfigDir, loadWoooConfigSync } from "../../core/config";
+import { getExternalWalletRegistry } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
 export default defineCommand({
@@ -9,27 +12,46 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const store = getWalletStore();
-    const wallets = await store.list();
+    const config = loadWoooConfigSync();
+    const activeWalletName = config.default?.wallet ?? "main";
+    const vaultPath = join(getConfigDir(), "vault");
     const outputOptions = resolveOutputOptions(args);
     const out = createOutput(outputOptions);
-    if (wallets.length === 0) {
+
+    // Gather OWS vault wallets
+    const owsWallets = listWallets(vaultPath);
+    const rows: Record<string, unknown>[] = owsWallets.map((w) => {
+      const evmAccount = w.accounts.find((a) =>
+        a.chainId.startsWith("eip155:"),
+      );
+      const firstAccount = evmAccount ?? w.accounts[0];
+      return {
+        name: w.name,
+        address: firstAccount?.address ?? "(none)",
+        source: "ows",
+        chain: firstAccount?.chainId ?? "",
+        active: w.name === activeWalletName,
+      };
+    });
+
+    // Gather external wallets
+    const externalWallets = getExternalWalletRegistry().list();
+    for (const ext of externalWallets) {
+      rows.push({
+        name: ext.name,
+        address: ext.address,
+        source: "external",
+        chain: ext.chainType,
+        active: ext.name === activeWalletName,
+      });
+    }
+
+    if (rows.length === 0) {
       out.warn(
-        "No wallets found. Run `wooo-cli wallet generate` for a local wallet or `wooo-cli wallet connect` for an external wallet.",
+        "No wallets found. Run `wooo wallet create` for a local wallet or `wooo wallet connect` for an external wallet.",
       );
       return;
     }
-    const includeTransport = wallets.some((wallet) => wallet.transport);
-    const rows = wallets.map((wallet) => ({
-      name: wallet.name,
-      address: wallet.address,
-      chain: wallet.chain,
-      mode: wallet.mode,
-      ...(includeTransport && wallet.transport
-        ? { transport: wallet.transport }
-        : {}),
-      active: wallet.active,
-    }));
 
     if (outputOptions.json || outputOptions.format === "json") {
       out.data(rows);
@@ -42,9 +64,7 @@ export default defineCommand({
         active: wallet.active ? "✓" : "",
       })),
       {
-        columns: includeTransport
-          ? ["name", "address", "chain", "mode", "transport", "active"]
-          : ["name", "address", "chain", "mode", "active"],
+        columns: ["name", "address", "source", "chain", "active"],
         title: "Wallets",
       },
     );

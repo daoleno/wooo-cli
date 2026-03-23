@@ -1,16 +1,20 @@
 import { defineCommand } from "citty";
 
 export default defineCommand({
-  meta: { name: "wallet", description: "Manage wallets" },
+  meta: { name: "wallet", description: "Wallet management" },
   subCommands: {
-    "__local-wallet-bridge": () =>
-      import("./__local-wallet-bridge").then((m) => m.default),
-    connect: () => import("./connect").then((m) => m.default),
-    discover: () => import("./discover").then((m) => m.default),
-    generate: () => import("./generate").then((m) => m.default),
+    create: () => import("./create").then((m) => m.default),
     import: () => import("./import").then((m) => m.default),
+    export: () => import("./export").then((m) => m.default),
     list: () => import("./list").then((m) => m.default),
-    balance: () => import("./balance").then((m) => m.default),
+    info: () => import("./info").then((m) => m.default),
+    delete: () => import("./delete").then((m) => m.default),
     switch: () => import("./switch").then((m) => m.default),
+    balance: () => import("./balance").then((m) => m.default),
+    connect: () => import("./connect").then((m) => m.default),
+    disconnect: () => import("./disconnect").then((m) => m.default),
+    discover: () => import("./discover").then((m) => m.default),
+    policy: () => import("./policy/index").then((m) => m.default),
+    key: () => import("./key/index").then((m) => m.default),
   },
 });
