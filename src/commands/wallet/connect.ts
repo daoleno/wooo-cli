@@ -1,7 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { defineCommand } from "citty";
 import { isAddress } from "viem";
-import { getWalletStore } from "../../core/context";
+import { type ChainFamily, isEvmChain, isSolanaChain } from "../../core/chain-ids";
+import { getExternalWalletRegistry } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   fetchSignerBrokerMetadata,
@@ -9,7 +10,18 @@ import {
   normalizeSignerBrokerUrl,
   normalizeSignerServiceUrl,
 } from "../../core/signers";
-import { resolveWalletType } from "../../core/wallet-store";
+
+/**
+ * Resolve a user-supplied chain string like "evm", "eth", "ethereum",
+ * "solana", or "sol" to a ChainFamily.
+ * Returns null if the input cannot be mapped.
+ */
+function resolveChainFamily(input: string): ChainFamily | null {
+  const lower = input.trim().toLowerCase();
+  if (lower === "evm" || isEvmChain(lower)) return "evm";
+  if (lower === "solana" || isSolanaChain(lower)) return "solana";
+  return null;
+}
 
 function parseCommandJson(value: string): string[] {
   let parsed: unknown;
@@ -56,7 +68,7 @@ function selectAdvertisedWallet(
   address?: string,
   chain?: string,
 ): { address: string; chain: "evm" | "solana" } {
-  const requestedChain = chain ? resolveWalletType(chain) : null;
+  const requestedChain = chain ? resolveChainFamily(chain) : null;
   if (chain && !requestedChain) {
     throw new Error(
       `Unsupported wallet type: ${chain}. Available: evm, solana`,
@@ -135,7 +147,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const store = getWalletStore();
+    const registry = getExternalWalletRegistry();
     const hasCommand = Boolean(args.command);
     const hasUrl = Boolean(args.url);
     const hasBrokerUrl = Boolean(args["broker-url"]);
@@ -150,87 +162,71 @@ export default defineCommand({
       throw new Error("--auth-env can only be used with --broker-url");
     }
 
-    const wallet = hasCommand
-      ? await (() => {
-          if (!args.chain || !args.address) {
-            throw new Error(
-              "External wallets using command transport require both --chain and --address",
-            );
-          }
-          if (!args.command) {
-            throw new Error("Missing --command value");
-          }
-          const walletType = resolveWalletType(args.chain);
-          if (!walletType) {
-            throw new Error(
-              `Unsupported wallet type: ${args.chain}. Available: evm, solana`,
-            );
-          }
-          return store.connectExternalWallet(
-            args.name,
-            validateWalletAddress(args.address, walletType),
-            walletType,
-            {
-              transport: "command",
-              command: parseCommandJson(args.command),
-            },
-          );
-        })()
-      : hasBrokerUrl
-        ? await (async () => {
-            if (!args["broker-url"]) {
-              throw new Error("Missing --broker-url value");
-            }
-            const url = normalizeSignerBrokerUrl(args["broker-url"]);
-            const metadata = await fetchSignerBrokerMetadata(
-              url,
-              args["auth-env"],
-            );
-            const selected = selectAdvertisedWallet(
-              metadata.wallets,
-              args.address,
-              args.chain,
-            );
-            return store.connectExternalWallet(
-              args.name,
-              selected.address,
-              selected.chain,
-              {
-                transport: "broker",
-                url,
-                ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
-              },
-            );
-          })()
-        : await (async () => {
-            if (!args.url) {
-              throw new Error("Missing --url value");
-            }
-            const url = normalizeSignerServiceUrl(args.url);
-            const metadata = await fetchSignerServiceMetadata(url);
-            const selected = selectAdvertisedWallet(
-              metadata.wallets,
-              args.address,
-              args.chain,
-            );
-            return store.connectExternalWallet(
-              args.name,
-              selected.address,
-              selected.chain,
-              {
-                transport: "service",
-                url,
-              },
-            );
-          })();
     const out = createOutput(resolveOutputOptions(args));
-    out.data({
-      name: wallet.name,
-      address: wallet.address,
-      chain: wallet.chain,
-      mode: wallet.mode,
-      ...(wallet.transport ? { transport: wallet.transport } : {}),
-      active: wallet.active,
-    });
+
+    if (hasCommand) {
+      if (!args.chain || !args.address) {
+        throw new Error(
+          "External wallets using command transport require both --chain and --address",
+        );
+      }
+      if (!args.command) {
+        throw new Error("Missing --command value");
+      }
+      const chainType = resolveChainFamily(args.chain);
+      if (!chainType) {
+        throw new Error(
+          `Unsupported wallet type: ${args.chain}. Available: evm, solana`,
+        );
+      }
+      const address = validateWalletAddress(args.address, chainType);
+      registry.add({
+        name: args.name,
+        address,
+        chainType,
+        transport: { type: "command", command: parseCommandJson(args.command) },
+      });
+      out.data({ name: args.name, address, chain: chainType, transport: "command" });
+    } else if (hasBrokerUrl) {
+      if (!args["broker-url"]) {
+        throw new Error("Missing --broker-url value");
+      }
+      const url = normalizeSignerBrokerUrl(args["broker-url"]);
+      const metadata = await fetchSignerBrokerMetadata(url, args["auth-env"]);
+      const selected = selectAdvertisedWallet(
+        metadata.wallets,
+        args.address,
+        args.chain,
+      );
+      registry.add({
+        name: args.name,
+        address: selected.address,
+        chainType: selected.chain,
+        transport: {
+          type: "broker",
+          url,
+          ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
+        },
+      });
+      out.data({ name: args.name, address: selected.address, chain: selected.chain, transport: "broker" });
+    } else {
+      if (!args.url) {
+        throw new Error("Missing --url value");
+      }
+      const url = normalizeSignerServiceUrl(args.url);
+      const metadata = await fetchSignerServiceMetadata(url);
+      const selected = selectAdvertisedWallet(
+        metadata.wallets,
+        args.address,
+        args.chain,
+      );
+      registry.add({
+        name: args.name,
+        address: selected.address,
+        chainType: selected.chain,
+        transport: { type: "service", url },
+      });
+      out.data({ name: args.name, address: selected.address, chain: selected.chain, transport: "service" });
+    }
   },
 });
