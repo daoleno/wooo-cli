@@ -12,14 +12,15 @@ import {
   serializeSignerPayload,
 } from "../../src/core/signer-protocol";
 import {
-  createEvmSigner,
-  createSignerChildEnv,
+  createSigner,
+  ExternalSigner,
   fetchSignerBrokerMetadata,
   fetchSignerServiceMetadata,
   normalizeSignerBrokerUrl,
   normalizeSignerServiceUrl,
+  OwsSigner,
+  type ResolvedWallet,
 } from "../../src/core/signers";
-import type { WalletRecord } from "../../src/core/wallet-store";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const TEST_TX_HASH = `0x${"12".repeat(32)}`;
@@ -65,51 +66,47 @@ describe("signers", () => {
     }
   });
 
-  test("createSignerChildEnv strips master password for external wallet transports", () => {
-    const env = createSignerChildEnv({
-      name: "external",
+  test("createSigner creates OwsSigner for ows source", () => {
+    const wallet: ResolvedWallet = {
+      source: "ows",
+      name: "my-wallet",
+      walletId: "wallet-123",
       address: ZERO_ADDRESS,
-      chain: "evm",
-      connection: {
-        mode: "external",
-        transport: "command",
-        command: ["bun", "run", FIXTURE_PATH],
-      },
-    });
-
-    expect(env.WOOO_MASTER_PASSWORD).toBeUndefined();
-    expect(env.WOOO_SIGNER_TEST_VALUE).toBe("signer-visible");
-    expect(env.WOOO_CONFIG_DIR).toBe(tempDir);
-  });
-
-  test("createSignerChildEnv keeps master password for local signer subprocess", () => {
-    const env = createSignerChildEnv({
-      name: "local",
-      address: ZERO_ADDRESS,
-      chain: "evm",
-      connection: {
-        mode: "local",
-        keyRef: "wallet:local",
-      },
-    });
-
-    expect(env.WOOO_MASTER_PASSWORD).toBe("top-secret");
-  });
-
-  test("createEvmSigner invokes the external command signer transport contract", async () => {
-    const wallet: WalletRecord = {
-      name: "external",
-      address: ZERO_ADDRESS,
-      chain: "evm",
-      connection: {
-        mode: "external",
-        transport: "command",
-        command: ["bun", "run", FIXTURE_PATH],
-      },
+      chainId: "eip155:1",
     };
 
-    const signer = createEvmSigner(wallet);
-    const txHash = await signer.writeContract("ethereum", {
+    const signer = createSigner(wallet);
+    expect(signer).toBeInstanceOf(OwsSigner);
+    expect(signer.walletName).toBe("my-wallet");
+    expect(signer.address).toBe(ZERO_ADDRESS);
+  });
+
+  test("createSigner creates ExternalSigner for external source", () => {
+    const wallet: ResolvedWallet = {
+      source: "external",
+      name: "ext-wallet",
+      address: ZERO_ADDRESS,
+      chainId: "eip155:1",
+      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
+    };
+
+    const signer = createSigner(wallet);
+    expect(signer).toBeInstanceOf(ExternalSigner);
+    expect(signer.walletName).toBe("ext-wallet");
+    expect(signer.address).toBe(ZERO_ADDRESS);
+  });
+
+  test("ExternalSigner invokes the external command signer transport for writeContract", async () => {
+    const wallet: ResolvedWallet = {
+      source: "external",
+      name: "external",
+      address: ZERO_ADDRESS,
+      chainId: "eip155:1",
+      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
+    };
+
+    const signer = createSigner(wallet);
+    const txHash = await signer.writeContract("eip155:1", {
       address: ZERO_ADDRESS,
       abi: [] as Abi,
       functionName: "approve",
@@ -137,26 +134,22 @@ describe("signers", () => {
 
     expect(capture.request.kind).toBe("evm-write-contract");
     expect(capture.request.walletName).toBe("external");
-    expect(capture.env.WOOO_MASTER_PASSWORD).toBeNull();
     expect(capture.env.WOOO_SIGNER_TEST_VALUE).toBe("signer-visible");
     expect(capture.env.WOOO_CONFIG_DIR).toBe(tempDir);
   });
 
-  test("createEvmSigner invokes typed data signing over the signer transport", async () => {
-    const wallet: WalletRecord = {
+  test("ExternalSigner invokes typed data signing over the signer transport", async () => {
+    const wallet: ResolvedWallet = {
+      source: "external",
       name: "external",
       address: ZERO_ADDRESS,
-      chain: "evm",
-      connection: {
-        mode: "external",
-        transport: "command",
-        command: ["bun", "run", FIXTURE_PATH],
-      },
+      chainId: "eip155:137",
+      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
     };
 
-    const signer = createEvmSigner(wallet);
+    const signer = createSigner(wallet);
     const signatureHex = await signer.signTypedData(
-      "polygon",
+      "eip155:137",
       {
         domain: {
           name: "ClobAuthDomain",
@@ -176,11 +169,9 @@ describe("signers", () => {
         },
       },
       {
-        origin: {
-          group: "prediction",
-          protocol: "polymarket",
-          command: "auth",
-        },
+        group: "prediction",
+        protocol: "polymarket",
+        command: "auth",
       },
     );
 
@@ -223,7 +214,7 @@ describe("signers", () => {
     ).toThrow(/https/);
   });
 
-  test("createEvmSigner invokes a local signer service", async () => {
+  test("ExternalSigner invokes a local signer service", async () => {
     let capturedRequest: SignerCommandRequest | null = null;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -245,19 +236,19 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "service-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "service",
+        chainId: "eip155:1",
+        transport: {
+          type: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
 
-      const signer = createEvmSigner(wallet);
-      const txHash = await signer.writeContract("ethereum", {
+      const signer = createSigner(wallet);
+      const txHash = await signer.writeContract("eip155:1", {
         address: ZERO_ADDRESS,
         abi: [] as Abi,
         functionName: "approve",
@@ -272,7 +263,7 @@ describe("signers", () => {
     }
   });
 
-  test("createEvmSigner waits for an async local signer service result", async () => {
+  test("ExternalSigner waits for an async local signer service result", async () => {
     process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS = "1";
     process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS = "250";
 
@@ -343,19 +334,19 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "service-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "service",
+        chainId: "eip155:1",
+        transport: {
+          type: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
 
-      const signer = createEvmSigner(wallet);
-      const txHash = await signer.writeContract("ethereum", {
+      const signer = createSigner(wallet);
+      const txHash = await signer.writeContract("eip155:1", {
         address: ZERO_ADDRESS,
         abi: [] as Abi,
         functionName: "approve",
@@ -370,7 +361,7 @@ describe("signers", () => {
     }
   });
 
-  test("createEvmSigner times out when an async signer service never completes", async () => {
+  test("ExternalSigner times out when an async signer service never completes", async () => {
     process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS = "1";
     process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS = "10";
 
@@ -413,21 +404,21 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "service-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "service",
+        chainId: "eip155:1",
+        transport: {
+          type: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
 
-      const signer = createEvmSigner(wallet);
+      const signer = createSigner(wallet);
 
       await expect(
-        signer.writeContract("ethereum", {
+        signer.writeContract("eip155:1", {
           address: ZERO_ADDRESS,
           abi: [] as Abi,
           functionName: "approve",
@@ -439,7 +430,7 @@ describe("signers", () => {
     }
   });
 
-  test("createEvmSigner supports Hyperliquid signatures via a local signer service", async () => {
+  test("ExternalSigner supports Hyperliquid signatures via a local signer service", async () => {
     let capturedRequest: SignerCommandRequest | null = null;
     const signature = {
       r: `0x${"34".repeat(32)}`,
@@ -467,18 +458,18 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "service-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "service",
+        chainId: "eip155:1",
+        transport: {
+          type: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
 
-      const signer = createEvmSigner(wallet);
+      const signer = createSigner(wallet);
       const result = await signer.signHyperliquidL1Action({
         action: {
           type: "order",
@@ -498,7 +489,7 @@ describe("signers", () => {
     }
   });
 
-  test("createEvmSigner supports typed data signatures via a local signer service", async () => {
+  test("ExternalSigner supports typed data signatures via a local signer service", async () => {
     let capturedRequest: SignerCommandRequest | null = null;
 
     const server = Bun.serve({
@@ -521,19 +512,19 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "service-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "service",
+        chainId: "eip155:1",
+        transport: {
+          type: "service",
           url: normalizeSignerServiceUrl(server.url.toString()),
         },
       };
 
-      const signer = createEvmSigner(wallet);
-      const signatureHex = await signer.signTypedData("polygon", {
+      const signer = createSigner(wallet);
+      const signatureHex = await signer.signTypedData("eip155:137", {
         domain: {
           name: "ClobAuthDomain",
           version: "1",
@@ -556,7 +547,7 @@ describe("signers", () => {
     }
   });
 
-  test("createEvmSigner invokes a broker transport with bearer auth", async () => {
+  test("ExternalSigner invokes a broker transport with bearer auth", async () => {
     let capturedAuthHeader: string | null = null;
     let capturedRequest: SignerCommandRequest | null = null;
 
@@ -581,20 +572,20 @@ describe("signers", () => {
     });
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "broker-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "broker",
+        chainId: "eip155:1",
+        transport: {
+          type: "broker",
           url: normalizeSignerBrokerUrl(server.url.toString()),
           authEnv: "WOOO_BROKER_TOKEN",
         },
       };
 
-      const signer = createEvmSigner(wallet);
-      const txHash = await signer.writeContract("ethereum", {
+      const signer = createSigner(wallet);
+      const txHash = await signer.writeContract("eip155:1", {
         address: ZERO_ADDRESS,
         abi: [] as Abi,
         functionName: "approve",

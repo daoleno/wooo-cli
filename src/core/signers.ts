@@ -8,7 +8,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Address, Hash } from "viem";
+import {
+  signAndSend as owsSignAndSend,
+  signMessage as owsSignMessage,
+  signTypedData as owsSignTypedData,
+} from "@open-wallet-standard/core";
+import { password as clackPassword } from "@clack/prompts";
+import { type Hash, type Hex, encodeFunctionData, hexToSignature } from "viem";
+import { getChainFamily, getChainName } from "./chain-ids";
+import type { ExternalTransport } from "./external-wallets";
 import type {
   EvmApprovalRequest,
   EvmContractWriteRequest,
@@ -31,44 +39,305 @@ import {
   isSignerCommandResponse,
   serializeSignerPayload,
 } from "./signer-protocol";
-import type { WalletRecord } from "./wallet-store";
 
-export interface EvmSigner {
-  address: Address;
+// ---------------------------------------------------------------------------
+// ResolvedWallet type
+// ---------------------------------------------------------------------------
+
+export type ResolvedWallet =
+  | {
+      source: "ows";
+      name: string;
+      walletId: string;
+      address: string;
+      chainId: string;
+    }
+  | {
+      source: "external";
+      name: string;
+      address: string;
+      chainId: string;
+      transport: ExternalTransport;
+    };
+
+// ---------------------------------------------------------------------------
+// WoooSigner interface
+// ---------------------------------------------------------------------------
+
+export interface WoooSigner {
+  walletName: string;
+  address: string;
+
+  // EVM operations
   signTypedData(
-    chainName: string,
+    chainId: string,
     request: EvmTypedDataSignRequest,
-    options?: {
-      origin?: SignerRequestOrigin;
-      prompt?: SignerPrompt;
-    },
-  ): Promise<`0x${string}`>;
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+  ): Promise<Hex>;
+  writeContract(
+    chainId: string,
+    request: EvmContractWriteRequest,
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+    approval?: EvmApprovalRequest,
+  ): Promise<Hash>;
+
+  // Solana operations
+  sendTransaction(
+    network: string,
+    serializedTx: string,
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+  ): Promise<string>;
+
+  // Hyperliquid L1 action signing (EIP-712 structured, returns {r, s, v})
   signHyperliquidL1Action(
     request: HyperliquidActionSigningRequest,
     origin?: SignerRequestOrigin,
   ): Promise<HyperliquidActionSignature>;
-  writeContract(
-    chainName: string,
-    request: EvmContractWriteRequest,
-    options?: {
-      approval?: EvmApprovalRequest;
-      origin?: SignerRequestOrigin;
-      prompt?: SignerPrompt;
-    },
-  ): Promise<Hash>;
-}
 
-export interface SolanaSigner {
-  address: string;
-  sendVersionedTransaction(
-    network: string,
-    serializedTransactionBase64: string,
-    options?: {
-      origin?: SignerRequestOrigin;
-      prompt?: SignerPrompt;
-    },
+  // Generic message signing
+  signMessage(
+    chainId: string,
+    message: string,
+    origin?: SignerRequestOrigin,
   ): Promise<string>;
 }
+
+// ---------------------------------------------------------------------------
+// Bigint JSON replacer (for OWS typed data serialization)
+// ---------------------------------------------------------------------------
+
+function bigintReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Passphrase resolution for OWS signer
+// ---------------------------------------------------------------------------
+
+async function resolveOwsPassphrase(): Promise<string | undefined> {
+  // OWS_API_KEY means agent/API access — no passphrase needed
+  if (process.env.OWS_API_KEY) {
+    return undefined;
+  }
+
+  // Explicit passphrase from env
+  if (process.env.OWS_PASSPHRASE) {
+    return process.env.OWS_PASSPHRASE;
+  }
+
+  // Interactive prompt
+  const result = await clackPassword({
+    message: "Enter wallet passphrase:",
+  });
+
+  if (typeof result === "symbol") {
+    throw new Error("Passphrase input was cancelled");
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// OwsSigner — delegates to OWS SDK
+// ---------------------------------------------------------------------------
+
+export class OwsSigner implements WoooSigner {
+  readonly walletName: string;
+  readonly address: string;
+  private readonly walletId: string;
+  private readonly chainId: string;
+  private cachedPassphrase: string | undefined | null = null; // null = not yet resolved
+
+  constructor(wallet: Extract<ResolvedWallet, { source: "ows" }>) {
+    this.walletName = wallet.name;
+    this.address = wallet.address;
+    this.walletId = wallet.walletId;
+    this.chainId = wallet.chainId;
+  }
+
+  private async getPassphrase(): Promise<string | undefined> {
+    if (this.cachedPassphrase !== null) {
+      return this.cachedPassphrase;
+    }
+    this.cachedPassphrase = await resolveOwsPassphrase();
+    return this.cachedPassphrase;
+  }
+
+  async signTypedData(
+    chainId: string,
+    request: EvmTypedDataSignRequest,
+    _origin?: SignerRequestOrigin,
+    _prompt?: SignerPrompt,
+  ): Promise<Hex> {
+    const passphrase = await this.getPassphrase();
+    const family = getChainFamily(chainId);
+    const typedDataJson = JSON.stringify(
+      {
+        domain: request.domain,
+        types: request.types,
+        primaryType: request.primaryType,
+        message: request.message,
+      },
+      bigintReplacer,
+    );
+    const result = owsSignTypedData(
+      this.walletId,
+      family,
+      typedDataJson,
+      passphrase,
+    );
+    return result.signature as Hex;
+  }
+
+  async writeContract(
+    chainId: string,
+    request: EvmContractWriteRequest,
+    _origin?: SignerRequestOrigin,
+    _prompt?: SignerPrompt,
+    _approval?: EvmApprovalRequest,
+  ): Promise<Hash> {
+    const passphrase = await this.getPassphrase();
+    const family = getChainFamily(chainId);
+
+    // Encode the contract call data using Viem
+    const data = encodeFunctionData({
+      abi: request.abi,
+      functionName: request.functionName,
+      args: request.args as unknown[],
+    });
+
+    // Build a raw unsigned transaction object and serialize to hex
+    const txObj: Record<string, unknown> = {
+      to: request.address,
+      data,
+    };
+    if (request.value !== undefined && request.value !== 0n) {
+      txObj.value = `0x${request.value.toString(16)}`;
+    }
+
+    const txHex = JSON.stringify(txObj, bigintReplacer);
+
+    // Get the chain name to look up an RPC URL
+    const chainName = getChainName(chainId);
+
+    const result = owsSignAndSend(
+      this.walletId,
+      family,
+      txHex,
+      passphrase,
+      undefined,
+      undefined, // rpcUrl — OWS resolves from chain
+    );
+    return result.txHash as Hash;
+  }
+
+  async sendTransaction(
+    network: string,
+    serializedTx: string,
+    _origin?: SignerRequestOrigin,
+    _prompt?: SignerPrompt,
+  ): Promise<string> {
+    const passphrase = await this.getPassphrase();
+    const family = getChainFamily(network);
+
+    // Convert base64 to hex for OWS
+    const txBytes = Buffer.from(serializedTx, "base64");
+    const txHex = txBytes.toString("hex");
+
+    const result = owsSignAndSend(
+      this.walletId,
+      family,
+      txHex,
+      passphrase,
+    );
+    return result.txHash;
+  }
+
+  async signHyperliquidL1Action(
+    request: HyperliquidActionSigningRequest,
+    _origin?: SignerRequestOrigin,
+  ): Promise<HyperliquidActionSignature> {
+    const passphrase = await this.getPassphrase();
+
+    // Construct EIP-712 typed data matching Hyperliquid's format
+    const domain = {
+      name: "Exchange",
+      version: "1",
+      chainId: request.sandbox ? 421614 : 42161,
+      verifyingContract: "0x0000000000000000000000000000000000000000",
+    };
+
+    const types: Record<string, Array<{ name: string; type: string }>> = {
+      "HyperliquidTransaction:Approve": [
+        { name: "hyperliquidChain", type: "string" },
+        { name: "destination", type: "string" },
+        { name: "isMainnet", type: "bool" },
+      ],
+    };
+
+    // Determine the primary type based on action
+    const primaryType = "HyperliquidTransaction:Approve";
+
+    const message: Record<string, unknown> = {
+      hyperliquidChain: request.sandbox ? "Testnet" : "Mainnet",
+      destination: request.vaultAddress ?? "a]",
+      isMainnet: !request.sandbox,
+    };
+
+    // Add action-specific fields
+    if (request.action) {
+      for (const [key, value] of Object.entries(request.action)) {
+        message[key] = value;
+      }
+    }
+
+    const typedDataJson = JSON.stringify(
+      { domain, types, primaryType, message },
+      bigintReplacer,
+    );
+
+    const result = owsSignTypedData(
+      this.walletId,
+      "evm",
+      typedDataJson,
+      passphrase,
+    );
+
+    // Parse the hex signature into {r, s, v}
+    const sig = hexToSignature(result.signature as Hex);
+    return {
+      r: sig.r,
+      s: sig.s,
+      v: Number(sig.v),
+    };
+  }
+
+  async signMessage(
+    chainId: string,
+    message: string,
+    _origin?: SignerRequestOrigin,
+  ): Promise<string> {
+    const passphrase = await this.getPassphrase();
+    const family = getChainFamily(chainId);
+    const result = owsSignMessage(
+      this.walletId,
+      family,
+      message,
+      passphrase,
+    );
+    return result.signature;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// External transport helpers (preserved from original signers.ts)
+// ---------------------------------------------------------------------------
 
 interface CommandInvocationPaths {
   dir: string;
@@ -102,25 +371,6 @@ const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
 ]);
 const DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_HTTP_SIGNER_TIMEOUT_MS = 5 * 60 * 1_000;
-
-function getBuiltInSignerCommand(): string[] {
-  const scriptPath = process.argv[1];
-  if (!scriptPath) {
-    throw new Error("Unable to determine current CLI entrypoint");
-  }
-
-  return [process.execPath, scriptPath, "wallet", "__local-wallet-bridge"];
-}
-
-function getSignerCommand(wallet: WalletRecord): string[] {
-  if (
-    wallet.connection.mode === "external" &&
-    wallet.connection.transport === "command"
-  ) {
-    return wallet.connection.command;
-  }
-  return getBuiltInSignerCommand();
-}
 
 function normalizeHttpSignerUrl(
   rawUrl: string,
@@ -320,8 +570,12 @@ export async function fetchSignerBrokerMetadata(
   })) as SignerBrokerMetadata;
 }
 
-export function createSignerChildEnv(
-  wallet: WalletRecord,
+// ---------------------------------------------------------------------------
+// Env isolation for command subprocess
+// ---------------------------------------------------------------------------
+
+function createSignerChildEnv(
+  transport: ExternalTransport,
 ): Record<string, string> {
   const env: Record<string, string> = {};
 
@@ -342,12 +596,15 @@ export function createSignerChildEnv(
     }
   }
 
-  if (wallet.connection.mode === "local" && process.env.WOOO_MASTER_PASSWORD) {
-    env.WOOO_MASTER_PASSWORD = process.env.WOOO_MASTER_PASSWORD;
-  }
+  // Never pass WOOO_MASTER_PASSWORD to external transports
+  // (OWS wallets don't use it; external signers manage their own auth)
 
   return env;
 }
+
+// ---------------------------------------------------------------------------
+// Temp-file invocation paths for command transport
+// ---------------------------------------------------------------------------
 
 function createInvocationPaths(
   request: SignerCommandRequest,
@@ -372,6 +629,10 @@ function readSignerResponse(
 function cleanupInvocationPaths(paths: CommandInvocationPaths): void {
   rmSync(paths.dir, { recursive: true, force: true });
 }
+
+// ---------------------------------------------------------------------------
+// HTTP transport helpers
+// ---------------------------------------------------------------------------
 
 function parsePositiveIntegerEnv(envKey: string, fallback: number): number {
   const value = process.env[envKey];
@@ -533,34 +794,25 @@ async function pollHttpSignerResponse(
 }
 
 async function invokeHttpSigner(
-  wallet: WalletRecord,
+  transport: ExternalTransport & { type: "service" | "broker" },
+  walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
-  if (
-    wallet.connection.mode !== "external" ||
-    (wallet.connection.transport !== "service" &&
-      wallet.connection.transport !== "broker")
-  ) {
-    throw new Error("Wallet is not configured for HTTP signer transport");
-  }
-
   const transportLabel =
-    wallet.connection.transport === "broker"
-      ? "Wallet broker"
-      : "Signer service";
-  const response = await fetch(wallet.connection.url, {
+    transport.type === "broker" ? "Wallet broker" : "Signer service";
+  const authEnv =
+    transport.type === "broker" ? transport.authEnv : undefined;
+
+  const response = await fetch(transport.url, {
     method: "POST",
     headers: createHttpSignerHeaders({
-      authEnv:
-        wallet.connection.transport === "broker"
-          ? wallet.connection.authEnv
-          : undefined,
+      authEnv,
       includeJsonContentType: true,
     }),
     body: serializeSignerPayload(request),
   });
   const parsed = await parseHttpSignerResponse(
-    wallet.connection.url,
+    transport.url,
     response,
     transportLabel,
   );
@@ -570,7 +822,7 @@ async function invokeHttpSigner(
       throw new Error(parsed.error);
     }
     throw new Error(
-      `${transportLabel} at ${wallet.connection.url} returned HTTP ${response.status}`,
+      `${transportLabel} at ${transport.url} returned HTTP ${response.status}`,
     );
   }
 
@@ -578,30 +830,24 @@ async function invokeHttpSigner(
     throw new Error(parsed.error);
   }
 
-  return await pollHttpSignerResponse(wallet.connection.url, parsed, {
-    authEnv:
-      wallet.connection.transport === "broker"
-        ? wallet.connection.authEnv
-        : undefined,
+  return await pollHttpSignerResponse(transport.url, parsed, {
+    authEnv,
     transportLabel,
   });
 }
 
 async function invokeSignerCommand(
-  wallet: WalletRecord,
+  transport: ExternalTransport,
+  walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandResponse> {
-  if (
-    wallet.connection.mode === "external" &&
-    (wallet.connection.transport === "service" ||
-      wallet.connection.transport === "broker")
-  ) {
-    return await invokeHttpSigner(wallet, request);
+  if (transport.type === "service" || transport.type === "broker") {
+    return await invokeHttpSigner(transport, walletName, request);
   }
 
   const paths = createInvocationPaths(request);
   const command = [
-    ...getSignerCommand(wallet),
+    ...transport.command,
     "--request-file",
     paths.requestFile,
     "--response-file",
@@ -610,7 +856,7 @@ async function invokeSignerCommand(
 
   try {
     const child = spawn(command[0], command.slice(1), {
-      env: createSignerChildEnv(wallet),
+      env: createSignerChildEnv(transport),
       stdio: "inherit",
     });
 
@@ -633,102 +879,170 @@ async function invokeSignerCommand(
   }
 }
 
-function toWalletContext(wallet: WalletRecord) {
-  return {
-    name: wallet.name,
-    address: wallet.address,
-    chain: wallet.chain,
-    mode: wallet.connection.mode,
-  } as const;
-}
+// ---------------------------------------------------------------------------
+// ExternalSigner — delegates to external transport (command/service/broker)
+// ---------------------------------------------------------------------------
 
-export function createEvmSigner(wallet: WalletRecord): EvmSigner {
-  return {
-    address: wallet.address as Address,
-    async signTypedData(chainName, request, options) {
-      const response = await invokeSignerCommand(wallet, {
+export class ExternalSigner implements WoooSigner {
+  readonly walletName: string;
+  readonly address: string;
+  private readonly chainId: string;
+  private readonly transport: ExternalTransport;
+
+  constructor(wallet: Extract<ResolvedWallet, { source: "external" }>) {
+    this.walletName = wallet.name;
+    this.address = wallet.address;
+    this.chainId = wallet.chainId;
+    this.transport = wallet.transport;
+  }
+
+  private toWalletContext() {
+    const family = getChainFamily(this.chainId);
+    return {
+      name: this.walletName,
+      address: this.address,
+      chain: family,
+      mode: "external" as const,
+    };
+  }
+
+  async signTypedData(
+    chainId: string,
+    request: EvmTypedDataSignRequest,
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+  ): Promise<Hex> {
+    const chainName = getChainName(chainId);
+    const response = await invokeSignerCommand(
+      this.transport,
+      this.walletName,
+      {
         version: 1,
         kind: "evm-sign-typed-data",
-        wallet: toWalletContext(wallet),
-        origin: options?.origin,
+        wallet: this.toWalletContext(),
+        origin,
         chainName,
         typedData: request,
-        prompt: options?.prompt,
-      });
+        prompt,
+      },
+    );
 
-      if (!response.ok || !("signatureHex" in response)) {
-        throw new Error(
-          response.ok
-            ? "Signer did not return typed data signature"
-            : response.error,
-        );
-      }
-      return response.signatureHex as `0x${string}`;
-    },
-    async writeContract(chainName, request, options) {
-      const response = await invokeSignerCommand(wallet, {
+    if (!response.ok || !("signatureHex" in response)) {
+      throw new Error(
+        response.ok
+          ? "Signer did not return typed data signature"
+          : response.error,
+      );
+    }
+    return response.signatureHex as Hex;
+  }
+
+  async writeContract(
+    chainId: string,
+    request: EvmContractWriteRequest,
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+    approval?: EvmApprovalRequest,
+  ): Promise<Hash> {
+    const chainName = getChainName(chainId);
+    const response = await invokeSignerCommand(
+      this.transport,
+      this.walletName,
+      {
         version: 1,
         kind: "evm-write-contract",
-        wallet: toWalletContext(wallet),
-        origin: options?.origin,
+        wallet: this.toWalletContext(),
+        origin,
         chainName,
         contract: request,
-        approval: options?.approval,
-        prompt: options?.prompt,
-      });
+        approval,
+        prompt,
+      },
+    );
 
-      if (!response.ok || !("txHash" in response)) {
-        throw new Error(
-          response.ok ? "Signer did not return tx hash" : response.error,
-        );
-      }
-      return response.txHash as Hash;
-    },
-    async signHyperliquidL1Action(request, origin) {
-      const response = await invokeSignerCommand(wallet, {
-        version: 1,
-        kind: "hyperliquid-sign-l1-action",
-        wallet: toWalletContext(wallet),
-        origin,
-        request,
-      });
+    if (!response.ok || !("txHash" in response)) {
+      throw new Error(
+        response.ok ? "Signer did not return tx hash" : response.error,
+      );
+    }
+    return response.txHash as Hash;
+  }
 
-      if (!response.ok || !("signature" in response)) {
-        throw new Error(
-          response.ok
-            ? "Signer did not return Hyperliquid signature"
-            : response.error,
-        );
-      }
-      return response.signature;
-    },
-  };
-}
-
-export function createSolanaSigner(wallet: WalletRecord): SolanaSigner {
-  return {
-    address: wallet.address,
-    async sendVersionedTransaction(
-      network,
-      serializedTransactionBase64,
-      options,
-    ) {
-      const response = await invokeSignerCommand(wallet, {
+  async sendTransaction(
+    network: string,
+    serializedTx: string,
+    origin?: SignerRequestOrigin,
+    prompt?: SignerPrompt,
+  ): Promise<string> {
+    const response = await invokeSignerCommand(
+      this.transport,
+      this.walletName,
+      {
         version: 1,
         kind: "solana-send-versioned-transaction",
-        wallet: toWalletContext(wallet),
-        origin: options?.origin,
+        wallet: this.toWalletContext(),
+        origin,
         network,
-        serializedTransactionBase64,
-        prompt: options?.prompt,
-      });
+        serializedTransactionBase64: serializedTx,
+        prompt,
+      },
+    );
 
-      if (!response.ok || !("txHash" in response)) {
-        throw new Error(
-          response.ok ? "Signer did not return tx hash" : response.error,
-        );
-      }
-      return String(response.txHash);
-    },
-  };
+    if (!response.ok || !("txHash" in response)) {
+      throw new Error(
+        response.ok ? "Signer did not return tx hash" : response.error,
+      );
+    }
+    return String(response.txHash);
+  }
+
+  async signHyperliquidL1Action(
+    request: HyperliquidActionSigningRequest,
+    origin?: SignerRequestOrigin,
+  ): Promise<HyperliquidActionSignature> {
+    const response = await invokeSignerCommand(
+      this.transport,
+      this.walletName,
+      {
+        version: 1,
+        kind: "hyperliquid-sign-l1-action",
+        wallet: this.toWalletContext(),
+        origin,
+        request,
+      },
+    );
+
+    if (!response.ok || !("signature" in response)) {
+      throw new Error(
+        response.ok
+          ? "Signer did not return Hyperliquid signature"
+          : response.error,
+      );
+    }
+    return response.signature;
+  }
+
+  async signMessage(
+    chainId: string,
+    message: string,
+    origin?: SignerRequestOrigin,
+  ): Promise<string> {
+    // Sign message is not a standard signer-protocol command yet.
+    // For external signers, we use the typed data path with a simple message wrapper.
+    // This is a placeholder that should be extended when the signer protocol adds message signing.
+    throw new Error(
+      "signMessage is not yet supported for external signer transports",
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createSigner(wallet: ResolvedWallet): WoooSigner {
+  if (wallet.source === "ows") {
+    return new OwsSigner(wallet);
+  }
+  return new ExternalSigner(wallet);
 }
