@@ -10,7 +10,7 @@ import type {
   SignerPrompt,
   SignerRequestOrigin,
 } from "./signer-protocol";
-import type { EvmSigner } from "./signers";
+import type { WoooSigner } from "./signers";
 
 export interface ContractWriteOptions {
   address: Address;
@@ -33,12 +33,12 @@ export class TxGateway {
   constructor(
     private chainName: string,
     private publicClient: PublicClient,
-    private signer: EvmSigner,
+    private signer: WoooSigner,
     private origin?: SignerRequestOrigin,
   ) {}
 
   get account(): Address {
-    return this.signer.address;
+    return this.signer.address as Address;
   }
 
   async waitForReceipt(hash: Hash): Promise<TransactionReceipt> {
@@ -54,7 +54,7 @@ export class TxGateway {
       functionName: options.functionName as never,
       args: (options.args ?? []) as never,
       value: options.value,
-      account: this.signer.address,
+      account: this.signer.address as Address,
     });
 
     const origin = {
@@ -70,11 +70,9 @@ export class TxGateway {
         args: options.args,
         value: options.value,
       },
-      {
-        approval: options.approval,
-        origin,
-        prompt: options.prompt,
-      },
+      origin,
+      options.prompt,
+      options.approval,
     );
     const receipt = await this.waitForReceipt(txHash);
 
@@ -95,7 +93,7 @@ export class TxGateway {
       address: token,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [this.signer.address, spender],
+      args: [this.signer.address as Address, spender],
     })) as bigint;
 
     if (allowance >= amount) {

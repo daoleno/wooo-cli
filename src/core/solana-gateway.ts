@@ -1,6 +1,6 @@
 import type { Connection } from "@solana/web3.js";
 import type { SignerRequestOrigin } from "./signer-protocol";
-import type { SolanaSigner } from "./signers";
+import type { WoooSigner } from "./signers";
 
 export interface SolanaSendTransactionResult {
   status: "confirmed";
@@ -11,24 +11,22 @@ export class SolanaGateway {
   constructor(
     private connection: Connection,
     private network: string,
-    private signer: SolanaSigner,
+    private signer: WoooSigner,
     private origin?: SignerRequestOrigin,
   ) {}
 
   async sendVersionedTransaction(
     serializedTransactionBase64: string,
   ): Promise<SolanaSendTransactionResult> {
-    const txHash = await this.signer.sendVersionedTransaction(
+    const txHash = await this.signer.sendTransaction(
       this.network,
       serializedTransactionBase64,
+      this.origin,
       {
-        origin: this.origin,
-        prompt: {
-          action: `Authorize Solana transaction for ${this.signer.address}`,
-          details: {
-            network: this.network,
-            wallet: this.signer.address,
-          },
+        action: `Authorize Solana transaction for ${this.signer.address}`,
+        details: {
+          network: this.network,
+          wallet: this.signer.address,
         },
       },
     );
