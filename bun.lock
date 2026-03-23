@@ -10,6 +10,7 @@
         "@lidofinance/lido-ethereum-sdk": "^4.7.0",
         "@morpho-org/blue-sdk": "^5.18.0",
         "@morpho-org/blue-sdk-viem": "^4.5.0",
+        "@open-wallet-standard/core": "^1.0.0",
         "@polymarket/clob-client": "^5.8.0",
         "@solana/web3.js": "1",
         "@uniswap/sdk-core": "^7.12.1",
@@ -296,6 +297,16 @@
     "@nomicfoundation/solidity-analyzer-linux-x64-musl": ["@nomicfoundation/solidity-analyzer-linux-x64-musl@0.1.2", "https://registry.npmmirror.com/@nomicfoundation/solidity-analyzer-linux-x64-musl/-/solidity-analyzer-linux-x64-musl-0.1.2.tgz", {}, "sha512-GzzVeeJob3lfrSlDKQw2bRJ8rBf6mEYaWY+gW0JnTDHINA0s2gPR4km5RLIj1xeZZOYz4zRw+AEeYgLRqB2NXg=="],
 
     "@nomicfoundation/solidity-analyzer-win32-x64-msvc": ["@nomicfoundation/solidity-analyzer-win32-x64-msvc@0.1.2", "https://registry.npmmirror.com/@nomicfoundation/solidity-analyzer-win32-x64-msvc/-/solidity-analyzer-win32-x64-msvc-0.1.2.tgz", {}, "sha512-Fdjli4DCcFHb4Zgsz0uEJXZ2K7VEO+w5KVv7HmT7WO10iODdU9csC2az4jrhEsRtiR9Gfd74FlG0NYlw1BMdyA=="],
+
+    "@open-wallet-standard/core": ["@open-wallet-standard/core@1.0.0", "https://registry.npmmirror.com/@open-wallet-standard/core/-/core-1.0.0.tgz", { "optionalDependencies": { "@open-wallet-standard/core-darwin-arm64": "1.0.0", "@open-wallet-standard/core-darwin-x64": "1.0.0", "@open-wallet-standard/core-linux-arm64-gnu": "1.0.0", "@open-wallet-standard/core-linux-x64-gnu": "1.0.0" }, "bin": { "ows": "bin/ows" } }, "sha512-fgA/2QOko9d4wMjRl6d/+bC/qYeP8e4YIJzzLPECAP5bjLbST3co50HHU61jI+JshzXe9KvvixC93i9lmRobMw=="],
+
+    "@open-wallet-standard/core-darwin-arm64": ["@open-wallet-standard/core-darwin-arm64@1.0.0", "https://registry.npmmirror.com/@open-wallet-standard/core-darwin-arm64/-/core-darwin-arm64-1.0.0.tgz", { "os": "darwin", "cpu": "arm64" }, "sha512-2mr22VTm+IQ0w1RKyMCY4BHX3+eb+kAOSYbIQrGm30n1ZLIYhcoAo1HiZfa2raSyPVlIpsEsnHs/w1VrA3Fuxw=="],
+
+    "@open-wallet-standard/core-darwin-x64": ["@open-wallet-standard/core-darwin-x64@1.0.0", "https://registry.npmmirror.com/@open-wallet-standard/core-darwin-x64/-/core-darwin-x64-1.0.0.tgz", { "os": "darwin", "cpu": "x64" }, "sha512-s4Dvu3HxYSTEubUAYsYUNyP2WDzqbEE0C0v/NhP3c48wPq5UKe3JG83aQpZU7Hdxn1rcCNf0TPkuirik74xGtg=="],
+
+    "@open-wallet-standard/core-linux-arm64-gnu": ["@open-wallet-standard/core-linux-arm64-gnu@1.0.0", "https://registry.npmmirror.com/@open-wallet-standard/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.0.0.tgz", { "os": "linux", "cpu": "arm64" }, "sha512-cdFXgSigycW+lh0orfo12cXZIkiZZ3R2XUVaXrJOn8m6wgaa1bk7kyEIHVQCToRPHqFUm76XxX7CLLmji2kflA=="],
+
+    "@open-wallet-standard/core-linux-x64-gnu": ["@open-wallet-standard/core-linux-x64-gnu@1.0.0", "https://registry.npmmirror.com/@open-wallet-standard/core-linux-x64-gnu/-/core-linux-x64-gnu-1.0.0.tgz", { "os": "linux", "cpu": "x64" }, "sha512-8bSkyiIlFSm1SVcbEN1YiSQLvSQMGldJqbCxBlWrMW7esSwXksshIdZ6Jstd3lzrdSSwvU+qFqtzP3Cfa7PZ3g=="],
 
     "@openzeppelin/contracts": ["@openzeppelin/contracts@3.4.2-solc-0.7", "https://registry.npmmirror.com/@openzeppelin/contracts/-/contracts-3.4.2-solc-0.7.tgz", {}, "sha512-W6QmqgkADuFcTLzHL8vVoNBtkwjvQRpYIAom7KiUNoLKghyx3FgH0GBjt8NRvigV1ZmMOBllvE1By1C+bi8WpA=="],
 
