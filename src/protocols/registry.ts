@@ -6,6 +6,7 @@ import { hyperliquidProtocol } from "./hyperliquid/commands";
 import { jupiterProtocol } from "./jupiter/commands";
 import { lidoProtocol } from "./lido/commands";
 import { morphoProtocol } from "./morpho/commands";
+import { mppProtocol } from "./mpp/commands";
 import { okxProtocol } from "./okx/commands";
 import { polymarketProtocol } from "./polymarket/commands";
 import {
@@ -14,6 +15,7 @@ import {
   type ProtocolGroup,
 } from "./types";
 import { uniswapProtocol } from "./uniswap/commands";
+import { x402Protocol } from "./x402/commands";
 
 const protocols: ProtocolDefinition[] = [
   // CEX
@@ -32,6 +34,9 @@ const protocols: ProtocolDefinition[] = [
   aaveProtocol,
   morphoProtocol,
   lidoProtocol,
+  // Payments
+  mppProtocol,
+  x402Protocol,
 ];
 
 export function registerProtocol(protocol: ProtocolDefinition): void {
@@ -59,6 +64,7 @@ export function listProtocolsByGroup(): Record<
     perps: [],
     bridge: [],
     prediction: [],
+    pay: [],
   };
   for (const p of protocols) {
     const group = PROTOCOL_TYPE_TO_GROUP[p.type];

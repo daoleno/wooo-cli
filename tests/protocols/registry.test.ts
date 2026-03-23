@@ -21,6 +21,8 @@ describe("protocol registry", () => {
       "aave",
       "morpho",
       "lido",
+      "mpp",
+      "x402",
     ]);
   });
 
@@ -47,10 +49,14 @@ describe("protocol registry", () => {
     expect(getProtocol("lido")?.type).toBe("staking");
     expect(getProtocol("hyperliquid")?.type).toBe("perps");
     expect(getProtocol("polymarket")?.type).toBe("prediction");
+    expect(getProtocol("mpp")?.type).toBe("payments");
+    expect(getProtocol("x402")?.type).toBe("payments");
     expect(getProtocol("uniswap")?.writeAccountType).toBe("evm");
     expect(getProtocol("jupiter")?.writeAccountType).toBe("solana");
     expect(getProtocol("morpho")?.writeAccountType).toBe("evm");
     expect(getProtocol("polymarket")?.writeAccountType).toBe("evm");
+    expect(getProtocol("mpp")?.writeAccountType).toBe("evm");
+    expect(getProtocol("x402")?.writeAccountType).toBe("evm");
   });
 
   test("listProtocolsByGroup groups correctly", () => {
@@ -66,6 +72,7 @@ describe("protocol registry", () => {
     expect(groups.lend.map((p) => p.name)).toEqual(["aave", "morpho"]);
     expect(groups.stake.map((p) => p.name)).toEqual(["lido"]);
     expect(groups.bridge).toEqual([]);
+    expect(groups.pay.map((p) => p.name)).toEqual(["mpp", "x402"]);
   });
 
   test("getProtocol returns undefined for unknown", () => {

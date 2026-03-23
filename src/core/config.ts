@@ -69,6 +69,7 @@ export const CONFIG_DEFAULTS: WoooConfig = {
     optimism: { rpc: "https://mainnet.optimism.io" },
     polygon: { rpc: "https://polygon-bor-rpc.publicnode.com" },
     base: { rpc: "https://mainnet.base.org" },
+    tempo: { rpc: "https://rpc.presto.tempo.xyz" },
   },
 };
 

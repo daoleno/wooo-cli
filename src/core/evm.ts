@@ -8,7 +8,7 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
+import { arbitrum, base, mainnet, optimism, polygon, tempo } from "viem/chains";
 import { formatSupportedChains, normalizeChainName } from "./chains";
 import { loadWoooConfigSync } from "./config";
 
@@ -18,6 +18,7 @@ export const CHAIN_MAP: Record<string, Chain> = {
   optimism: optimism,
   polygon: polygon,
   base: base,
+  tempo: tempo,
 };
 
 export const EVM_RPC_TIMEOUT_MS = 8_000;

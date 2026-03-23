@@ -34,10 +34,10 @@ export function formatSupportedChains(supported: string[]): string {
 }
 
 export const EVM_CHAIN_HELP_TEXT =
-  "EVM chain, e.g. ethereum|eth, arbitrum|arb, optimism|op, polygon|matic, base";
+  "EVM chain, e.g. ethereum|eth, arbitrum|arb, optimism|op, polygon|matic, base, tempo";
 
 export const EVM_CHAIN_HELP_TEXT_WITH_DEFAULT =
-  "EVM chain, e.g. ethereum|eth, arbitrum|arb, optimism|op, polygon|matic, base (default: ethereum)";
+  "EVM chain, e.g. ethereum|eth, arbitrum|arb, optimism|op, polygon|matic, base, tempo (default: ethereum)";
 
 export const CHAIN_HELP_TEXT_WITH_CONFIG_DEFAULT =
   "Chain, e.g. ethereum|eth, arbitrum|arb, optimism|op, polygon|matic, base, solana|sol (default from config)";

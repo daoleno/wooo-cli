@@ -22,6 +22,8 @@ describe("protocol manifest contract", () => {
       aave: "evm",
       morpho: "evm",
       lido: "evm",
+      mpp: "evm",
+      x402: "evm",
     });
   });
 
