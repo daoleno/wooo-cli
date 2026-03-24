@@ -1,24 +1,24 @@
-# External Wallet Integration Guide
+# Remote Signer Integration Guide
 
-This guide is for teams integrating their own external wallet system with `wooo-cli`.
+This guide is for teams integrating a remote signer with `wooo-cli`.
 
 Use this document when you need to decide:
 
-- how to expose your wallet system as an HTTP signer
-- how to connect it to `wooo-cli`
+- how to expose your signer as an HTTP transport
+- how to advertise remote accounts to `wooo-cli`
 - what security properties the integration must preserve
 - what users can expect when humans and AI both drive the CLI
 
-## What `wooo-cli` Assumes
+## Core Model
 
 `wooo-cli` is the planner and execution router. The signer is the trust boundary.
 
 That means:
 
-- `wooo-cli` may build a request such as "swap USDC to ETH on Uniswap"
-- the signer decides whether the request is allowed
+- `wooo-cli` may prepare a transaction or typed-data payload
+- the signer decides whether that operation is allowed
 - the signer signs or broadcasts locally
-- `wooo-cli` only receives a tx hash or a protocol-specific signature
+- `wooo-cli` only receives a tx hash, hex signature, or protocol-specific signature
 
 This keeps the core safety property intact:
 
@@ -28,26 +28,29 @@ This keeps the core safety property intact:
 
 ## Integration Shape
 
-External wallets connect via an HTTP signer. The signer endpoint:
+Remote accounts connect via an HTTP signer transport. The signer endpoint:
 
-1. Exposes `GET /` to return signer metadata (advertised wallets, supported request kinds)
-2. Accepts `POST /` with a JSON signer request
+1. Exposes `GET /` to return transport metadata
+2. Accepts `POST /` with a JSON request
 3. Either completes immediately or returns `pending` plus a `requestId`
 4. If `pending`, exposes `GET /requests/:requestId` so `wooo-cli` can poll for completion
 5. Enforces approval or policy before signing
-6. Returns a terminal JSON response (tx hash, signature, or error)
+6. Returns a terminal JSON response
 
 Authentication is optional. When configured, `wooo-cli` reads a bearer token from an environment variable and sends it as `Authorization: Bearer <token>`.
+
+Use a dedicated env name that matches `WOOO_SIGNER_AUTH_*`, for example `WOOO_SIGNER_AUTH_TOKEN`.
 
 ## Fastest Path To A Working Integration
 
 1. Expose an HTTP endpoint.
-2. Implement `GET /` to return signer metadata.
-3. Implement `POST /` to accept the signer request JSON.
-4. Either complete immediately or return `pending` plus a `requestId`.
-5. If `pending`, implement `GET /requests/:requestId` for polling.
-6. Coordinate the real wallet approval in your backend/frontend/app.
-7. Return the terminal signer response JSON.
+2. Implement `GET /` to return transport metadata.
+3. Implement `POST /` to accept request JSON.
+4. Respect `clientRequestId` as an idempotency key for repeated `POST /` calls.
+5. Either complete immediately or return `pending` plus a `requestId`.
+6. If `pending`, implement `GET /requests/:requestId` for polling.
+7. Coordinate the real approval flow in your backend, frontend, wallet app, or hardware device.
+8. Return a terminal signer response JSON.
 
 Discover and connect:
 
@@ -62,15 +65,16 @@ With authentication:
 ```bash
 wooo-cli wallet connect remote-signer \
   --signer https://signer.example.com/ \
-  --auth-env SIGNER_TOKEN
+  --auth-env WOOO_SIGNER_AUTH_TOKEN
 ```
 
-If the signer advertises multiple wallets, specify one explicitly:
+If the signer advertises multiple accounts, specify one explicitly:
 
 ```bash
 wooo-cli wallet connect my-signer \
   --signer http://127.0.0.1:8787/ \
-  --address 0xabc123...
+  --address 0xabc123... \
+  --chain evm
 ```
 
 ## Metadata Discovery
@@ -80,47 +84,57 @@ The signer must expose metadata on `GET /`:
 ```json
 {
   "version": 1,
-  "kind": "wooo-signer",
-  "supportedKinds": [
-    "evm-sign-typed-data",
-    "evm-write-contract",
-    "hyperliquid-sign-l1-action",
-    "solana-send-versioned-transaction"
-  ],
-  "wallets": [
-    { "address": "0xabc123...", "chain": "evm" }
+  "kind": "wooo-wallet-transport",
+  "transport": "http-signer",
+  "accounts": [
+    {
+      "address": "0xabc123...",
+      "chainFamily": "evm",
+      "operations": [
+        "sign-typed-data",
+        "sign-and-send-transaction",
+        "sign-protocol-payload"
+      ]
+    }
   ]
 }
 ```
 
-## Request / Response Contract
+The key design change is that capabilities are account-scoped, not signer-scoped.
 
-All requests and responses use JSON. See the request kind examples below.
+## Operation Contract
 
-**Supported request kinds:**
+All requests and responses use JSON.
 
-| Kind | Use Case |
-|------|----------|
-| `evm-sign-typed-data` | EIP-712 signing (Polymarket auth, etc.) |
-| `evm-write-contract` | EVM contract writes |
-| `solana-send-versioned-transaction` | Solana transaction submission |
-| `hyperliquid-sign-l1-action` | Hyperliquid L1 action signing |
+Supported operations:
 
-**Response shapes:**
+| Operation | Use Case |
+|----------|----------|
+| `sign-typed-data` | EIP-712 signing such as Polymarket auth |
+| `sign-and-send-transaction` | EVM or Solana transaction execution |
+| `sign-protocol-payload` | Protocol-specific signing such as Hyperliquid L1 actions |
+
+Response shapes:
 
 | Response | When |
 |----------|------|
-| `{ "ok": true, "status": "pending", "requestId": "..." }` | Async, poll later |
-| `{ "ok": true, "txHash": "0x..." }` | EVM/Solana execution success |
-| `{ "ok": true, "signatureHex": "0x..." }` | EIP-712 signing success |
-| `{ "ok": true, "signature": { "r": "0x...", "s": "0x...", "v": 27 } }` | Hyperliquid signing success |
+| `{ "ok": true, "status": "pending", "requestId": "..." }` | Async approval, poll later |
+| `{ "ok": true, "txHash": "0x..." }` | Transaction execution success |
+| `{ "ok": true, "signatureHex": "0x..." }` | Typed-data signing success |
+| `{ "ok": true, "signature": { "r": "0x...", "s": "0x...", "v": 27 } }` | Protocol payload signing success |
 | `{ "ok": false, "error": "..." }` | Rejection or failure |
 
-`bigint` values in request payloads use tagged encoding: `{ "$type": "bigint", "value": "1000000000000000000" }`.
+`bigint` values in request payloads use tagged encoding:
+
+```json
+{ "$type": "bigint", "value": "1000000000000000000" }
+```
+
+See the formal wire contract in [Wallet Transport Protocol](./wallet-transport.md).
 
 ## User Experience After Integration
 
-Once connected, the wallet works transparently:
+Once connected, the remote account works transparently:
 
 ```bash
 wooo-cli wallet switch my-signer
@@ -136,10 +150,10 @@ This is true whether the command is launched by a human, a script, or an AI agen
 An integration is aligned with the intended model when:
 
 1. `wooo-cli` never receives raw private keys, seed phrases, or wallet backups
-2. The signer enforces its own allowlist, rate limits, policy, or human approval
-3. Signer auth authorizes request creation, not implicit signing
-4. Rejections are fail-closed — malformed or unsupported requests return errors
-5. Audit logs are kept on the signer side
+2. the signer enforces its own allowlist, rate limits, policy, or human approval
+3. signer auth authorizes request creation, not implicit signing
+4. rejections are fail-closed; malformed or unsupported requests return errors
+5. audit logs are kept on the signer side
 
 ## Reference Implementations
 
@@ -148,4 +162,4 @@ This repo includes two reference implementations:
 - local signer service: [src/examples/signer-service.ts](../src/examples/signer-service.ts)
 - async signer example: [src/examples/async-signer.ts](../src/examples/async-signer.ts)
 
-The async signer example is intentionally a coordinator, not the signing key holder. It demonstrates metadata discovery, authenticated request creation, async `pending` polling, and out-of-band request resolution.
+The async signer example is intentionally a coordinator, not the signing key holder. It demonstrates metadata discovery, authenticated request creation, async `pending` polling, idempotent request handling, and out-of-band request resolution.

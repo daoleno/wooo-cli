@@ -50,8 +50,8 @@ async function main(): Promise<void> {
             WOOO_SIGNER_TEST_VALUE: process.env.WOOO_SIGNER_TEST_VALUE ?? null,
           },
           request: {
-            kind: request.kind,
-            walletName: request.wallet.name,
+            accountLabel: request.account.label ?? null,
+            operation: request.operation,
           },
         },
         null,
@@ -61,9 +61,9 @@ async function main(): Promise<void> {
   }
 
   const response: SignerCommandResponse =
-    request.kind === "hyperliquid-sign-l1-action"
+    request.operation === "sign-protocol-payload"
       ? { ok: true, signature: TEST_SIGNATURE }
-      : request.kind === "evm-sign-typed-data"
+      : request.operation === "sign-typed-data"
         ? { ok: true, signatureHex: TEST_SIGNATURE_HEX }
         : { ok: true, txHash: TEST_TX_HASH };
 

@@ -22,14 +22,14 @@ src/
 ├── core/                 # Shared infrastructure
 │   ├── chain-ids.ts      # CAIP-2 chain identifiers and aliases
 │   ├── config.ts         # Configuration loading (c12)
-│   ├── context.ts        # Active wallet / signer resolution (OWS + external registry)
+│   ├── context.ts        # Active wallet / account-port resolution (OWS + remote account registry)
 │   ├── evm.ts            # Shared EVM clients (viem)
 │   ├── execution-plan.ts # Machine-readable dry-run contract
 │   ├── exchange-gateway.ts # Thin execution wrapper for exchange APIs
-│   ├── external-wallets.ts # External wallet registry (HTTP signer-based)
+│   ├── external-wallets.ts # Remote account registry (HTTP signer-based)
 │   ├── output.ts         # Structured output (table, JSON)
-│   ├── signer-protocol.ts # External wallet request / response contract
-│   ├── signers.ts        # WoooSigner interface (OWS local + HTTP signer external)
+│   ├── signer-protocol.ts # Remote wallet transport request / response contract
+│   ├── signers.ts        # WalletPort interface (OWS local + HTTP signer remote)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
 │   ├── solana.ts         # Shared Solana connection
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
@@ -173,27 +173,27 @@ Local wallets are managed by the Open Wallet Standard (OWS) SDK:
 - Audit log at `~/.ows/logs/audit.jsonl`
 - Authentication: passphrase (interactive or `OWS_PASSPHRASE`) or API key (`OWS_API_KEY`) for agent access
 
-### External Wallets (HTTP Signer)
+### Remote Accounts (HTTP Signer)
 
-External wallets connect via an HTTP signer:
+Remote accounts connect via an HTTP signer:
 
 - Registered with `wooo wallet connect <name> --signer <url> [--auth-env VAR]`
-- Stored in `~/.config/wooo/external-wallets.json` (address + signer URL only, no keys)
-- Signing happens via HTTP POST to the signer, which returns tx hash or signature
-- Async support via pending/polling pattern for browser-wallet or app-wallet approval flows
-- Auth token resolved from environment variable, never persisted in config
+- Stored in `~/.config/wooo/remote-accounts.json` (address + signer URL only, no keys)
+- Discovery is account-scoped: the signer advertises accounts and supported operations
+- Execution happens via HTTP `POST /`, which returns a tx hash, hex signature, or structured signature
+- Async support uses the pending/polling pattern for browser-wallet or app-wallet approval flows
+- Auth token is resolved from an environment variable and is never persisted in config
 
-### Unified Signer Interface
+### Unified Wallet Port
 
-Both wallet types expose the same `WoooSigner` interface:
+Both wallet types expose the same `WalletPort` execution surface:
 
 - `signTypedData()` — EIP-712 signing
-- `writeContract()` — EVM contract writes
-- `sendTransaction()` — Solana transactions
-- `signHyperliquidL1Action()` — Hyperliquid L1 actions
+- `signAndSendTransaction()` — EVM or Solana transaction execution
+- `signProtocolPayload()` — protocol-specific signing escape hatch
 
-Protocol code uses `getActiveSigner("evm")` or `getActiveSigner("solana")` and does not
-need to know whether the wallet is local or external.
+Protocol code uses `getActiveWalletPort("evm")` or `getActiveWalletPort("solana")`
+and does not need to know whether the account is local or remote.
 
 ### EVM
 
@@ -202,7 +202,7 @@ need to know whether the wallet is local or external.
 - `CHAIN_MAP`
 - `getPublicClient(chain)`
 
-EVM write protocols use `TxGateway` on top of `getPublicClient()` plus a `WoooSigner`.
+EVM write protocols use `TxGateway` on top of `getPublicClient()` plus a `WalletPort`.
 
 ### Solana
 
@@ -210,7 +210,7 @@ EVM write protocols use `TxGateway` on top of `getPublicClient()` plus a `WoooSi
 
 - `getSolanaConnection()`
 
-Solana write protocols use `SolanaGateway` plus a `WoooSigner`.
+Solana write protocols use `SolanaGateway` plus a `WalletPort`.
 
 ### Exchange APIs
 

@@ -3,7 +3,7 @@
  *
  * This demonstrates the external signer service protocol. The service exposes
  * two endpoints:
- *   GET  /  → SignerServiceMetadata  (advertise wallets and supported kinds)
+ *   GET  /  → transport metadata (advertise accounts and operations)
  *   POST /  → SignerCommandResponse  (execute a signing request)
  *
  * The actual signing logic is left as a TODO — replace the stub below with
@@ -40,7 +40,7 @@ function parseChain(args: string[]): "evm" | "solana" {
   if (!raw || raw === "evm") return "evm";
   if (raw === "solana") return "solana";
   throw new Error(
-    `Unsupported signer service wallet type: ${raw}. Use evm or solana.`,
+    `Unsupported signer service chain family: ${raw}. Use evm or solana.`,
   );
 }
 
@@ -61,16 +61,22 @@ function createMetadata(
 ): HttpSignerMetadata {
   return {
     version: 1,
-    kind: "wooo-signer",
-    wallets: [{ address, chain }],
-    supportedKinds:
-      chain === "evm"
-        ? [
-            "evm-sign-typed-data",
-            "evm-write-contract",
-            "hyperliquid-sign-l1-action",
-          ]
-        : ["solana-send-versioned-transaction"],
+    kind: "wooo-wallet-transport",
+    transport: "http-signer",
+    accounts: [
+      {
+        address,
+        chainFamily: chain,
+        operations:
+          chain === "evm"
+            ? [
+                "sign-typed-data",
+                "sign-and-send-transaction",
+                "sign-protocol-payload",
+              ]
+            : ["sign-and-send-transaction"],
+      },
+    ],
   };
 }
 
@@ -78,9 +84,9 @@ function createMetadata(
  * TODO: Replace this stub with your actual signing implementation.
  *
  * The request contains all the information needed to sign:
- *   - request.kind — the type of signing operation
- *   - request.wallet — the target wallet (address + chain)
- *   - request-specific fields (e.g. request.tx for evm-write-contract)
+ *   - request.operation — the type of wallet operation
+ *   - request.account — the target account (address + chain family)
+ *   - request-specific fields (e.g. request.transaction for sign-and-send)
  *
  * Return a SignerCommandResponse with ok: true and the result, or ok: false
  * and an error message if the request is rejected.
@@ -90,7 +96,7 @@ async function handleSignerRequest(
 ): Promise<SignerCommandResponse> {
   // Example: reject everything — replace with real signing logic.
   console.error(
-    `Received ${request.kind} request for ${request.wallet.chain}:${request.wallet.address}`,
+    `Received ${request.operation} request for ${request.account.chainFamily}:${request.account.address}`,
   );
   return {
     ok: false,
@@ -157,7 +163,7 @@ async function main(): Promise<void> {
   });
 
   console.error(`Reference signer service listening on http://${host}:${port}`);
-  console.error(`Advertised wallet: ${chain}:${address}`);
+  console.error(`Advertised account: ${chain}:${address}`);
 
   await new Promise(() => {});
   server.close();

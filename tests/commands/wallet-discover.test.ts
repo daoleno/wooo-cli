@@ -24,14 +24,15 @@ describe("wallet discover command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer",
-            wallets: [
+            kind: "wooo-wallet-transport",
+            transport: "http-signer",
+            accounts: [
               {
                 address: ZERO_ADDRESS,
-                chain: "evm",
+                chainFamily: "evm",
+                operations: ["sign-and-send-transaction"],
               },
             ],
-            supportedKinds: ["evm-write-contract"],
           }),
           {
             headers: {
@@ -75,17 +76,22 @@ describe("wallet discover command", () => {
       const output = JSON.parse(stdout) as {
         kind: string;
         signerUrl: string;
-        supportedKinds: string[];
-        wallets: Array<{ address: string; chain: string }>;
+        transport: string;
+        accounts: Array<{
+          address: string;
+          chainFamily: string;
+          operations: string[];
+        }>;
       };
 
-      expect(output.kind).toBe("wooo-signer");
-      expect(output.supportedKinds).toEqual(["evm-write-contract"]);
+      expect(output.kind).toBe("wooo-wallet-transport");
+      expect(output.transport).toBe("http-signer");
       expect(output.signerUrl).toBe(server.url.toString());
-      expect(output.wallets).toEqual([
+      expect(output.accounts).toEqual([
         {
           address: ZERO_ADDRESS,
-          chain: "evm",
+          chainFamily: "evm",
+          operations: ["sign-and-send-transaction"],
         },
       ]);
     } finally {
@@ -103,14 +109,15 @@ describe("wallet discover command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer",
-            wallets: [
+            kind: "wooo-wallet-transport",
+            transport: "http-signer",
+            accounts: [
               {
                 address: ZERO_ADDRESS,
-                chain: "evm",
+                chainFamily: "evm",
+                operations: ["sign-and-send-transaction"],
               },
             ],
-            supportedKinds: ["evm-write-contract"],
           }),
           {
             headers: {
@@ -132,14 +139,14 @@ describe("wallet discover command", () => {
           "--signer",
           server.url.toString(),
           "--auth-env",
-          "WOOO_SIGNER_TOKEN",
+          "WOOO_SIGNER_AUTH_TOKEN",
           "--json",
         ],
         cwd: process.cwd(),
         env: {
           ...process.env,
           WOOO_CONFIG_DIR: tempDir,
-          WOOO_SIGNER_TOKEN: "signer-token-test",
+          WOOO_SIGNER_AUTH_TOKEN: "signer-token-test",
         },
         stderr: "pipe",
         stdout: "pipe",
@@ -159,16 +166,23 @@ describe("wallet discover command", () => {
         authEnv?: string;
         kind: string;
         signerUrl: string;
-        wallets: Array<{ address: string; chain: string }>;
+        transport: string;
+        accounts: Array<{
+          address: string;
+          chainFamily: string;
+          operations: string[];
+        }>;
       };
 
-      expect(output.kind).toBe("wooo-signer");
-      expect(output.authEnv).toBe("WOOO_SIGNER_TOKEN");
+      expect(output.kind).toBe("wooo-wallet-transport");
+      expect(output.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
+      expect(output.transport).toBe("http-signer");
       expect(output.signerUrl).toBe(server.url.toString());
-      expect(output.wallets).toEqual([
+      expect(output.accounts).toEqual([
         {
           address: ZERO_ADDRESS,
-          chain: "evm",
+          chainFamily: "evm",
+          operations: ["sign-and-send-transaction"],
         },
       ]);
     } finally {

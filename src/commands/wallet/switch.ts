@@ -7,7 +7,7 @@ import {
   getConfigDir,
   getConfigPath,
 } from "../../core/config";
-import { getExternalWalletRegistry } from "../../core/context";
+import { getRemoteAccountRegistry } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 
 export default defineCommand({
@@ -24,7 +24,7 @@ export default defineCommand({
   async run({ args }) {
     const vaultPath = join(getConfigDir(), "vault");
 
-    // Validate wallet exists in OWS vault or external registry
+    // Validate wallet exists in OWS vault or remote account registry
     let found = false;
     try {
       getWallet(args.name, vaultPath);
@@ -34,7 +34,7 @@ export default defineCommand({
     }
 
     if (!found) {
-      const ext = getExternalWalletRegistry().get(args.name);
+      const ext = getRemoteAccountRegistry().get(args.name);
       if (ext) {
         found = true;
       }
@@ -42,7 +42,7 @@ export default defineCommand({
 
     if (!found) {
       console.error(
-        `Wallet "${args.name}" not found in OWS vault or external wallets.`,
+        `Wallet "${args.name}" not found in the OWS vault or remote accounts.`,
       );
       process.exit(1);
     }

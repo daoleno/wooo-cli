@@ -1,6 +1,6 @@
 import { type Address, formatUnits, parseUnits } from "viem";
 import { getPublicClient } from "../../core/evm";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import {
   ERC20_ABI,
@@ -23,7 +23,7 @@ type EvmPublicClient = ReturnType<typeof getPublicClient>;
 export class UniswapClient {
   constructor(
     private chain: string,
-    private signer?: WoooSigner,
+    private signer?: WalletPort,
   ) {}
 
   /**

@@ -4,7 +4,7 @@ import type {
   HyperliquidActionSignature,
   HyperliquidActionSigningRequest,
 } from "../../core/signer-protocol";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import type {
   HyperliquidFunding,
   HyperliquidOrderResult,
@@ -83,16 +83,16 @@ export class HyperliquidClient {
   private address?: string;
   private command?: string;
   private exchange: HyperliquidExchangeInternal;
-  private signer?: WoooSigner;
+  private signer?: WalletPort;
 
-  constructor(address?: string, signer?: WoooSigner, command?: string) {
+  constructor(address?: string, signer?: WalletPort, command?: string) {
     this.address = address;
     this.command = command;
     this.exchange = createExchange(address);
     this.signer = signer;
   }
 
-  private requireSigner(): WoooSigner {
+  private requireSigner(): WalletPort {
     if (!this.signer) {
       throw new Error("Hyperliquid write operation requires an active signer");
     }
@@ -106,11 +106,18 @@ export class HyperliquidClient {
   private async signAction(
     request: HyperliquidActionSigningRequest,
   ): Promise<HyperliquidActionSignature> {
-    return await this.requireSigner().signHyperliquidL1Action(request, {
-      group: "perps",
-      protocol: "hyperliquid",
-      command: this.command,
-    });
+    const result = await this.requireSigner().signProtocolPayload(
+      {
+        protocol: "hyperliquid",
+        payload: request,
+      },
+      {
+        group: "perps",
+        protocol: "hyperliquid",
+        command: this.command,
+      },
+    );
+    return result.signature;
   }
 
   private async submitAction(

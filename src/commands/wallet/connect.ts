@@ -8,10 +8,14 @@ import {
 } from "../../core/chain-ids";
 import {
   bootstrapDefaultWallet,
-  getExternalWalletRegistry,
+  getRemoteAccountRegistry,
 } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { fetchSignerMetadata, normalizeSignerUrl } from "../../core/signers";
+import {
+  fetchSignerMetadata,
+  normalizeSignerUrl,
+  validateSignerAuthEnv,
+} from "../../core/signers";
 
 /**
  * Resolve a user-supplied chain string like "evm", "eth", "ethereum",
@@ -43,26 +47,34 @@ function validateWalletAddress(
   }
 }
 
-function selectAdvertisedWallet(
-  wallets: Array<{ address: string; chain: "evm" | "solana" }>,
+function selectAdvertisedAccount(
+  accounts: Array<{
+    address: string;
+    chainFamily: "evm" | "solana";
+    operations: string[];
+  }>,
   address?: string,
   chain?: string,
-): { address: string; chain: "evm" | "solana" } {
+): {
+  address: string;
+  chainFamily: "evm" | "solana";
+  operations: string[];
+} {
   const requestedChain = chain ? resolveChainFamily(chain) : null;
   if (chain && !requestedChain) {
     throw new Error(
-      `Unsupported wallet type: ${chain}. Available: evm, solana`,
+      `Unsupported chain family: ${chain}. Available: evm, solana`,
     );
   }
 
-  const matching = wallets.filter((wallet) => {
+  const matching = accounts.filter((account) => {
     if (
       address &&
-      wallet.address !== validateWalletAddress(address, wallet.chain)
+      account.address !== validateWalletAddress(address, account.chainFamily)
     ) {
       return false;
     }
-    if (requestedChain && wallet.chain !== requestedChain) {
+    if (requestedChain && account.chainFamily !== requestedChain) {
       return false;
     }
     return true;
@@ -70,13 +82,13 @@ function selectAdvertisedWallet(
 
   if (matching.length === 0) {
     throw new Error(
-      "The configured signer endpoint did not advertise a wallet matching the requested address/chain",
+      "The configured signer endpoint did not advertise an account matching the requested address/chain family",
     );
   }
 
   if (matching.length > 1) {
     throw new Error(
-      "The configured signer endpoint advertised multiple matching wallets. Provide --address or --chain to choose one explicitly.",
+      "The configured signer endpoint advertised multiple matching accounts. Provide --address or --chain to choose one explicitly.",
     );
   }
 
@@ -86,7 +98,7 @@ function selectAdvertisedWallet(
 export default defineCommand({
   meta: {
     name: "connect",
-    description: "Connect an external wallet over HTTP signer transport",
+    description: "Connect a remote account over HTTP signer transport",
   },
   args: {
     name: {
@@ -111,13 +123,13 @@ export default defineCommand({
     chain: {
       type: "string",
       description:
-        "Wallet chain type: evm, solana. Optional when signer discovery yields one match",
+        "Account chain family: evm, solana. Optional when signer discovery yields one match",
     },
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const registry = getExternalWalletRegistry();
+    const registry = getRemoteAccountRegistry();
 
     if (!args.signer) {
       throw new Error("Missing --signer value");
@@ -126,24 +138,26 @@ export default defineCommand({
     const out = createOutput(resolveOutputOptions(args));
 
     const url = normalizeSignerUrl(args.signer);
-    const metadata = await fetchSignerMetadata(url, args["auth-env"]);
-    const selected = selectAdvertisedWallet(
-      metadata.wallets,
+    const authEnv = validateSignerAuthEnv(args["auth-env"]);
+    const metadata = await fetchSignerMetadata(url, authEnv);
+    const selected = selectAdvertisedAccount(
+      metadata.accounts,
       args.address,
       args.chain,
     );
     registry.add({
-      name: args.name,
+      label: args.name,
       address: selected.address,
-      chainType: selected.chain,
+      chainFamily: selected.chainFamily,
       signerUrl: url,
-      ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
+      ...(authEnv ? { authEnv } : {}),
     });
     bootstrapDefaultWallet(args.name);
     out.data({
       name: args.name,
       address: selected.address,
-      chain: selected.chain,
+      chainFamily: selected.chainFamily,
+      operations: selected.operations,
       signerUrl: url,
     });
   },

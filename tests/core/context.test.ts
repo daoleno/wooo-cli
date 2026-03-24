@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWallet, getWallet } from "@open-wallet-standard/core";
 import { getConfigPath, getVaultPath } from "../../src/core/config";
-import { getActiveSigner, getActiveWallet } from "../../src/core/context";
+import { getActiveWallet, getActiveWalletPort } from "../../src/core/context";
 
 describe("context wallet resolution", () => {
   const originalEnv = {
@@ -31,7 +31,7 @@ describe("context wallet resolution", () => {
     }
   });
 
-  test("getActiveSigner and getActiveWallet honor the requested chain family", async () => {
+  test("getActiveWalletPort and getActiveWallet honor the requested chain family", async () => {
     const vaultPath = getVaultPath(tempDir);
     createWallet("main", "test-passphrase", 12, vaultPath);
     writeFileSync(
@@ -52,9 +52,9 @@ describe("context wallet resolution", () => {
       account.chainId.startsWith("eip155:"),
     );
 
-    const solanaSigner = await getActiveSigner("solana");
+    const solanaSigner = await getActiveWalletPort("solana");
     const solanaWallet = await getActiveWallet("solana");
-    const evmSigner = await getActiveSigner("evm");
+    const evmSigner = await getActiveWalletPort("evm");
 
     expect(solanaSigner.address).toBe(solanaAccount?.address);
     expect(solanaWallet.address).toBe(solanaAccount?.address);

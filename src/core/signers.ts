@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import {
   signAndSend as owsSignAndSend,
   signTypedData as owsSignTypedData,
 } from "@open-wallet-standard/core";
-import { encodeFunctionData, type Hash, type Hex } from "viem";
+import { serializeTransaction, type Address, type Hash, type Hex } from "viem";
 import { getChainFamily, getChainName } from "./chain-ids";
+import { getPublicClient, getRpcUrlForChain } from "./evm";
 import { signHyperliquidL1Action } from "./hyperliquid-signing";
 import {
   ensureHexPrefix,
@@ -11,17 +13,17 @@ import {
   resolveOwsPassphrase,
 } from "./ows";
 import type {
-  EvmApprovalRequest,
-  EvmContractWriteRequest,
+  ApprovalPrompt,
   EvmTypedDataSignRequest,
   HttpSignerMetadata,
-  HyperliquidActionSignature,
-  HyperliquidActionSigningRequest,
+  ProtocolPayloadRequest,
+  ProtocolPayloadSignature,
   SignerCommandRequest,
   SignerCommandResponse,
   SignerCommandTerminalResponse,
-  SignerPrompt,
-  SignerRequestOrigin,
+  TransactionExecutionRequest,
+  TransactionIntent,
+  WalletOperationContext,
 } from "./signer-protocol";
 import {
   deserializeSignerPayload,
@@ -31,63 +33,56 @@ import {
 } from "./signer-protocol";
 
 // ---------------------------------------------------------------------------
-// ResolvedWallet type
+// ResolvedAccount type
 // ---------------------------------------------------------------------------
 
-export type ResolvedWallet =
+export type ResolvedAccount =
   | {
-      source: "ows";
-      name: string;
-      walletId: string;
       address: string;
+      chainFamily: "evm" | "solana";
       chainId: string;
+      custody: "local";
+      label: string;
+      walletId: string;
       vaultPath: string;
     }
   | {
-      source: "external";
-      name: string;
       address: string;
-      chainId: string;
-      signerUrl: string;
       authEnv?: string;
+      chainFamily: "evm" | "solana";
+      chainId: string;
+      custody: "remote";
+      label: string;
+      signerUrl: string;
     };
 
 // ---------------------------------------------------------------------------
-// WoooSigner interface
+// WalletPort interface
 // ---------------------------------------------------------------------------
 
-export interface WoooSigner {
-  walletName: string;
+export interface WalletPort {
+  accountLabel: string;
   address: string;
 
-  // EVM operations
   signTypedData(
     chainId: string,
     request: EvmTypedDataSignRequest,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
+    context?: WalletOperationContext,
+    prompt?: ApprovalPrompt,
   ): Promise<Hex>;
-  writeContract(
+
+  signAndSendTransaction(
     chainId: string,
-    request: EvmContractWriteRequest,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
-    approval?: EvmApprovalRequest,
-  ): Promise<Hash>;
+    request: TransactionExecutionRequest,
+    context?: WalletOperationContext,
+    prompt?: ApprovalPrompt,
+    intent?: TransactionIntent,
+  ): Promise<Hash | string>;
 
-  // Solana operations
-  sendTransaction(
-    network: string,
-    serializedTx: string,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
-  ): Promise<string>;
-
-  // Hyperliquid L1 action signing (EIP-712 structured, returns {r, s, v})
-  signHyperliquidL1Action(
-    request: HyperliquidActionSigningRequest,
-    origin?: SignerRequestOrigin,
-  ): Promise<HyperliquidActionSignature>;
+  signProtocolPayload(
+    request: ProtocolPayloadRequest,
+    context?: WalletOperationContext,
+  ): Promise<ProtocolPayloadSignature>;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,23 +141,59 @@ function stringifyTypedData(request: EvmTypedDataSignRequest): string {
   );
 }
 
+async function serializeUnsignedEvmTransaction(
+  chainId: string,
+  from: Address,
+  request: Extract<TransactionExecutionRequest, { format: "evm-transaction" }>,
+): Promise<string> {
+  const chainName = getChainName(chainId);
+  if (chainName === chainId) {
+    throw new Error(
+      `Unsupported EVM chain ID for local OWS execution: ${chainId}`,
+    );
+  }
+
+  const publicClient = getPublicClient(chainName);
+  const nonce = await publicClient.getTransactionCount({
+    address: from,
+  });
+  const gas = await publicClient.estimateGas({
+    account: from,
+    to: request.to,
+    data: ensureHexPrefix(request.data),
+    value: request.value,
+  });
+  const gasPrice = await publicClient.getGasPrice();
+  const serialized = serializeTransaction({
+    type: "eip1559",
+    chainId: Number.parseInt(chainId.split(":")[1] ?? "", 10),
+    nonce,
+    gas,
+    maxFeePerGas: gasPrice,
+    maxPriorityFeePerGas: 0n,
+    to: request.to,
+    data: ensureHexPrefix(request.data),
+    value: request.value,
+  });
+
+  return serialized.startsWith("0x") ? serialized.slice(2) : serialized;
+}
+
 // ---------------------------------------------------------------------------
 // OwsSigner — delegates to OWS SDK
 // ---------------------------------------------------------------------------
 
-export class OwsSigner implements WoooSigner {
-  readonly walletName: string;
+export class OwsSigner implements WalletPort {
+  readonly accountLabel: string;
   readonly address: string;
   private readonly walletId: string;
-  private readonly chainId: string;
   private readonly vaultPath: string;
   private cachedPassphrase: string | undefined | null = null; // null = not yet resolved
 
-  constructor(wallet: Extract<ResolvedWallet, { source: "ows" }>) {
-    this.walletName = wallet.name;
+  constructor(wallet: Extract<ResolvedAccount, { custody: "local" }>) {
+    this.accountLabel = wallet.label;
     this.address = wallet.address;
     this.walletId = wallet.walletId;
-    this.chainId = wallet.chainId;
     this.vaultPath = wallet.vaultPath;
   }
 
@@ -177,8 +208,8 @@ export class OwsSigner implements WoooSigner {
   async signTypedData(
     chainId: string,
     request: EvmTypedDataSignRequest,
-    _origin?: SignerRequestOrigin,
-    _prompt?: SignerPrompt,
+    _context?: WalletOperationContext,
+    _prompt?: ApprovalPrompt,
   ): Promise<Hex> {
     const passphrase = await this.getPassphrase();
     const family = getChainFamily(chainId);
@@ -194,59 +225,47 @@ export class OwsSigner implements WoooSigner {
     return ensureHexPrefix(result.signature) as Hex;
   }
 
-  async writeContract(
+  async signAndSendTransaction(
     chainId: string,
-    request: EvmContractWriteRequest,
-    _origin?: SignerRequestOrigin,
-    _prompt?: SignerPrompt,
-    _approval?: EvmApprovalRequest,
-  ): Promise<Hash> {
+    request: TransactionExecutionRequest,
+    _context?: WalletOperationContext,
+    _prompt?: ApprovalPrompt,
+    _intent?: TransactionIntent,
+  ): Promise<Hash | string> {
     const passphrase = await this.getPassphrase();
     const family = getChainFamily(chainId);
-
-    // Encode the contract call data using Viem
-    const data = encodeFunctionData({
-      abi: request.abi,
-      functionName: request.functionName,
-      args: request.args as unknown[],
-    });
-
-    // Build a raw unsigned transaction object and serialize to hex
-    const txObj: Record<string, unknown> = {
-      to: request.address,
-      data,
-    };
-    if (request.value !== undefined && request.value !== 0n) {
-      txObj.value = `0x${request.value.toString(16)}`;
+    if (family === "evm") {
+      if (request.format !== "evm-transaction") {
+        throw new Error(
+          `Expected an evm-transaction request for chain ${chainId}, received ${request.format}.`,
+        );
+      }
+      const txHex = await serializeUnsignedEvmTransaction(
+        chainId,
+        this.address as Address,
+        request,
+      );
+      const chainName = getChainName(chainId);
+      const result = owsSignAndSend(
+        this.walletId,
+        family,
+        txHex,
+        passphrase,
+        undefined,
+        getRpcUrlForChain(chainName),
+        this.vaultPath,
+      );
+      return result.txHash as Hash;
     }
 
-    const txHex = JSON.stringify(txObj, bigintReplacer);
+    if (request.format !== "solana-versioned-transaction") {
+      throw new Error(
+        `Expected a solana-versioned-transaction request for chain ${chainId}, received ${request.format}.`,
+      );
+    }
 
-    const result = owsSignAndSend(
-      this.walletId,
-      family,
-      txHex,
-      passphrase,
-      undefined,
-      undefined, // rpcUrl — OWS resolves from chain
-      this.vaultPath,
-    );
-    return result.txHash as Hash;
-  }
-
-  async sendTransaction(
-    network: string,
-    serializedTx: string,
-    _origin?: SignerRequestOrigin,
-    _prompt?: SignerPrompt,
-  ): Promise<string> {
-    const passphrase = await this.getPassphrase();
-    const family = getChainFamily(network);
-
-    // Convert base64 to hex for OWS
-    const txBytes = Buffer.from(serializedTx, "base64");
+    const txBytes = Buffer.from(request.serializedTransactionBase64, "base64");
     const txHex = txBytes.toString("hex");
-
     const result = owsSignAndSend(
       this.walletId,
       family,
@@ -259,18 +278,25 @@ export class OwsSigner implements WoooSigner {
     return result.txHash;
   }
 
-  async signHyperliquidL1Action(
-    request: HyperliquidActionSigningRequest,
-    _origin?: SignerRequestOrigin,
-  ): Promise<HyperliquidActionSignature> {
+  async signProtocolPayload(
+    request: ProtocolPayloadRequest,
+    _context?: WalletOperationContext,
+  ): Promise<ProtocolPayloadSignature> {
+    if (request.protocol !== "hyperliquid") {
+      throw new Error(`Unsupported protocol payload: ${request.protocol}`);
+    }
+
     const passphrase = await this.getPassphrase();
     const privateKey = await exportOwsPrivateKey(
-      this.walletName,
+      this.accountLabel,
       "evm",
       this.vaultPath,
       passphrase,
     );
-    return signHyperliquidL1Action(privateKey, request);
+    return {
+      protocol: "hyperliquid",
+      signature: signHyperliquidL1Action(privateKey, request.payload),
+    };
   }
 }
 
@@ -284,14 +310,16 @@ const LOCAL_SIGNER_SERVICE_HOSTS = new Set([
   "[::1]",
   "localhost",
 ]);
-const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
-  "evm-sign-typed-data",
-  "evm-write-contract",
-  "hyperliquid-sign-l1-action",
-  "solana-send-versioned-transaction",
+const SUPPORTED_SIGNER_OPERATIONS = new Set<SignerCommandRequest["operation"]>([
+  "sign-and-send-transaction",
+  "sign-protocol-payload",
+  "sign-typed-data",
 ]);
+const SIGNER_AUTH_ENV_PATTERN = /^WOOO_SIGNER_AUTH_[A-Z0-9_]*$/;
 const DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_HTTP_SIGNER_TIMEOUT_MS = 5 * 60 * 1_000;
+const DEFAULT_HTTP_SIGNER_REQUEST_TIMEOUT_MS = 30_000;
+const HTTP_SIGNER_INITIAL_REQUEST_MAX_ATTEMPTS = 2;
 
 export function normalizeSignerUrl(rawUrl: string): string {
   let url: URL;
@@ -326,45 +354,64 @@ function isHttpSignerMetadata(value: unknown): value is HttpSignerMetadata {
   }
 
   const metadata = value as {
+    accounts?: unknown;
     kind?: unknown;
-    supportedKinds?: unknown;
+    transport?: unknown;
     version?: unknown;
-    wallets?: unknown;
   };
 
   return (
     metadata.version === 1 &&
-    metadata.kind === "wooo-signer" &&
-    Array.isArray(metadata.supportedKinds) &&
-    metadata.supportedKinds.every(
-      (item) =>
-        typeof item === "string" &&
-        SUPPORTED_SIGNER_REQUEST_KINDS.has(
-          item as SignerCommandRequest["kind"],
+    metadata.kind === "wooo-wallet-transport" &&
+    metadata.transport === "http-signer" &&
+    Array.isArray(metadata.accounts) &&
+    metadata.accounts.every(
+      (account) =>
+        account &&
+        typeof account === "object" &&
+        !Array.isArray(account) &&
+        "address" in account &&
+        typeof account.address === "string" &&
+        "chainFamily" in account &&
+        (account.chainFamily === "evm" || account.chainFamily === "solana") &&
+        "operations" in account &&
+        Array.isArray(account.operations) &&
+        account.operations.every(
+          (item: unknown) =>
+            typeof item === "string" &&
+            SUPPORTED_SIGNER_OPERATIONS.has(
+              item as SignerCommandRequest["operation"],
+            ),
         ),
-    ) &&
-    Array.isArray(metadata.wallets) &&
-    metadata.wallets.every(
-      (wallet) =>
-        wallet &&
-        typeof wallet === "object" &&
-        !Array.isArray(wallet) &&
-        "address" in wallet &&
-        typeof wallet.address === "string" &&
-        "chain" in wallet &&
-        (wallet.chain === "evm" || wallet.chain === "solana"),
     )
   );
 }
 
-function resolveAuthToken(authEnv?: string): string | null {
+export function validateSignerAuthEnv(authEnv?: string): string | undefined {
   if (!authEnv) {
+    return undefined;
+  }
+
+  if (!SIGNER_AUTH_ENV_PATTERN.test(authEnv)) {
+    throw new Error(
+      `Signer auth env "${authEnv}" is not allowed. Use a dedicated env name that matches ${SIGNER_AUTH_ENV_PATTERN.source}.`,
+    );
+  }
+
+  return authEnv;
+}
+
+function resolveAuthToken(authEnv?: string): string | null {
+  const validatedAuthEnv = validateSignerAuthEnv(authEnv);
+  if (!validatedAuthEnv) {
     return null;
   }
 
-  const value = process.env[authEnv];
+  const value = process.env[validatedAuthEnv];
   if (!value?.trim()) {
-    throw new Error(`Signer auth env "${authEnv}" is not set or is empty.`);
+    throw new Error(
+      `Signer auth env "${validatedAuthEnv}" is not set or is empty.`,
+    );
   }
 
   return value.trim();
@@ -395,7 +442,7 @@ export async function fetchSignerMetadata(
   authEnv?: string,
 ): Promise<HttpSignerMetadata> {
   const url = normalizeSignerUrl(rawUrl);
-  const response = await fetch(url, {
+  const response = await fetchHttpSigner(url, {
     method: "GET",
     headers: createHttpSignerHeaders({ authEnv }),
   });
@@ -419,8 +466,8 @@ export async function fetchSignerMetadata(
     throw new Error("Signer returned an invalid metadata payload");
   }
 
-  if (parsed.wallets.length === 0) {
-    throw new Error("Signer did not advertise any wallets");
+  if (parsed.accounts.length === 0) {
+    throw new Error("Signer did not advertise any accounts");
   }
 
   return parsed;
@@ -458,6 +505,13 @@ function getHttpSignerTimeoutMs(): number {
   );
 }
 
+function getHttpSignerRequestTimeoutMs(): number {
+  return parsePositiveIntegerEnv(
+    "WOOO_HTTP_SIGNER_REQUEST_TIMEOUT_MS",
+    DEFAULT_HTTP_SIGNER_REQUEST_TIMEOUT_MS,
+  );
+}
+
 function createHttpSignerRequestStatusUrl(
   endpointUrl: string,
   requestId: string,
@@ -476,6 +530,50 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+class HttpSignerTransportError extends Error {
+  readonly retryable: boolean;
+
+  constructor(message: string, options?: { retryable?: boolean }) {
+    super(message);
+    this.name = "HttpSignerTransportError";
+    this.retryable = options?.retryable ?? false;
+  }
+}
+
+async function fetchHttpSigner(
+  url: string,
+  init: RequestInit,
+  transportLabel = "HTTP signer",
+): Promise<Response> {
+  const timeoutMs = getHttpSignerRequestTimeoutMs();
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new HttpSignerTransportError(
+        `${transportLabel} at ${url} timed out after ${timeoutMs}ms`,
+        { retryable: true },
+      );
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new HttpSignerTransportError(
+      `${transportLabel} at ${url} failed: ${message}`,
+      { retryable: true },
+    );
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 async function parseHttpSignerResponse(
@@ -559,12 +657,16 @@ async function pollHttpSignerResponse(
       endpointUrl,
       pendingResponse.requestId,
     );
-    const response = await fetch(statusUrl, {
-      method: "GET",
-      headers: createHttpSignerHeaders({
-        authEnv: options?.authEnv,
-      }),
-    });
+    const response = await fetchHttpSigner(
+      statusUrl,
+      {
+        method: "GET",
+        headers: createHttpSignerHeaders({
+          authEnv: options?.authEnv,
+        }),
+      },
+      transportLabel,
+    );
     const parsed = await parseHttpSignerResponse(
       statusUrl,
       response,
@@ -592,90 +694,107 @@ async function pollHttpSignerResponse(
 async function invokeHttpSigner(
   signerUrl: string,
   authEnv: string | undefined,
-  _walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
   const transportLabel = "HTTP signer";
+  let attempt = 0;
 
-  const response = await fetch(signerUrl, {
-    method: "POST",
-    headers: createHttpSignerHeaders({
-      authEnv,
-      includeJsonContentType: true,
-    }),
-    body: serializeSignerPayload(request),
-  });
-  const parsed = await parseHttpSignerResponse(
-    signerUrl,
-    response,
-    transportLabel,
-  );
+  while (true) {
+    attempt += 1;
 
-  if (!response.ok) {
-    if (!parsed.ok) {
-      throw new Error(parsed.error);
+    try {
+      const response = await fetchHttpSigner(
+        signerUrl,
+        {
+          method: "POST",
+          headers: createHttpSignerHeaders({
+            authEnv,
+            includeJsonContentType: true,
+          }),
+          body: serializeSignerPayload(request),
+        },
+        transportLabel,
+      );
+      const parsed = await parseHttpSignerResponse(
+        signerUrl,
+        response,
+        transportLabel,
+      );
+
+      if (!response.ok) {
+        if (!parsed.ok) {
+          throw new Error(parsed.error);
+        }
+        throw new Error(
+          `${transportLabel} at ${signerUrl} returned HTTP ${response.status}`,
+        );
+      }
+
+      if (!parsed.ok) {
+        throw new Error(parsed.error);
+      }
+
+      return await pollHttpSignerResponse(signerUrl, parsed, {
+        authEnv,
+        transportLabel,
+      });
+    } catch (error) {
+      if (
+        error instanceof HttpSignerTransportError &&
+        error.retryable &&
+        attempt < HTTP_SIGNER_INITIAL_REQUEST_MAX_ATTEMPTS
+      ) {
+        continue;
+      }
+
+      throw error;
     }
-    throw new Error(
-      `${transportLabel} at ${signerUrl} returned HTTP ${response.status}`,
-    );
   }
-
-  if (!parsed.ok) {
-    throw new Error(parsed.error);
-  }
-
-  return await pollHttpSignerResponse(signerUrl, parsed, {
-    authEnv,
-    transportLabel,
-  });
 }
 
 // ---------------------------------------------------------------------------
 // ExternalSigner — delegates to external HTTP transport
 // ---------------------------------------------------------------------------
 
-export class ExternalSigner implements WoooSigner {
-  readonly walletName: string;
+export class ExternalSigner implements WalletPort {
+  readonly accountLabel: string;
   readonly address: string;
-  private readonly chainId: string;
+  private readonly chainFamily: "evm" | "solana";
   private readonly signerUrl: string;
   private readonly authEnv: string | undefined;
 
-  constructor(wallet: Extract<ResolvedWallet, { source: "external" }>) {
-    this.walletName = wallet.name;
+  constructor(wallet: Extract<ResolvedAccount, { custody: "remote" }>) {
+    this.accountLabel = wallet.label;
     this.address = wallet.address;
-    this.chainId = wallet.chainId;
-    this.signerUrl = wallet.signerUrl;
-    this.authEnv = wallet.authEnv;
+    this.chainFamily = wallet.chainFamily;
+    this.signerUrl = normalizeSignerUrl(wallet.signerUrl);
+    this.authEnv = validateSignerAuthEnv(wallet.authEnv);
   }
 
-  private toWalletContext() {
-    const family = getChainFamily(this.chainId);
+  private toAccountRef() {
     return {
-      name: this.walletName,
       address: this.address,
-      chain: family,
-      mode: "external" as const,
+      chainFamily: this.chainFamily,
+      label: this.accountLabel,
     };
   }
 
   async signTypedData(
     chainId: string,
     request: EvmTypedDataSignRequest,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
+    context?: WalletOperationContext,
+    prompt?: ApprovalPrompt,
   ): Promise<Hex> {
-    const chainName = getChainName(chainId);
     const response = await invokeHttpSigner(
       this.signerUrl,
       this.authEnv,
-      this.walletName,
       {
+        clientRequestId: randomUUID(),
         version: 1,
-        kind: "evm-sign-typed-data",
-        wallet: this.toWalletContext(),
-        origin,
-        chainName,
+        operation: "sign-typed-data",
+        account: this.toAccountRef(),
+        context,
+        chainId,
         typedData: request,
         prompt,
       },
@@ -691,26 +810,25 @@ export class ExternalSigner implements WoooSigner {
     return response.signatureHex as Hex;
   }
 
-  async writeContract(
+  async signAndSendTransaction(
     chainId: string,
-    request: EvmContractWriteRequest,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
-    approval?: EvmApprovalRequest,
-  ): Promise<Hash> {
-    const chainName = getChainName(chainId);
+    request: TransactionExecutionRequest,
+    context?: WalletOperationContext,
+    prompt?: ApprovalPrompt,
+    intent?: TransactionIntent,
+  ): Promise<Hash | string> {
     const response = await invokeHttpSigner(
       this.signerUrl,
       this.authEnv,
-      this.walletName,
       {
+        clientRequestId: randomUUID(),
         version: 1,
-        kind: "evm-write-contract",
-        wallet: this.toWalletContext(),
-        origin,
-        chainName,
-        contract: request,
-        approval,
+        operation: "sign-and-send-transaction",
+        account: this.toAccountRef(),
+        context,
+        chainId,
+        transaction: request,
+        intent,
         prompt,
       },
     );
@@ -720,52 +838,23 @@ export class ExternalSigner implements WoooSigner {
         response.ok ? "Signer did not return tx hash" : response.error,
       );
     }
-    return response.txHash as Hash;
+    return response.txHash;
   }
 
-  async sendTransaction(
-    network: string,
-    serializedTx: string,
-    origin?: SignerRequestOrigin,
-    prompt?: SignerPrompt,
-  ): Promise<string> {
+  async signProtocolPayload(
+    request: ProtocolPayloadRequest,
+    context?: WalletOperationContext,
+  ): Promise<ProtocolPayloadSignature> {
     const response = await invokeHttpSigner(
       this.signerUrl,
       this.authEnv,
-      this.walletName,
       {
+        clientRequestId: randomUUID(),
         version: 1,
-        kind: "solana-send-versioned-transaction",
-        wallet: this.toWalletContext(),
-        origin,
-        network,
-        serializedTransactionBase64: serializedTx,
-        prompt,
-      },
-    );
-
-    if (!response.ok || !("txHash" in response)) {
-      throw new Error(
-        response.ok ? "Signer did not return tx hash" : response.error,
-      );
-    }
-    return String(response.txHash);
-  }
-
-  async signHyperliquidL1Action(
-    request: HyperliquidActionSigningRequest,
-    origin?: SignerRequestOrigin,
-  ): Promise<HyperliquidActionSignature> {
-    const response = await invokeHttpSigner(
-      this.signerUrl,
-      this.authEnv,
-      this.walletName,
-      {
-        version: 1,
-        kind: "hyperliquid-sign-l1-action",
-        wallet: this.toWalletContext(),
-        origin,
-        request,
+        operation: "sign-protocol-payload",
+        account: this.toAccountRef(),
+        context,
+        payload: request,
       },
     );
 
@@ -776,7 +865,10 @@ export class ExternalSigner implements WoooSigner {
           : response.error,
       );
     }
-    return response.signature;
+    return {
+      protocol: request.protocol,
+      signature: response.signature,
+    };
   }
 }
 
@@ -784,9 +876,9 @@ export class ExternalSigner implements WoooSigner {
 // Factory
 // ---------------------------------------------------------------------------
 
-export function createSigner(wallet: ResolvedWallet): WoooSigner {
-  if (wallet.source === "ows") {
-    return new OwsSigner(wallet);
+export function createWalletPort(account: ResolvedAccount): WalletPort {
+  if (account.custody === "local") {
+    return new OwsSigner(account);
   }
-  return new ExternalSigner(wallet);
+  return new ExternalSigner(account);
 }

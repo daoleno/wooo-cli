@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExternalWalletRegistry } from "../../src/core/external-wallets";
+import { RemoteAccountRegistry } from "../../src/core/external-wallets";
 
-describe("ExternalWalletRegistry (via wallet commands)", () => {
+describe("RemoteAccountRegistry (via wallet commands)", () => {
   let tempDir: string;
-  let registry: ExternalWalletRegistry;
+  let registry: RemoteAccountRegistry;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-wallet-test-"));
-    registry = new ExternalWalletRegistry(tempDir);
+    registry = new RemoteAccountRegistry(tempDir);
   });
 
   afterEach(() => {
@@ -21,52 +21,52 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
     expect(registry.list()).toEqual([]);
   });
 
-  test("adds and lists an external wallet", () => {
+  test("adds and lists a remote account", () => {
     registry.add({
-      name: "http-wallet",
+      label: "http-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     });
     const wallets = registry.list();
     expect(wallets).toHaveLength(1);
-    expect(wallets[0]?.name).toBe("http-wallet");
+    expect(wallets[0]?.label).toBe("http-wallet");
     expect(wallets[0]?.signerUrl).toBe("http://127.0.0.1:8787/");
   });
 
-  test("adds and lists an external wallet with auth", () => {
+  test("adds and lists a remote account with auth", () => {
     registry.add({
-      name: "auth-wallet",
+      label: "auth-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "https://signer.example.com/",
-      authEnv: "WOOO_SIGNER_TOKEN",
+      authEnv: "WOOO_SIGNER_AUTH_TOKEN",
     });
     const wallets = registry.list();
     expect(wallets).toHaveLength(1);
-    expect(wallets[0]?.name).toBe("auth-wallet");
+    expect(wallets[0]?.label).toBe("auth-wallet");
     expect(wallets[0]?.signerUrl).toBe("https://signer.example.com/");
-    expect(wallets[0]?.authEnv).toBe("WOOO_SIGNER_TOKEN");
+    expect(wallets[0]?.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
   });
 
   test("retrieves a wallet by name", () => {
     registry.add({
-      name: "my-wallet",
+      label: "my-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     });
     const wallet = registry.get("my-wallet");
     expect(wallet).toBeDefined();
-    expect(wallet?.name).toBe("my-wallet");
+    expect(wallet?.label).toBe("my-wallet");
     expect(registry.get("nonexistent")).toBeUndefined();
   });
 
   test("removes a wallet by name", () => {
     registry.add({
-      name: "to-remove",
+      label: "to-remove",
       address: "0x000000000000000000000000000000000000dEaD",
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     });
     expect(registry.list()).toHaveLength(1);
@@ -76,13 +76,13 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
 
   test("persists wallets across instances", () => {
     registry.add({
-      name: "persistent",
+      label: "persistent",
       address: "0x000000000000000000000000000000000000dEaD",
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:9999/",
     });
 
-    const registry2 = new ExternalWalletRegistry(tempDir);
+    const registry2 = new RemoteAccountRegistry(tempDir);
     expect(registry2.list()).toHaveLength(1);
     expect(registry2.get("persistent")?.signerUrl).toBe(
       "http://127.0.0.1:9999/",

@@ -5,21 +5,23 @@ import type {
   PublicClient,
   TransactionReceipt,
 } from "viem";
+import { encodeFunctionData } from "viem";
 import type {
-  EvmApprovalRequest,
-  SignerPrompt,
-  SignerRequestOrigin,
+  ApprovalPrompt,
+  TokenApprovalIntent,
+  WalletOperationContext,
 } from "./signer-protocol";
-import type { WoooSigner } from "./signers";
+import { resolveChainId } from "./chain-ids";
+import type { WalletPort } from "./signers";
 
 export interface ContractWriteOptions {
   address: Address;
-  approval?: EvmApprovalRequest;
   abi: Abi;
+  intent?: TokenApprovalIntent;
   functionName: string;
   args?: readonly unknown[];
-  origin?: Partial<SignerRequestOrigin>;
-  prompt?: SignerPrompt;
+  context?: Partial<WalletOperationContext>;
+  prompt?: ApprovalPrompt;
   value?: bigint;
 }
 
@@ -30,15 +32,19 @@ export interface ContractWriteResult {
 }
 
 export class TxGateway {
+  private readonly chainId: string;
+
   constructor(
-    private chainName: string,
+    chainName: string,
     private publicClient: PublicClient,
-    private signer: WoooSigner,
-    private origin?: SignerRequestOrigin,
-  ) {}
+    private walletPort: WalletPort,
+    private context?: WalletOperationContext,
+  ) {
+    this.chainId = resolveChainId(chainName);
+  }
 
   get account(): Address {
-    return this.signer.address as Address;
+    return this.walletPort.address as Address;
   }
 
   async waitForReceipt(hash: Hash): Promise<TransactionReceipt> {
@@ -54,30 +60,33 @@ export class TxGateway {
       functionName: options.functionName as never,
       args: (options.args ?? []) as never,
       value: options.value,
-      account: this.signer.address as Address,
+      account: this.walletPort.address as Address,
     });
 
-    const origin = {
-      ...(this.origin ?? {}),
-      ...(options.origin ?? {}),
+    const operationContext = {
+      ...(this.context ?? {}),
+      ...(options.context ?? {}),
     };
-    const txHash = await this.signer.writeContract(
-      this.chainName,
+    const txHash = await this.walletPort.signAndSendTransaction(
+      this.chainId,
       {
-        address: options.address,
-        abi: options.abi,
-        functionName: options.functionName,
-        args: options.args,
+        format: "evm-transaction",
+        to: options.address,
+        data: encodeFunctionData({
+          abi: options.abi,
+          functionName: options.functionName,
+          args: options.args as unknown[],
+        }),
         value: options.value,
       },
-      origin,
+      operationContext,
       options.prompt,
-      options.approval,
+      options.intent,
     );
-    const receipt = await this.waitForReceipt(txHash);
+    const receipt = await this.waitForReceipt(txHash as Hash);
 
     return {
-      txHash,
+      txHash: txHash as Hash,
       receipt,
       result,
     };
@@ -93,7 +102,7 @@ export class TxGateway {
       address: token,
       abi: erc20Abi,
       functionName: "allowance",
-      args: [this.signer.address as Address, spender],
+      args: [this.walletPort.address as Address, spender],
     })) as bigint;
 
     if (allowance >= amount) {
@@ -105,7 +114,8 @@ export class TxGateway {
       abi: erc20Abi,
       functionName: "approve",
       args: [spender, amount],
-      approval: {
+      intent: {
+        kind: "token-approval",
         token,
         spender,
         amount,
@@ -116,8 +126,8 @@ export class TxGateway {
           token,
           spender,
           amount: amount.toString(),
-          ...(this.origin?.protocol ? { protocol: this.origin.protocol } : {}),
-          ...(this.origin?.command ? { command: this.origin.command } : {}),
+          ...(this.context?.protocol ? { protocol: this.context.protocol } : {}),
+          ...(this.context?.command ? { command: this.context.command } : {}),
         },
       },
     });

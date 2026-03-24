@@ -6,24 +6,31 @@ import {
   loadWoooConfigSync,
   setDefaultWalletIfMissing,
 } from "./config";
-import { ExternalWalletRegistry } from "./external-wallets";
+import { RemoteAccountRegistry } from "./external-wallets";
 import { exportOwsPrivateKey, resolveOwsPassphrase } from "./ows";
-import { createSigner, type ResolvedWallet, type WoooSigner } from "./signers";
+import {
+  createWalletPort,
+  type ResolvedAccount,
+  type WalletPort,
+} from "./signers";
 
 // ---------------------------------------------------------------------------
-// Singleton external wallet registry
+// Singleton remote account registry
 // ---------------------------------------------------------------------------
 
-let _externalRegistry: ExternalWalletRegistry | undefined;
-let _externalRegistryConfigDir: string | undefined;
+let _remoteAccountRegistry: RemoteAccountRegistry | undefined;
+let _remoteAccountRegistryConfigDir: string | undefined;
 
-export function getExternalWalletRegistry(): ExternalWalletRegistry {
+export function getRemoteAccountRegistry(): RemoteAccountRegistry {
   const configDir = getConfigDir();
-  if (!_externalRegistry || _externalRegistryConfigDir !== configDir) {
-    _externalRegistry = new ExternalWalletRegistry(configDir);
-    _externalRegistryConfigDir = configDir;
+  if (
+    !_remoteAccountRegistry ||
+    _remoteAccountRegistryConfigDir !== configDir
+  ) {
+    _remoteAccountRegistry = new RemoteAccountRegistry(configDir);
+    _remoteAccountRegistryConfigDir = configDir;
   }
-  return _externalRegistry;
+  return _remoteAccountRegistry;
 }
 
 function walletExists(name: string): boolean {
@@ -31,7 +38,7 @@ function walletExists(name: string): boolean {
     getWallet(name, getVaultPath());
     return true;
   } catch {
-    return Boolean(getExternalWalletRegistry().get(name));
+    return Boolean(getRemoteAccountRegistry().get(name));
   }
 }
 
@@ -46,7 +53,7 @@ export function bootstrapDefaultWallet(walletName: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve a wallet by name + chain to a ResolvedWallet.
+ * Resolve a wallet label + chain to a ResolvedAccount.
  *
  * Resolution order:
  *   1. OWS vault — matched by chain FAMILY (all eip155:* share the same EVM address)
@@ -54,12 +61,12 @@ export function bootstrapDefaultWallet(walletName: string): void {
  *
  * The vault path is passed to every OWS call so it respects WOOO_CONFIG_DIR.
  */
-export async function resolveWallet(
+export async function resolveAccount(
   name?: string,
   chain?: string,
-): Promise<ResolvedWallet> {
+): Promise<ResolvedAccount> {
   const config = loadWoooConfigSync();
-  const walletName = name ?? config.default?.wallet ?? "main";
+  const accountLabel = name ?? config.default?.wallet ?? "main";
   const chainAlias = chain ?? config.default?.chain ?? "ethereum";
   const chainId = resolveChainId(chainAlias);
   const chainFamily = getChainFamily(chainId);
@@ -67,7 +74,7 @@ export async function resolveWallet(
 
   // Try OWS vault first
   try {
-    const owsWallet = getWallet(walletName, vaultPath);
+    const owsWallet = getWallet(accountLabel, vaultPath);
     // Match by chain family: same EVM address across all eip155:* chains
     const account = owsWallet.accounts.find((a) => {
       try {
@@ -77,15 +84,16 @@ export async function resolveWallet(
       }
     });
     if (!account) {
-      throw new Error(`Wallet "${walletName}" has no ${chainFamily} account`);
+      throw new Error(`Wallet "${accountLabel}" has no ${chainFamily} account`);
     }
     return {
-      source: "ows",
-      name: walletName,
-      walletId: owsWallet.id,
       address: account.address,
+      chainFamily,
       chainId,
+      custody: "local",
+      label: accountLabel,
       vaultPath,
+      walletId: owsWallet.id,
     };
   } catch (err) {
     // If the error is the chain-family mismatch we surfaced ourselves, re-throw
@@ -96,25 +104,26 @@ export async function resolveWallet(
   }
 
   // Try external registry
-  const extWallet = getExternalWalletRegistry().get(walletName);
-  if (extWallet) {
-    if (extWallet.chainType !== chainFamily) {
+  const remoteAccount = getRemoteAccountRegistry().get(accountLabel);
+  if (remoteAccount) {
+    if (remoteAccount.chainFamily !== chainFamily) {
       throw new Error(
-        `Wallet "${walletName}" is ${extWallet.chainType}, but chain ${chainAlias} requires ${chainFamily}`,
+        `Account "${accountLabel}" is ${remoteAccount.chainFamily}, but chain ${chainAlias} requires ${chainFamily}`,
       );
     }
     return {
-      source: "external",
-      name: walletName,
-      address: extWallet.address,
+      address: remoteAccount.address,
+      authEnv: remoteAccount.authEnv,
+      chainFamily,
       chainId,
-      signerUrl: extWallet.signerUrl,
-      authEnv: extWallet.authEnv,
+      custody: "remote",
+      label: accountLabel,
+      signerUrl: remoteAccount.signerUrl,
     };
   }
 
   throw new Error(
-    `Wallet "${walletName}" not found. Run \`wooo wallet create\` to create a new wallet or \`wooo wallet connect\` to add an external wallet.`,
+    `Wallet "${accountLabel}" not found. Run \`wooo wallet create\` to create a new wallet or \`wooo wallet connect\` to add a remote account.`,
   );
 }
 
@@ -152,32 +161,32 @@ export async function getActiveWallet(
   requiredType?: ChainFamily,
 ): Promise<{ name: string; address: string; chainId: string }> {
   const chainAlias = resolvePreferredChainAlias(requiredType);
-  const wallet = await resolveWallet(undefined, chainAlias);
+  const wallet = await resolveAccount(undefined, chainAlias);
 
   return {
-    name: wallet.name,
+    name: wallet.label,
     address: wallet.address,
     chainId: wallet.chainId,
   };
 }
 
 /**
- * Obtain a WoooSigner for signing operations on the active wallet.
+ * Obtain a WalletPort for signing operations on the active wallet.
  *
  * @param chainType - "evm" or "solana"
  */
-export async function getActiveSigner(
-  chainType: ChainFamily,
-): Promise<WoooSigner> {
-  const chainAlias = resolvePreferredChainAlias(chainType);
-  const wallet = await resolveWallet(undefined, chainAlias);
-  return createSigner(wallet);
+export async function getActiveWalletPort(
+  chainFamily: ChainFamily,
+): Promise<WalletPort> {
+  const chainAlias = resolvePreferredChainAlias(chainFamily);
+  const account = await resolveAccount(undefined, chainAlias);
+  return createWalletPort(account);
 }
 
 /**
  * Export the raw private key for the active wallet.
  *
- * Only available for OWS-managed wallets. External wallets do not expose raw keys.
+ * Only available for OWS-managed wallets. Remote accounts do not expose raw keys.
  *
  * - Mnemonic wallets: derive key via @scure/bip32 + @scure/bip39
  * - Private-key wallets: parse the exported JSON and return the key directly
@@ -187,20 +196,20 @@ export async function getActiveSigner(
 export async function getActivePrivateKey(
   chainType: ChainFamily,
 ): Promise<`0x${string}`> {
-  const wallet = await resolveWallet(
+  const wallet = await resolveAccount(
     undefined,
     resolvePreferredChainAlias(chainType),
   );
 
-  if (wallet.source === "external") {
+  if (wallet.custody === "remote") {
     throw new Error(
-      `Raw key export is not available for external wallet "${wallet.name}".`,
+      `Raw key export is not available for remote account "${wallet.label}".`,
     );
   }
 
   const passphrase = await resolveOwsPassphrase();
   return await exportOwsPrivateKey(
-    wallet.name,
+    wallet.label,
     chainType,
     wallet.vaultPath,
     passphrase,

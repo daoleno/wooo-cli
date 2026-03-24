@@ -1,7 +1,16 @@
 import { defineCommand } from "citty";
-import { type Address, erc20Abi, isAddress, maxUint256, parseAbi } from "viem";
+import {
+  encodeFunctionData,
+  type Address,
+  type Hash,
+  erc20Abi,
+  isAddress,
+  maxUint256,
+  parseAbi,
+} from "viem";
 import { confirmTransaction } from "../../core/confirm";
-import { getActiveSigner } from "../../core/context";
+import { getActiveWalletPort } from "../../core/context";
+import { resolveChainId } from "../../core/chain-ids";
 import { getPublicClient } from "../../core/evm";
 import {
   createApprovalStep,
@@ -2030,8 +2039,9 @@ const approve = defineCommand({
             return;
           }
 
-          const signer = await getActiveSigner("evm");
+          const walletPort = await getActiveWalletPort("evm");
           const publicClient = getPublicClient("polygon");
+          const polygonChainId = resolveChainId("polygon");
           const results: Array<{
             contract: string;
             txHash: string;
@@ -2039,27 +2049,73 @@ const approve = defineCommand({
           }> = [];
 
           for (const target of targets) {
-            const approveHash = await signer.writeContract("polygon", {
-              address: contractConfig.collateral,
-              abi: erc20Abi,
-              functionName: "approve",
-              args: [target.address, maxUint256],
+            const approveHash = await walletPort.signAndSendTransaction(
+              polygonChainId,
+              {
+                format: "evm-transaction",
+                to: contractConfig.collateral,
+                data: encodeFunctionData({
+                  abi: erc20Abi,
+                  functionName: "approve",
+                  args: [target.address, maxUint256],
+                }),
+              },
+              {
+                group: "prediction",
+                protocol: "polymarket",
+                command: "approve",
+              },
+              {
+                action: `Approve collateral spend for ${target.name}`,
+                details: {
+                  contract: target.name,
+                  token: contractConfig.collateral,
+                  spender: target.address,
+                },
+              },
+              {
+                kind: "token-approval",
+                token: contractConfig.collateral,
+                spender: target.address,
+                amount: maxUint256,
+              },
+            );
+            await publicClient.waitForTransactionReceipt({
+              hash: approveHash as Hash,
             });
-            await publicClient.waitForTransactionReceipt({ hash: approveHash });
             results.push({
               contract: target.name,
               txHash: approveHash,
               type: "erc20",
             });
 
-            const approvalForAllHash = await signer.writeContract("polygon", {
-              address: contractConfig.conditionalTokens,
-              abi: ERC1155_ABI,
-              functionName: "setApprovalForAll",
-              args: [target.address, true],
-            });
+            const approvalForAllHash = await walletPort.signAndSendTransaction(
+              polygonChainId,
+              {
+                format: "evm-transaction",
+                to: contractConfig.conditionalTokens,
+                data: encodeFunctionData({
+                  abi: ERC1155_ABI,
+                  functionName: "setApprovalForAll",
+                  args: [target.address, true],
+                }),
+              },
+              {
+                group: "prediction",
+                protocol: "polymarket",
+                command: "approve",
+              },
+              {
+                action: `Approve conditional tokens for ${target.name}`,
+                details: {
+                  contract: target.name,
+                  operator: target.address,
+                  approved: true,
+                },
+              },
+            );
             await publicClient.waitForTransactionReceipt({
-              hash: approvalForAllHash,
+              hash: approvalForAllHash as Hash,
             });
             results.push({
               contract: target.name,

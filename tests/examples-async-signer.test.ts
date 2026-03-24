@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Abi } from "viem";
 import {
   deserializeSignerPayload,
   type HttpSignerMetadata,
@@ -13,9 +12,9 @@ import {
   serializeSignerPayload,
 } from "../src/core/signer-protocol";
 import {
-  createSigner,
+  createWalletPort,
   normalizeSignerUrl,
-  type ResolvedWallet,
+  type ResolvedAccount,
 } from "../src/core/signers";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -29,20 +28,20 @@ interface ReferenceSignerHarness {
 }
 
 interface DevRequestSummary {
+  account: {
+    address: string;
+    chainFamily: string;
+    label?: string;
+  };
+  clientRequestId: string;
   createdAt: string;
-  kind: string;
+  operation: string;
   requestId: string;
   status: "completed" | "pending";
-  wallet: {
-    address: string;
-    chain: string;
-    mode: string;
-    name: string;
-  };
 }
 
 const tempDirs = new Set<string>();
-const originalSignerToken = process.env.WOOO_SIGNER_TOKEN;
+const originalSignerToken = process.env.WOOO_SIGNER_AUTH_TOKEN;
 
 async function findFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -122,7 +121,7 @@ async function startReferenceSigner(): Promise<ReferenceSignerHarness> {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      WOOO_SIGNER_TOKEN: SIGNER_AUTH_TOKEN,
+      WOOO_SIGNER_AUTH_TOKEN: SIGNER_AUTH_TOKEN,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -214,9 +213,9 @@ afterEach(() => {
   tempDirs.clear();
 
   if (originalSignerToken === undefined) {
-    delete process.env.WOOO_SIGNER_TOKEN;
+    delete process.env.WOOO_SIGNER_AUTH_TOKEN;
   } else {
-    process.env.WOOO_SIGNER_TOKEN = originalSignerToken;
+    process.env.WOOO_SIGNER_AUTH_TOKEN = originalSignerToken;
   }
 });
 
@@ -242,30 +241,34 @@ describe("reference async signer example", () => {
       expect(metadataResponse.status).toBe(200);
 
       const metadata = await readJson<HttpSignerMetadata>(metadataResponse);
-      expect(metadata.kind).toBe("wooo-signer");
-      expect(metadata.wallets).toEqual([
+      expect(metadata.kind).toBe("wooo-wallet-transport");
+      expect(metadata.transport).toBe("http-signer");
+      expect(metadata.accounts).toEqual([
         {
           address: ZERO_ADDRESS,
-          chain: "evm",
+          chainFamily: "evm",
+          operations: [
+            "sign-typed-data",
+            "sign-and-send-transaction",
+            "sign-protocol-payload",
+          ],
         },
       ]);
-      expect(metadata.supportedKinds).toContain("evm-write-contract");
 
       const request: SignerCommandRequest = {
+        clientRequestId: "client-request-1",
         version: 1,
-        kind: "evm-write-contract",
-        wallet: {
-          name: "signer-wallet",
+        operation: "sign-and-send-transaction",
+        account: {
+          label: "signer-wallet",
           address: ZERO_ADDRESS,
-          chain: "evm",
-          mode: "external",
+          chainFamily: "evm",
         },
-        chainName: "ethereum",
-        contract: {
-          address: ZERO_ADDRESS,
-          abi: [] as Abi,
-          functionName: "approve",
-          args: [],
+        chainId: "eip155:1",
+        transaction: {
+          format: "evm-transaction",
+          to: ZERO_ADDRESS,
+          data: "0x",
         },
       };
 
@@ -301,13 +304,13 @@ describe("reference async signer example", () => {
         await readJson<DevRequestSummary[]>(pendingListResponse);
       expect(pendingList).toHaveLength(1);
       expect(pendingList[0]).toMatchObject({
+        clientRequestId: "client-request-1",
         requestId: pendingRequestId,
-        kind: "evm-write-contract",
-        wallet: {
-          name: "signer-wallet",
+        operation: "sign-and-send-transaction",
+        account: {
+          label: "signer-wallet",
           address: ZERO_ADDRESS,
-          chain: "evm",
-          mode: "external",
+          chainFamily: "evm",
         },
         status: "pending",
       });
@@ -371,6 +374,82 @@ describe("reference async signer example", () => {
     }
   });
 
+  test("deduplicates repeated POST requests that reuse the same clientRequestId", async () => {
+    const signer = await startReferenceSigner();
+
+    try {
+      const request: SignerCommandRequest = {
+        clientRequestId: "client-request-retry",
+        version: 1,
+        operation: "sign-and-send-transaction",
+        account: {
+          label: "signer-wallet",
+          address: ZERO_ADDRESS,
+          chainFamily: "evm",
+        },
+        chainId: "eip155:1",
+        transaction: {
+          format: "evm-transaction",
+          to: ZERO_ADDRESS,
+          data: "0x",
+        },
+      };
+
+      const [firstResponse, secondResponse] = await Promise.all([
+        fetch(`${signer.baseUrl}/`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${signer.authToken}`,
+            "content-type": "application/json",
+          },
+          body: serializeSignerPayload(request),
+        }),
+        fetch(`${signer.baseUrl}/`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${signer.authToken}`,
+            "content-type": "application/json",
+          },
+          body: serializeSignerPayload(request),
+        }),
+      ]);
+
+      expect(firstResponse.status).toBe(202);
+      expect(secondResponse.status).toBe(202);
+
+      const firstPayload = deserializeSignerPayload<SignerCommandResponse>(
+        await firstResponse.text(),
+      );
+      const secondPayload = deserializeSignerPayload<SignerCommandResponse>(
+        await secondResponse.text(),
+      );
+
+      expect(isSignerCommandPendingResponse(firstPayload)).toBe(true);
+      expect(isSignerCommandPendingResponse(secondPayload)).toBe(true);
+      if (
+        !isSignerCommandPendingResponse(firstPayload) ||
+        !isSignerCommandPendingResponse(secondPayload)
+      ) {
+        throw new Error("Expected pending signer responses");
+      }
+
+      expect(firstPayload.requestId).toBe(secondPayload.requestId);
+
+      const pendingList = await readJson<DevRequestSummary[]>(
+        await fetch(`${signer.baseUrl}/dev/requests`, {
+          headers: {
+            authorization: `Bearer ${signer.authToken}`,
+          },
+        }),
+      );
+
+      expect(pendingList).toHaveLength(1);
+      expect(pendingList[0]?.clientRequestId).toBe("client-request-retry");
+    } finally {
+      await signer.stop();
+    }
+  });
+
   test("works with wallet discover and wallet connect over HTTP transport", async () => {
     const signer = await startReferenceSigner();
 
@@ -379,7 +458,12 @@ describe("reference async signer example", () => {
         authEnv: string;
         kind: string;
         signerUrl: string;
-        wallets: Array<{ address: string; chain: string }>;
+        transport: string;
+        accounts: Array<{
+          address: string;
+          chainFamily: string;
+          operations: string[];
+        }>;
       }>(
         [
           "wallet",
@@ -387,28 +471,35 @@ describe("reference async signer example", () => {
           "--signer",
           signer.baseUrl,
           "--auth-env",
-          "WOOO_SIGNER_TOKEN",
+          "WOOO_SIGNER_AUTH_TOKEN",
         ],
         {
           env: {
-            WOOO_SIGNER_TOKEN: signer.authToken,
+            WOOO_SIGNER_AUTH_TOKEN: signer.authToken,
           },
         },
       );
 
-      expect(discoverResult.kind).toBe("wooo-signer");
-      expect(discoverResult.authEnv).toBe("WOOO_SIGNER_TOKEN");
-      expect(discoverResult.wallets).toEqual([
+      expect(discoverResult.kind).toBe("wooo-wallet-transport");
+      expect(discoverResult.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
+      expect(discoverResult.transport).toBe("http-signer");
+      expect(discoverResult.accounts).toEqual([
         {
           address: ZERO_ADDRESS,
-          chain: "evm",
+          chainFamily: "evm",
+          operations: [
+            "sign-typed-data",
+            "sign-and-send-transaction",
+            "sign-protocol-payload",
+          ],
         },
       ]);
 
       const connectResult = await runCliJson<{
         address: string;
-        chain: string;
+        chainFamily: string;
         name: string;
+        operations: string[];
         signerUrl: string;
       }>(
         [
@@ -418,11 +509,11 @@ describe("reference async signer example", () => {
           "--signer",
           signer.baseUrl,
           "--auth-env",
-          "WOOO_SIGNER_TOKEN",
+          "WOOO_SIGNER_AUTH_TOKEN",
         ],
         {
           env: {
-            WOOO_SIGNER_TOKEN: signer.authToken,
+            WOOO_SIGNER_AUTH_TOKEN: signer.authToken,
           },
         },
       );
@@ -430,7 +521,12 @@ describe("reference async signer example", () => {
       expect(connectResult).toEqual({
         name: "signer-example",
         address: ZERO_ADDRESS,
-        chain: "evm",
+        chainFamily: "evm",
+        operations: [
+          "sign-typed-data",
+          "sign-and-send-transaction",
+          "sign-protocol-payload",
+        ],
         signerUrl: `${signer.baseUrl}/`,
       });
     } finally {
@@ -440,24 +536,24 @@ describe("reference async signer example", () => {
 
   test("completes an async signer request through the reference signer", async () => {
     const transport = await startReferenceSigner();
-    process.env.WOOO_SIGNER_TOKEN = transport.authToken;
+    process.env.WOOO_SIGNER_AUTH_TOKEN = transport.authToken;
 
     try {
-      const wallet: ResolvedWallet = {
-        source: "external",
-        name: "signer-wallet",
+      const wallet: ResolvedAccount = {
+        custody: "remote",
+        label: "signer-wallet",
         address: ZERO_ADDRESS,
+        chainFamily: "evm",
         chainId: "eip155:1",
         signerUrl: normalizeSignerUrl(transport.baseUrl),
-        authEnv: "WOOO_SIGNER_TOKEN",
+        authEnv: "WOOO_SIGNER_AUTH_TOKEN",
       };
 
-      const walletSigner = createSigner(wallet);
-      const writePromise = walletSigner.writeContract("ethereum", {
-        address: ZERO_ADDRESS,
-        abi: [] as Abi,
-        functionName: "approve",
-        args: [],
+      const walletSigner = createWalletPort(wallet);
+      const writePromise = walletSigner.signAndSendTransaction("eip155:1", {
+        format: "evm-transaction",
+        to: ZERO_ADDRESS,
+        data: "0x",
       });
 
       const pendingRequest = await waitForResult(async () => {
@@ -476,12 +572,11 @@ describe("reference async signer example", () => {
         return requests[0] ?? null;
       });
 
-      expect(pendingRequest.kind).toBe("evm-write-contract");
-      expect(pendingRequest.wallet).toEqual({
-        name: "signer-wallet",
+      expect(pendingRequest.operation).toBe("sign-and-send-transaction");
+      expect(pendingRequest.account).toEqual({
+        label: "signer-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        mode: "external",
+        chainFamily: "evm",
       });
       expect(pendingRequest.status).toBe("pending");
 

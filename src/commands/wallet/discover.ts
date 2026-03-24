@@ -1,11 +1,15 @@
 import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { fetchSignerMetadata, normalizeSignerUrl } from "../../core/signers";
+import {
+  fetchSignerMetadata,
+  normalizeSignerUrl,
+  validateSignerAuthEnv,
+} from "../../core/signers";
 
 export default defineCommand({
   meta: {
     name: "discover",
-    description: "Inspect an HTTP signer and list its advertised wallets",
+    description: "Inspect an HTTP signer and list its advertised accounts",
   },
   args: {
     signer: {
@@ -26,34 +30,35 @@ export default defineCommand({
     }
 
     const url = normalizeSignerUrl(args.signer);
-    const metadata = await fetchSignerMetadata(url, args["auth-env"]);
+    const authEnv = validateSignerAuthEnv(args["auth-env"]);
+    const metadata = await fetchSignerMetadata(url, authEnv);
     const out = createOutput(resolveOutputOptions(args));
 
     if (args.json || args.format === "json") {
       out.data({
         signerUrl: url,
         ...metadata,
-        ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
+        ...(authEnv ? { authEnv } : {}),
       });
       return;
     }
 
     if (args.format !== "csv") {
       out.data(`Signer: ${url}`);
-      out.data(`Supported kinds: ${metadata.supportedKinds.join(", ")}`);
-      if (args["auth-env"]) {
-        out.data(`Auth env: ${args["auth-env"]}`);
+      if (authEnv) {
+        out.data(`Auth env: ${authEnv}`);
       }
     }
 
     out.table(
-      metadata.wallets.map((wallet) => ({
-        address: wallet.address,
-        chain: wallet.chain,
+      metadata.accounts.map((account) => ({
+        address: account.address,
+        chainFamily: account.chainFamily,
+        operations: account.operations.join(", "),
       })),
       {
-        columns: ["address", "chain"],
-        title: "Advertised Wallets",
+        columns: ["address", "chainFamily", "operations"],
+        title: "Advertised Accounts",
       },
     );
   },

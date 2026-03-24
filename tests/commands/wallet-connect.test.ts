@@ -24,14 +24,15 @@ describe("wallet connect command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer",
-            wallets: [
+            kind: "wooo-wallet-transport",
+            transport: "http-signer",
+            accounts: [
               {
                 address: ZERO_ADDRESS,
-                chain: "evm",
+                chainFamily: "evm",
+                operations: ["sign-and-send-transaction"],
               },
             ],
-            supportedKinds: ["evm-write-contract"],
           }),
           {
             headers: {
@@ -75,14 +76,16 @@ describe("wallet connect command", () => {
 
       const output = JSON.parse(stdout) as {
         address: string;
-        chain: string;
+        chainFamily: string;
         name: string;
+        operations: string[];
         signerUrl: string;
       };
 
       expect(output.name).toBe("service-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
-      expect(output.chain).toBe("evm");
+      expect(output.chainFamily).toBe("evm");
+      expect(output.operations).toEqual(["sign-and-send-transaction"]);
       expect(output.signerUrl).toBe(server.url.toString());
       const config = JSON.parse(
         readFileSync(join(tempDir, "wooo.config.json"), "utf-8"),
@@ -105,14 +108,15 @@ describe("wallet connect command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer",
-            wallets: [
+            kind: "wooo-wallet-transport",
+            transport: "http-signer",
+            accounts: [
               {
                 address: ZERO_ADDRESS,
-                chain: "evm",
+                chainFamily: "evm",
+                operations: ["sign-and-send-transaction"],
               },
             ],
-            supportedKinds: ["evm-write-contract"],
           }),
           {
             headers: {
@@ -135,14 +139,14 @@ describe("wallet connect command", () => {
           "--signer",
           server.url.toString(),
           "--auth-env",
-          "WOOO_SIGNER_TOKEN",
+          "WOOO_SIGNER_AUTH_TOKEN",
           "--json",
         ],
         cwd: process.cwd(),
         env: {
           ...process.env,
           WOOO_CONFIG_DIR: tempDir,
-          WOOO_SIGNER_TOKEN: "signer-token-test",
+          WOOO_SIGNER_AUTH_TOKEN: "signer-token-test",
         },
         stderr: "pipe",
         stdout: "pipe",
@@ -160,14 +164,16 @@ describe("wallet connect command", () => {
 
       const output = JSON.parse(stdout) as {
         address: string;
-        chain: string;
+        chainFamily: string;
         name: string;
+        operations: string[];
         signerUrl: string;
       };
 
       expect(output.name).toBe("signer-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
-      expect(output.chain).toBe("evm");
+      expect(output.chainFamily).toBe("evm");
+      expect(output.operations).toEqual(["sign-and-send-transaction"]);
       expect(output.signerUrl).toBe(server.url.toString());
     } finally {
       server.stop(true);
@@ -183,14 +189,15 @@ describe("wallet connect command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer",
-            wallets: [
+            kind: "wooo-wallet-transport",
+            transport: "http-signer",
+            accounts: [
               {
                 address: ZERO_ADDRESS,
-                chain: "evm",
+                chainFamily: "evm",
+                operations: ["sign-and-send-transaction"],
               },
             ],
-            supportedKinds: ["evm-write-contract"],
           }),
           {
             headers: {

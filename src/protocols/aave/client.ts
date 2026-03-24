@@ -1,6 +1,6 @@
 import { type Address, formatUnits, maxUint256, parseUnits } from "viem";
 import { getPublicClient } from "../../core/evm";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { type AaveApiMarket, fetchAaveMarkets } from "./api";
 import { AAVE_POOL_ABI, ERC20_ABI } from "./constants";
@@ -61,7 +61,7 @@ export class AaveClient {
 
   constructor(
     private chain: string,
-    private signer?: WoooSigner,
+    private signer?: WalletPort,
   ) {}
 
   private async getMarkets(): Promise<AaveApiMarket[]> {

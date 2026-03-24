@@ -1,9 +1,9 @@
-import { getActiveSigner } from "../../core/context";
+import { getActiveWalletPort } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { MppClient } from "./client";
 import { TEMPO_CHAIN_NAME } from "./constants";
@@ -18,7 +18,7 @@ export interface MppCallParams {
 
 export function createMppCallOperation(
   params: MppCallParams,
-): WriteOperation<MppCallParams, WoooSigner, MppCallResult> {
+): WriteOperation<MppCallParams, WalletPort, MppCallResult> {
   return {
     protocol: "mpp",
     prepare: async () => params,
@@ -51,7 +51,7 @@ export function createMppCallOperation(
           url: prepared.url,
         },
       }),
-    resolveAuth: async () => await getActiveSigner("evm"),
+    resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared) => {
       const client = new MppClient();
       return await client.call(prepared.url, {

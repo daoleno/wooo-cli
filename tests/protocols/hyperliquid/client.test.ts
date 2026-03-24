@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { WoooSigner } from "../../../src/core/signers";
+import type { WalletPort } from "../../../src/core/signers";
 import { HyperliquidClient } from "../../../src/protocols/hyperliquid/client";
 import { createHyperliquidExecutionPlan } from "../../../src/protocols/hyperliquid/plan";
 
@@ -56,29 +56,33 @@ describe("HyperliquidClient", () => {
       }>,
     };
 
-    const signer: WoooSigner = {
-      walletName: "test-wallet",
+    const signer: WalletPort = {
+      accountLabel: "test-wallet",
       address: "0x0000000000000000000000000000000000000000",
       async signTypedData() {
         throw new Error("not used");
       },
-      async writeContract() {
+      async signAndSendTransaction() {
         throw new Error("not used");
       },
-      async sendTransaction() {
+      async signProtocolPayload(request) {
+        if (request.protocol === "hyperliquid") {
+          captured.signedRequests.push({
+            action: request.payload.action,
+            context:
+              request.payload.context as Record<string, unknown> | undefined,
+            nonce: request.payload.nonce,
+          });
+          return {
+            protocol: "hyperliquid",
+            signature: {
+              r: `0x${"12".repeat(32)}`,
+              s: `0x${"34".repeat(32)}`,
+              v: 27,
+            },
+          };
+        }
         throw new Error("not used");
-      },
-      async signHyperliquidL1Action(request) {
-        captured.signedRequests.push({
-          action: request.action,
-          context: request.context as Record<string, unknown> | undefined,
-          nonce: request.nonce,
-        });
-        return {
-          r: `0x${"12".repeat(32)}`,
-          s: `0x${"34".repeat(32)}`,
-          v: 27,
-        };
       },
     };
 

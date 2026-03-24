@@ -1,4 +1,4 @@
-import { getActiveSigner } from "../../core/context";
+import { getActiveWalletPort } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
@@ -6,7 +6,7 @@ import {
   createWrapStep,
   type ExecutionPlanStep,
 } from "../../core/execution-plan";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { UniswapClient } from "./client";
 import { NATIVE_WRAPS } from "./constants";
@@ -29,7 +29,7 @@ function isNativeToken(symbol: string): boolean {
 
 export function createUniswapSwapOperation(
   params: UniswapSwapParams,
-): WriteOperation<PreparedUniswapSwap, WoooSigner, UniswapSwapResult> {
+): WriteOperation<PreparedUniswapSwap, WalletPort, UniswapSwapResult> {
   return {
     protocol: "uniswap",
     prepare: async () => {
@@ -101,7 +101,7 @@ export function createUniswapSwapOperation(
         },
       });
     },
-    resolveAuth: async () => await getActiveSigner("evm"),
+    resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
       const client = new UniswapClient(prepared.chain, signer);
       return await client.swap(

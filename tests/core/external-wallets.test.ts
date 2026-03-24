@@ -2,19 +2,21 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExternalWalletRecord } from "../../src/core/external-wallets";
-import { ExternalWalletRegistry } from "../../src/core/external-wallets";
+import {
+  RemoteAccountRegistry,
+  type RemoteAccountRecord,
+} from "../../src/core/external-wallets";
 
 const EVM_ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const SOL_ADDRESS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
-describe("ExternalWalletRegistry", () => {
+describe("RemoteAccountRegistry", () => {
   let tempDir: string;
-  let registry: ExternalWalletRegistry;
+  let registry: RemoteAccountRegistry;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-test-external-wallets-"));
-    registry = new ExternalWalletRegistry(tempDir);
+    registry = new RemoteAccountRegistry(tempDir);
   });
 
   afterEach(() => {
@@ -22,10 +24,10 @@ describe("ExternalWalletRegistry", () => {
   });
 
   test("add and list wallets", () => {
-    const wallet: ExternalWalletRecord = {
-      name: "my-ledger",
+    const wallet: RemoteAccountRecord = {
+      label: "my-ledger",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     };
 
@@ -37,18 +39,18 @@ describe("ExternalWalletRegistry", () => {
   });
 
   test("list returns multiple wallets", () => {
-    const evmWallet: ExternalWalletRecord = {
-      name: "hw-evm",
+    const evmWallet: RemoteAccountRecord = {
+      label: "hw-evm",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://localhost:8080/",
     };
-    const solWallet: ExternalWalletRecord = {
-      name: "hw-sol",
+    const solWallet: RemoteAccountRecord = {
+      label: "hw-sol",
       address: SOL_ADDRESS,
-      chainType: "solana",
+      chainFamily: "solana",
       signerUrl: "http://localhost:9090/",
-      authEnv: "SIGNER_TOKEN",
+      authEnv: "WOOO_SIGNER_AUTH_TOKEN",
     };
 
     registry.add(evmWallet);
@@ -56,15 +58,15 @@ describe("ExternalWalletRegistry", () => {
 
     const wallets = registry.list();
     expect(wallets).toHaveLength(2);
-    expect(wallets.map((w) => w.name)).toContain("hw-evm");
-    expect(wallets.map((w) => w.name)).toContain("hw-sol");
+    expect(wallets.map((w) => w.label)).toContain("hw-evm");
+    expect(wallets.map((w) => w.label)).toContain("hw-sol");
   });
 
   test("get wallet by name", () => {
-    const wallet: ExternalWalletRecord = {
-      name: "remote-signer",
+    const wallet: RemoteAccountRecord = {
+      label: "remote-signer",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://localhost:7777/",
     };
 
@@ -80,10 +82,10 @@ describe("ExternalWalletRegistry", () => {
   });
 
   test("remove wallet", () => {
-    const wallet: ExternalWalletRecord = {
-      name: "to-remove",
+    const wallet: RemoteAccountRecord = {
+      label: "to-remove",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     };
 
@@ -95,10 +97,10 @@ describe("ExternalWalletRegistry", () => {
   });
 
   test("throws on duplicate name", () => {
-    const wallet: ExternalWalletRecord = {
-      name: "duplicate",
+    const wallet: RemoteAccountRecord = {
+      label: "duplicate",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     };
 
@@ -110,14 +112,26 @@ describe("ExternalWalletRegistry", () => {
     expect(() => registry.remove("ghost")).toThrow(/not found/i);
   });
 
+  test("rejects non-signer auth env names", () => {
+    expect(() =>
+      registry.add({
+        label: "invalid-auth-env",
+        address: EVM_ADDRESS,
+        chainFamily: "evm",
+        signerUrl: "http://127.0.0.1:8787/",
+        authEnv: "OPENAI_API_KEY",
+      }),
+    ).toThrow(/WOOO_SIGNER_AUTH_/);
+  });
+
   test("creates the config directory on first save", () => {
     const missingDir = join(tempDir, "nested", "config");
-    const nestedRegistry = new ExternalWalletRegistry(missingDir);
+    const nestedRegistry = new RemoteAccountRegistry(missingDir);
 
     nestedRegistry.add({
-      name: "first-wallet",
+      label: "first-wallet",
       address: EVM_ADDRESS,
-      chainType: "evm",
+      chainFamily: "evm",
       signerUrl: "http://127.0.0.1:8787/",
     });
 

@@ -1,40 +1,49 @@
-import type { Abi, Address, Hash, Hex } from "viem";
+import type { ChainFamily } from "./chain-ids";
+import type { Address, Hash, Hex } from "viem";
 
-export type WalletMode = "local" | "external";
-
-export interface SignerWalletContext {
-  name: string;
+export interface TransportAccountRef {
   address: string;
-  chain: string;
-  mode: WalletMode;
+  chainFamily: ChainFamily;
+  label?: string;
 }
 
-export type SignerPromptValue = boolean | number | string | null;
+export type ApprovalPromptValue = boolean | number | string | null;
 
-export interface SignerPrompt {
+export interface ApprovalPrompt {
   action: string;
-  details?: Record<string, SignerPromptValue>;
+  details?: Record<string, ApprovalPromptValue>;
 }
 
-export interface SignerRequestOrigin {
+export interface WalletOperationContext {
   command?: string;
   group?: string;
   protocol?: string;
 }
 
-export interface EvmContractWriteRequest {
-  address: Address;
-  abi: Abi;
-  functionName: string;
-  args?: readonly unknown[];
-  value?: bigint;
-}
-
-export interface EvmApprovalRequest {
+export interface TokenApprovalIntent {
   amount: bigint;
+  kind: "token-approval";
   spender: Address;
   token: Address;
 }
+
+export type TransactionIntent = TokenApprovalIntent;
+
+export interface EvmTransactionRequest {
+  data: Hex | string;
+  format: "evm-transaction";
+  to: Address;
+  value?: bigint;
+}
+
+export interface SolanaVersionedTransactionRequest {
+  format: "solana-versioned-transaction";
+  serializedTransactionBase64: string;
+}
+
+export type TransactionExecutionRequest =
+  | EvmTransactionRequest
+  | SolanaVersionedTransactionRequest;
 
 export interface EvmTypedDataField {
   name: string;
@@ -59,11 +68,11 @@ export interface HyperliquidActionContext {
 export interface HyperliquidActionSigningRequest {
   action: Record<string, unknown>;
   context?: HyperliquidActionContext;
-  nonce: number;
-  vaultAddress?: string;
   expiresAfter?: number;
+  nonce: number;
+  prompt?: ApprovalPrompt;
   sandbox?: boolean;
-  prompt?: SignerPrompt;
+  vaultAddress?: string;
 }
 
 export interface HyperliquidActionSignature {
@@ -72,98 +81,102 @@ export interface HyperliquidActionSignature {
   v: number;
 }
 
-export interface AdvertisedWalletDescriptor {
+export interface ProtocolPayloadRequest {
+  payload: HyperliquidActionSigningRequest;
+  protocol: "hyperliquid";
+}
+
+export interface ProtocolPayloadSignature {
+  protocol: "hyperliquid";
+  signature: HyperliquidActionSignature;
+}
+
+export type WalletTransportOperation =
+  | "sign-and-send-transaction"
+  | "sign-protocol-payload"
+  | "sign-typed-data";
+
+export interface AdvertisedAccountDescriptor {
   address: string;
-  chain: "evm" | "solana";
+  chainFamily: ChainFamily;
+  operations: WalletTransportOperation[];
 }
 
 export interface HttpSignerMetadata {
-  kind: "wooo-signer";
-  supportedKinds: SignerCommandRequestBase["kind"][];
+  accounts: AdvertisedAccountDescriptor[];
+  kind: "wooo-wallet-transport";
+  transport: "http-signer";
   version: 1;
-  wallets: AdvertisedWalletDescriptor[];
 }
 
-interface SignerCommandRequestBase {
-  kind:
-    | "evm-sign-typed-data"
-    | "evm-write-contract"
-    | "hyperliquid-sign-l1-action"
-    | "solana-send-versioned-transaction";
-  origin?: SignerRequestOrigin;
+interface WalletTransportRequestBase {
+  account: TransportAccountRef;
+  clientRequestId: string;
+  context?: WalletOperationContext;
+  operation: WalletTransportOperation;
   version: 1;
-  wallet: SignerWalletContext;
 }
 
-export interface EvmSignTypedDataCommandRequest
-  extends SignerCommandRequestBase {
-  kind: "evm-sign-typed-data";
-  chainName: string;
-  prompt?: SignerPrompt;
+export interface SignTypedDataCommandRequest extends WalletTransportRequestBase {
+  chainId: string;
+  operation: "sign-typed-data";
+  prompt?: ApprovalPrompt;
   typedData: EvmTypedDataSignRequest;
 }
 
-export interface EvmWriteContractCommandRequest
-  extends SignerCommandRequestBase {
-  approval?: EvmApprovalRequest;
-  kind: "evm-write-contract";
-  chainName: string;
-  contract: EvmContractWriteRequest;
-  prompt?: SignerPrompt;
+export interface SignAndSendTransactionCommandRequest
+  extends WalletTransportRequestBase {
+  chainId: string;
+  intent?: TransactionIntent;
+  operation: "sign-and-send-transaction";
+  prompt?: ApprovalPrompt;
+  transaction: TransactionExecutionRequest;
 }
 
-export interface HyperliquidSignCommandRequest
-  extends SignerCommandRequestBase {
-  kind: "hyperliquid-sign-l1-action";
-  request: HyperliquidActionSigningRequest;
-}
-
-export interface SolanaSendTransactionCommandRequest
-  extends SignerCommandRequestBase {
-  kind: "solana-send-versioned-transaction";
-  network: string;
-  serializedTransactionBase64: string;
-  prompt?: SignerPrompt;
+export interface SignProtocolPayloadCommandRequest
+  extends WalletTransportRequestBase {
+  operation: "sign-protocol-payload";
+  payload: ProtocolPayloadRequest;
 }
 
 export type SignerCommandRequest =
-  | EvmSignTypedDataCommandRequest
-  | EvmWriteContractCommandRequest
-  | HyperliquidSignCommandRequest
-  | SolanaSendTransactionCommandRequest;
+  | SignAndSendTransactionCommandRequest
+  | SignProtocolPayloadCommandRequest
+  | SignTypedDataCommandRequest;
 
-interface SignerCommandResponseBase {
+interface WalletTransportResponseBase {
   ok: boolean;
 }
 
 export interface SignerCommandPendingResponse
-  extends SignerCommandResponseBase {
+  extends WalletTransportResponseBase {
   ok: true;
   pollAfterMs?: number;
   requestId: string;
   status: "pending";
 }
 
-export interface SignerCommandTxHashResponse extends SignerCommandResponseBase {
+export interface SignerCommandTxHashResponse
+  extends WalletTransportResponseBase {
   ok: true;
   txHash: Hash | string;
 }
 
 export interface SignerCommandSignatureResponse
-  extends SignerCommandResponseBase {
+  extends WalletTransportResponseBase {
   ok: true;
   signature: HyperliquidActionSignature;
 }
 
 export interface SignerCommandHexSignatureResponse
-  extends SignerCommandResponseBase {
+  extends WalletTransportResponseBase {
   ok: true;
   signatureHex: Hex | string;
 }
 
-export interface SignerCommandErrorResponse extends SignerCommandResponseBase {
-  ok: false;
+export interface SignerCommandErrorResponse extends WalletTransportResponseBase {
   error: string;
+  ok: false;
 }
 
 export type SignerCommandTerminalResponse =

@@ -1,5 +1,5 @@
-import { getActiveSigner, getActiveWallet } from "../../core/context";
-import type { WoooSigner } from "../../core/signers";
+import { getActiveWallet, getActiveWalletPort } from "../../core/context";
+import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { HyperliquidClient } from "./client";
 import { createHyperliquidExecutionPlan } from "./plan";
@@ -26,7 +26,7 @@ export function createHyperliquidOrderOperation(
   params: HyperliquidOrderParams,
 ): WriteOperation<
   PreparedHyperliquidOrder,
-  WoooSigner,
+  WalletPort,
   HyperliquidOrderResult
 > {
   return {
@@ -63,7 +63,7 @@ export function createHyperliquidOrderOperation(
         estimatedPrice: prepared.ticker.last,
         leverage: prepared.leverage,
       }),
-    resolveAuth: async () => await getActiveSigner("evm"),
+    resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
       const wallet = await getActiveWallet("evm");
       const client = new HyperliquidClient(

@@ -26,6 +26,7 @@ interface EvmAnvilHarnessOptions {
   chainName: "ethereum" | "polygon";
   configDirPrefix: string;
   defaultForkUrl: string;
+  defaultForkUrls?: string[];
   forkBlockNumberEnvKey: string;
   forkUrlsEnvKey: string;
   forkUrlEnvKey: string;
@@ -55,6 +56,10 @@ export function resolveForkUrls(options: EvmAnvilHarnessOptions): string[] {
   const explicitSingle = process.env[options.forkUrlEnvKey]?.trim();
   if (explicitSingle) {
     return [explicitSingle];
+  }
+
+  if (options.defaultForkUrls?.length) {
+    return options.defaultForkUrls;
   }
 
   return [options.defaultForkUrl];
@@ -219,7 +224,7 @@ class EvmAnvilHarness {
   private readonly options: EvmAnvilHarnessOptions;
   private anvil?: Bun.Subprocess;
   private configDir?: string;
-  private rpcUrl?: string;
+  private _rpcUrl?: string;
 
   constructor(options: EvmAnvilHarnessOptions) {
     this.options = options;
@@ -240,7 +245,7 @@ class EvmAnvilHarness {
 
     const port = await findFreePort();
     const readyTimeoutMs = getReadyTimeoutMs();
-    this.rpcUrl = `http://127.0.0.1:${port}`;
+    this._rpcUrl = `http://127.0.0.1:${port}`;
     const forkBlockNumber =
       process.env[this.options.forkBlockNumberEnvKey]?.trim();
     const failures: string[] = [];
@@ -351,7 +356,19 @@ class EvmAnvilHarness {
     }
   }
 
-  async runCli(args: string[]): Promise<string> {
+  get rpcUrl(): string {
+    if (!this._rpcUrl) {
+      throw new Error("Anvil harness start() must be called first");
+    }
+    return this._rpcUrl;
+  }
+
+  async runCli(
+    args: string[],
+    options?: {
+      env?: Record<string, string>;
+    },
+  ): Promise<string> {
     if (!this.configDir) {
       throw new Error("Anvil harness start() must be called first");
     }
@@ -363,7 +380,9 @@ class EvmAnvilHarness {
         ...process.env,
         WOOO_CONFIG_DIR: this.configDir,
         WOOO_MASTER_PASSWORD: MASTER_PASSWORD,
+        OWS_PASSPHRASE: MASTER_PASSWORD,
         WOOO_SIGNER_AUTO_APPROVE: "1",
+        ...(options?.env ?? {}),
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -386,8 +405,13 @@ class EvmAnvilHarness {
     return stdout.trim();
   }
 
-  async runJson<T>(args: string[]): Promise<T> {
-    const stdout = await this.runCli([...args, "--json"]);
+  async runJson<T>(
+    args: string[],
+    options?: {
+      env?: Record<string, string>;
+    },
+  ): Promise<T> {
+    const stdout = await this.runCli([...args, "--json"], options);
     return JSON.parse(stdout) as T;
   }
 }
@@ -414,6 +438,10 @@ export class PolygonAnvilHarness extends EvmAnvilHarness {
       chainId: 137,
       configDirPrefix: "wooo-anvil-polygon-e2e-",
       defaultForkUrl: DEFAULT_POLYGON_FORK_URL,
+      defaultForkUrls: [
+        "https://polygon.rpc.subquery.network/public",
+        DEFAULT_POLYGON_FORK_URL,
+      ],
       forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER_POLYGON",
       forkUrlsEnvKey: "ANVIL_FORK_URLS_POLYGON",
       forkUrlEnvKey: "ANVIL_FORK_URL_POLYGON",

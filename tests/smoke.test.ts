@@ -176,7 +176,7 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("key");
   });
 
-  test("wallet connect help shows external wallet transport options", async () => {
+  test("wallet connect help shows remote account transport options", async () => {
     const result = await $`bun run src/index.ts wallet connect --help`.text();
     expect(result).toContain("signer");
     expect(result).toContain("auth-env");

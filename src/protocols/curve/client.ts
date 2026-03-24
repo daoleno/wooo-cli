@@ -1,6 +1,6 @@
 import { formatUnits, parseUnits } from "viem";
 import { getPublicClient } from "../../core/evm";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import {
   CURVE_POOL_ABI,
@@ -22,7 +22,7 @@ interface ResolvedPool {
 export class CurveClient {
   constructor(
     private chain = "ethereum",
-    private signer?: WoooSigner,
+    private signer?: WalletPort,
   ) {}
 
   private getChainPools(): Record<string, CurvePoolConfig> {

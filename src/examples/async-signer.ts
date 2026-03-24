@@ -15,21 +15,23 @@ import {
 } from "../core/signer-protocol";
 import { getFlagValue } from "./signer-example-utils";
 
-function resolveWalletType(raw: string): "evm" | "solana" | null {
+function resolveChainFamily(raw: string): "evm" | "solana" | null {
   if (raw === "evm" || raw === "ethereum") return "evm";
   if (raw === "solana") return "solana";
   return null;
 }
 
-interface AdvertisedWallet {
+interface AdvertisedAccount {
   address: string;
-  chain: "evm" | "solana";
+  chainFamily: "evm" | "solana";
 }
 
 interface SignerRequestState {
+  clientRequestId: string;
   createdAt: string;
   request: SignerCommandRequest;
   response: SignerCommandTerminalResponse | null;
+  requestId: string;
 }
 
 function parsePort(args: string[]): number {
@@ -45,7 +47,7 @@ function parsePort(args: string[]): number {
   return port;
 }
 
-function parseAdvertisedWallet(args: string[]): AdvertisedWallet {
+function parseAdvertisedAccount(args: string[]): AdvertisedAccount {
   const address =
     getFlagValue(args, "--address") || process.env.WOOO_SIGNER_ADDRESS;
   if (!address?.trim()) {
@@ -54,41 +56,47 @@ function parseAdvertisedWallet(args: string[]): AdvertisedWallet {
 
   const rawChain =
     getFlagValue(args, "--chain") || process.env.WOOO_SIGNER_CHAIN || "evm";
-  const chain = resolveWalletType(rawChain);
-  if (!chain) {
+  const chainFamily = resolveChainFamily(rawChain);
+  if (!chainFamily) {
     throw new Error(
-      `Unsupported signer wallet type: ${rawChain}. Use evm or solana.`,
+      `Unsupported signer chain family: ${rawChain}. Use evm or solana.`,
     );
   }
 
   return {
     address: address.trim(),
-    chain,
+    chainFamily,
   };
 }
 
 function resolveAuthToken(args: string[]): string | null {
   const token =
-    getFlagValue(args, "--auth-token") || process.env.WOOO_SIGNER_TOKEN;
+    getFlagValue(args, "--auth-token") || process.env.WOOO_SIGNER_AUTH_TOKEN;
   if (!token?.trim()) {
     return null;
   }
   return token.trim();
 }
 
-function createMetadata(wallet: AdvertisedWallet): HttpSignerMetadata {
+function createMetadata(account: AdvertisedAccount): HttpSignerMetadata {
   return {
     version: 1,
-    kind: "wooo-signer",
-    wallets: [wallet],
-    supportedKinds:
-      wallet.chain === "evm"
-        ? [
-            "evm-sign-typed-data",
-            "evm-write-contract",
-            "hyperliquid-sign-l1-action",
-          ]
-        : ["solana-send-versioned-transaction"],
+    kind: "wooo-wallet-transport",
+    transport: "http-signer",
+    accounts: [
+      {
+        address: account.address,
+        chainFamily: account.chainFamily,
+        operations:
+          account.chainFamily === "evm"
+            ? [
+                "sign-typed-data",
+                "sign-and-send-transaction",
+                "sign-protocol-payload",
+              ]
+            : ["sign-and-send-transaction"],
+      },
+    ],
   };
 }
 
@@ -98,6 +106,20 @@ async function readRequestBody(request: IncomingMessage): Promise<string> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function createPendingSignerResponse(requestId: string): {
+  ok: true;
+  pollAfterMs: number;
+  requestId: string;
+  status: "pending";
+} {
+  return {
+    ok: true,
+    status: "pending",
+    requestId,
+    pollAfterMs: 1_000,
+  };
 }
 
 function sendJson(
@@ -166,10 +188,11 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const host = process.env.WOOO_SIGNER_HOST || "127.0.0.1";
   const port = parsePort(args);
-  const wallet = parseAdvertisedWallet(args);
+  const account = parseAdvertisedAccount(args);
   const authToken = resolveAuthToken(args);
-  const metadata = createMetadata(wallet);
+  const metadata = createMetadata(account);
   const requestState = new Map<string, SignerRequestState>();
+  const requestIdByClientRequestId = new Map<string, string>();
   const baseUrl = createBaseUrl(host, port);
   const authHeader = authToken ? " -H 'Authorization: Bearer <token>'" : "";
 
@@ -201,15 +224,57 @@ async function main(): Promise<void> {
         return;
       }
 
+      const existingRequestId = requestIdByClientRequestId.get(
+        signerRequest.clientRequestId,
+      );
+      if (existingRequestId) {
+        const existingState = requestState.get(existingRequestId);
+        if (!existingState) {
+          sendSignerError(
+            response,
+            500,
+            `Inconsistent signer state for clientRequestId ${signerRequest.clientRequestId}`,
+          );
+          return;
+        }
+
+        if (
+          serializeSignerPayload(existingState.request) !==
+          serializeSignerPayload(signerRequest)
+        ) {
+          sendSignerError(
+            response,
+            409,
+            `clientRequestId ${signerRequest.clientRequestId} was already used for a different request`,
+          );
+          return;
+        }
+
+        if (existingState.response) {
+          sendJson(
+            response,
+            existingState.response.ok ? 200 : 400,
+            existingState.response,
+          );
+          return;
+        }
+
+        sendJson(response, 202, createPendingSignerResponse(existingRequestId));
+        return;
+      }
+
       const requestId = randomUUID();
+      requestIdByClientRequestId.set(signerRequest.clientRequestId, requestId);
       requestState.set(requestId, {
+        clientRequestId: signerRequest.clientRequestId,
         createdAt: new Date().toISOString(),
         request: signerRequest,
         response: null,
+        requestId,
       });
 
       console.error(
-        `Signer request ${requestId} queued for ${signerRequest.kind} (${signerRequest.wallet.chain}:${signerRequest.wallet.address})`,
+        `Signer request ${requestId} queued for ${signerRequest.operation} (${signerRequest.account.chainFamily}:${signerRequest.account.address})`,
       );
       console.error(
         `Inspect pending requests: curl${authHeader} ${baseUrl}/dev/requests`,
@@ -218,12 +283,7 @@ async function main(): Promise<void> {
         `Resolve request: curl -X POST${authHeader} -H 'content-type: application/json' ${baseUrl}/dev/requests/${requestId}/resolve --data '{"ok":false,"error":"user rejected"}'`,
       );
 
-      sendJson(response, 202, {
-        ok: true,
-        status: "pending",
-        requestId,
-        pollAfterMs: 1_000,
-      });
+      sendJson(response, 202, createPendingSignerResponse(requestId));
       return;
     }
 
@@ -237,9 +297,10 @@ async function main(): Promise<void> {
         200,
         Array.from(requestState.entries()).map(([requestId, state]) => ({
           requestId,
+          clientRequestId: state.clientRequestId,
           createdAt: state.createdAt,
-          kind: state.request.kind,
-          wallet: state.request.wallet,
+          account: state.request.account,
+          operation: state.request.operation,
           status: state.response ? "completed" : "pending",
         })),
       );
@@ -259,12 +320,7 @@ async function main(): Promise<void> {
       }
 
       if (!state.response) {
-        sendJson(response, 202, {
-          ok: true,
-          status: "pending",
-          requestId: statusRequestId,
-          pollAfterMs: 1_000,
-        });
+        sendJson(response, 202, createPendingSignerResponse(statusRequestId));
         return;
       }
 
@@ -337,7 +393,9 @@ async function main(): Promise<void> {
   });
 
   console.error(`Reference HTTP signer listening on ${baseUrl}`);
-  console.error(`Advertised wallet: ${wallet.chain}:${wallet.address}`);
+  console.error(
+    `Advertised account: ${account.chainFamily}:${account.address}`,
+  );
   if (authToken) {
     console.error("Signer auth: bearer token required");
   }

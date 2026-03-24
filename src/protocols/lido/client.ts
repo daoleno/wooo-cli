@@ -1,7 +1,7 @@
 import type { LidoSDKCoreProps } from "@lidofinance/lido-ethereum-sdk";
 import { type Address, formatEther, parseEther, zeroAddress } from "viem";
 import { getPublicClient } from "../../core/evm";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { STETH_ABI, STETH_ADDRESS } from "./constants";
 import type { LidoRewards, LidoStakeResult } from "./types";
@@ -9,7 +9,7 @@ import type { LidoRewards, LidoStakeResult } from "./types";
 export class LidoClient {
   private chain = "ethereum";
 
-  constructor(private signer?: WoooSigner) {}
+  constructor(private signer?: WalletPort) {}
 
   async stake(amountETH: number): Promise<LidoStakeResult> {
     if (!this.signer) throw new Error("Signer required for staking");

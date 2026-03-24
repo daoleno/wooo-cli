@@ -1,9 +1,9 @@
-import { getActiveSigner } from "../../core/context";
+import { getActiveWalletPort } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { WoooSigner } from "../../core/signers";
+import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { JupiterClient } from "./client";
 import type { JupiterQuote, JupiterSwapResult } from "./types";
@@ -20,7 +20,7 @@ export interface PreparedJupiterSwap extends JupiterSwapParams {
 
 export function createJupiterSwapOperation(
   params: JupiterSwapParams,
-): WriteOperation<PreparedJupiterSwap, WoooSigner, JupiterSwapResult> {
+): WriteOperation<PreparedJupiterSwap, WalletPort, JupiterSwapResult> {
   return {
     protocol: "jupiter",
     prepare: async () => {
@@ -66,7 +66,7 @@ export function createJupiterSwapOperation(
           quote: prepared.quote,
         },
       }),
-    resolveAuth: async () => await getActiveSigner("solana"),
+    resolveAuth: async () => await getActiveWalletPort("solana"),
     execute: async (prepared, signer) => {
       const client = new JupiterClient(signer);
       return await client.swap(
