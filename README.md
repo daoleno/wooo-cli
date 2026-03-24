@@ -6,10 +6,7 @@
 
 Swap on Uniswap, lend on Aave, trade perps on Hyperliquid, query Polymarket, or route through the best supported DEX without ever leaving your terminal. wooo-cli brings CEX trading, DeFi, prediction markets, and on-chain execution across EVM and Solana into a single CLI with consistent flags, structured output, and built-in wallet management.
 
-External wallet integrations:
-
-- overview and rollout guidance: [docs/external-wallet.md](./docs/external-wallet.md)
-- formal wire contract: [docs/wallet-transport-v1.md](./docs/wallet-transport-v1.md)
+External wallet integration: [docs/external-wallet.md](./docs/external-wallet.md)
 
 ## Quick Start
 
@@ -19,7 +16,7 @@ npm install -g wooo-cli
 
 # Set up a local wallet
 wooo-cli config init
-wooo-cli wallet generate my-wallet   # prompts for the master password unless WOOO_MASTER_PASSWORD is set
+wooo-cli wallet create my-wallet   # prompts for passphrase unless OWS_PASSPHRASE is set
 
 # Start using
 wooo-cli market price BTC
@@ -51,16 +48,18 @@ Common EVM chain aliases are supported in CLI flags, for example `eth`,
 ### Wallet Management
 
 ```bash
-wooo-cli wallet generate trading-wallet
-wooo-cli wallet import 0xprivatekey... --name imported
-wooo-cli wallet discover --url http://127.0.0.1:8787/ --json
-wooo-cli wallet discover --broker-url https://broker.example.com/ --auth-env WOOO_BROKER_TOKEN --json
-wooo-cli wallet connect ledger-main --chain ethereum --address 0xabc... --command '["/usr/local/bin/wooo-signer-ledger","--profile","main"]'
-wooo-cli wallet connect signer-service --url http://127.0.0.1:8787/
-wooo-cli wallet connect broker-main --broker-url https://broker.example.com/ --auth-env WOOO_BROKER_TOKEN
+wooo-cli wallet create trading-wallet
+wooo-cli wallet import my-import --mnemonic
+wooo-cli wallet import my-key 0xprivatekey...
 wooo-cli wallet list
+wooo-cli wallet info trading-wallet
 wooo-cli wallet switch trading-wallet
 wooo-cli wallet balance
+wooo-cli wallet export trading-wallet --confirm
+wooo-cli wallet discover --broker http://127.0.0.1:8787/ --json
+wooo-cli wallet connect ledger --broker http://127.0.0.1:8787/
+wooo-cli wallet connect remote-signer --broker https://signer.example.com --auth-env SIGNER_TOKEN
+wooo-cli wallet disconnect ledger
 ```
 
 ### Market Data
@@ -184,7 +183,7 @@ wooo-cli chain okx tx ethereum 0xabc123...
 ```
 wooo-cli
 ├── config       — init, set, get, list
-├── wallet       — connect, generate, import, list, balance, switch
+├── wallet       — create, import, export, list, info, delete, switch, balance, connect, disconnect, discover, policy, key
 ├── market       — price, search, okx
 ├── portfolio    — overview, okx
 ├── chain        — tx, balance, ens, call, okx
@@ -263,182 +262,56 @@ wooo-cli config set okxOnchain.passphrase ...
 
 ### On-Chain Protocols
 
-On-chain operations execute through a signer backend, not through private key export.
+On-chain operations use the OWS (Open Wallet Standard) vault for local wallets and HTTP broker transport for external wallets.
 
-For a local encrypted wallet:
+For a local wallet:
 
 ```bash
-wooo-cli wallet generate my-wallet
-wooo-cli wallet import 0xprivatekey... --name imported
+wooo-cli wallet create my-wallet
+wooo-cli wallet import my-key 0xprivatekey...
 ```
 
-`wooo-cli wallet generate` and `wooo-cli wallet import` prompt for the master password on
-TTYs. `WOOO_MASTER_PASSWORD` remains available for controlled local automation and tests.
+`wooo-cli wallet create` and `wooo-cli wallet import` prompt for the vault passphrase on TTYs. Set `OWS_PASSPHRASE` for non-interactive use, or `OWS_API_KEY` for agent/automated access with policy enforcement.
 
-For an external wallet that exposes a local command signer, register a command transport:
+For an external wallet, connect to an HTTP signing broker:
 
 ```bash
-wooo-cli wallet connect signer-main \
-  --chain ethereum \
-  --address 0xabc123... \
-  --command '["/usr/local/bin/wooo-signer","--profile","main"]'
+wooo-cli wallet connect my-signer --broker http://127.0.0.1:8787/
+wooo-cli wallet connect remote --broker https://signer.example.com --auth-env SIGNER_TOKEN
 ```
 
-For an external wallet system that exposes a local signer service instead of a CLI command:
+Reference signer implementations ship in `src/examples/`:
 
 ```bash
-wooo-cli wallet connect signer-service \
-  --url http://127.0.0.1:8787/
-```
-
-For a wallet system that coordinates approval through a remote backend plus frontend wallet:
-
-```bash
-wooo-cli wallet connect broker-main \
-  --broker-url https://broker.example.com/ \
-  --auth-env WOOO_BROKER_TOKEN
-```
-
-This repo also ships a reference external signer over command transport for local development and as an
-implementation template:
-
-```bash
-export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
-
-wooo-cli wallet connect signer-main \
-  --chain ethereum \
-  --address 0xabc123... \
-  --command '["bun","run","src/examples/command-signer.ts"]'
-```
-
-And a reference local signer service:
-
-```bash
+# Local signer service
 export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
 bun run src/examples/signer-service.ts --port 8787
+wooo-cli wallet connect dev --broker http://127.0.0.1:8787/
 
-wooo-cli wallet connect signer-service \
-  --chain ethereum \
-  --address 0xabc123... \
-  --url http://127.0.0.1:8787/
-```
-
-And a reference wallet broker that demonstrates the async `pending` flow used by
-backend-plus-frontend wallet systems:
-
-```bash
+# Async broker (demonstrates pending/polling flow)
 export WOOO_BROKER_AUTH_TOKEN=dev-broker-token
-bun run src/examples/signer-broker.ts \
-  --address 0xabc123... \
-  --chain ethereum \
-  --port 8788
-
-wooo-cli wallet connect broker-dev \
-  --broker-url http://127.0.0.1:8788/ \
-  --auth-env WOOO_BROKER_AUTH_TOKEN
+bun run src/examples/signer-broker.ts --address 0xabc... --chain ethereum --port 8788
+wooo-cli wallet connect broker-dev --broker http://127.0.0.1:8788/ --auth-env WOOO_BROKER_AUTH_TOKEN
 ```
 
-The command signer receives `--request-file <path>` and
-`--response-file <path>` arguments. The request file contains a JSON payload
-describing the action to authorize. The signer command is expected to perform
-local confirmation or policy checks, sign or send the request, write a JSON
-response file, and exit.
-
-For service-based signers, `wooo-cli` sends the same JSON payload over HTTP `POST`
-to the configured local URL and expects the same JSON response contract.
-You can inspect signer service metadata first with `wooo-cli wallet discover --url ...`.
-
-For wallet broker transports, `wooo-cli` uses the same JSON signer request/response
-contract over HTTP, but talks to an explicit remote broker URL and reads the
-bearer token from the configured env var instead of storing it in wallet config.
-
-The reference broker does not hold a secret. It queues requests, exposes
-`GET /requests/:requestId` for polling, and lets you resolve them through a dev
-endpoint so you can model a browser-wallet or app-wallet approval loop before
-swapping in your real backend.
-
-For local testing, inspect and resolve pending broker requests with:
+OWS policy management:
 
 ```bash
-curl -H "Authorization: Bearer $WOOO_BROKER_AUTH_TOKEN" \
-  http://127.0.0.1:8788/dev/requests
-
-curl -X POST \
-  -H "Authorization: Bearer $WOOO_BROKER_AUTH_TOKEN" \
-  -H "content-type: application/json" \
-  http://127.0.0.1:8788/dev/requests/<request-id>/resolve \
-  --data '{"ok":true,"txHash":"0x..."}'
+wooo-cli wallet policy create policy.json
+wooo-cli wallet policy list
+wooo-cli wallet key create agent-key --wallet my-wallet --policy policy-id
+wooo-cli wallet key list
+wooo-cli wallet key revoke key-id
 ```
-
-For teams integrating an external wallet with `wooo-cli`, use:
-
-- [docs/external-wallet.md](./docs/external-wallet.md) for the integration guide
-- [docs/wallet-transport-v1.md](./docs/wallet-transport-v1.md) for the exact transport and payload contract
-
-The reference signer resolves its secret from, in order:
-
-- `--secret-file <path>`
-- `WOOO_SIGNER_SECRET_FILE`
-- `WOOO_SIGNER_SECRET`
-- interactive prompt
-
-It is suitable for local development, testing, and as a template. For production,
-replace secret resolution with a hardware wallet, OS keychain, HSM, MPC signer,
-or your own trusted local signing daemon.
-
-For local wallets, `wooo-cli` applies signer policy and audit logging inside the
-signer subprocess. This keeps the main CLI process focused on planning and
-execution routing, not secret handling.
-
-Example signer policy:
-
-```json
-{
-  "signerPolicy": {
-    "agent-wallet": {
-      "autoApprove": true,
-      "expiresAt": "2026-03-16T18:00:00Z",
-      "allowProtocols": ["uniswap"],
-      "allowCommands": ["swap"],
-      "evm": {
-        "allowChains": ["arbitrum"],
-        "allowFunctions": ["approve", "exactInputSingle"],
-        "approvals": {
-          "denyUnlimited": true,
-          "maxAmount": "1000000000"
-        }
-      }
-    }
-  }
-}
-```
-
-You can write these values with `wooo-cli config set`, including JSON arrays and
-objects:
-
-```bash
-wooo-cli config set signerPolicy.agent-wallet.autoApprove true
-wooo-cli config set signerPolicy.agent-wallet.allowProtocols '["uniswap"]'
-wooo-cli config set signerPolicy.agent-wallet.evm '{"allowChains":["arbitrum"],"approvals":{"denyUnlimited":true}}'
-```
-
-Local signer audit records are appended to `~/.config/wooo/signer-audit.jsonl`.
-External wallet transports should implement equivalent policy and audit controls on their side.
 
 Security model:
 
-- The main CLI process never exposes private keys through the command surface.
-- Local wallets sign through an internal signer subprocess.
-- External wallets can keep keys entirely outside `wooo-cli`, either as a command transport, a local signer service transport, or a broker transport.
-- `--yes` skips the CLI confirmation prompt, but signer-level authorization is still enforced by the signer backend.
-- `config.signerPolicy[walletName]` is enforced on the signer side, not in the planner.
-- Local signer approvals and rejections are logged to `~/.config/wooo/signer-audit.jsonl`.
-- External command signer subprocesses do not inherit the full parent environment. `wooo-cli` forwards `WOOO_CONFIG_DIR`, common terminal/path variables, and `WOOO_SIGNER_*` variables only.
-- Local signer service URLs must point to a local host such as `127.0.0.1`, `::1`, or `localhost`.
-- Wallet broker URLs may be remote, but non-local brokers must use `https://`, and broker auth only authorizes request creation, not approval bypass.
-- External wallet transports support EVM writes, EVM typed-data signing, Solana sends, and Hyperliquid signing through the same request/response contract.
-
-See [docs/external-wallet.md](docs/external-wallet.md) for the full external wallet integration contract.
+- Local wallets are stored in the OWS vault at `~/.ows/` with AES-256-GCM encryption
+- Policy is enforced by the OWS policy engine before signing
+- Audit log at `~/.ows/logs/audit.jsonl`
+- `--yes` skips CLI confirmation only; signer-side authorization remains separate
+- External wallets connect via HTTP broker — keys never enter the CLI process
+- For teams integrating an external wallet, see [docs/external-wallet.md](docs/external-wallet.md)
 
 ## Development
 
