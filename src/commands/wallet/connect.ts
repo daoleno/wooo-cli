@@ -6,7 +6,10 @@ import {
   isEvmChain,
   isSolanaChain,
 } from "../../core/chain-ids";
-import { getExternalWalletRegistry } from "../../core/context";
+import {
+  bootstrapDefaultWallet,
+  getExternalWalletRegistry,
+} from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { fetchSignerMetadata, normalizeSignerUrl } from "../../core/signers";
 
@@ -96,9 +99,9 @@ export default defineCommand({
       description:
         "Wallet address. Optional when signer discovery yields one match",
     },
-    broker: {
+    signer: {
       type: "string",
-      description: "HTTP signer broker URL, for example http://127.0.0.1:8787/",
+      description: "HTTP signer URL, for example http://127.0.0.1:8787/",
       required: true,
     },
     "auth-env": {
@@ -116,13 +119,13 @@ export default defineCommand({
   async run({ args }) {
     const registry = getExternalWalletRegistry();
 
-    if (!args.broker) {
-      throw new Error("Missing --broker value");
+    if (!args.signer) {
+      throw new Error("Missing --signer value");
     }
 
     const out = createOutput(resolveOutputOptions(args));
 
-    const url = normalizeSignerUrl(args.broker);
+    const url = normalizeSignerUrl(args.signer);
     const metadata = await fetchSignerMetadata(url, args["auth-env"]);
     const selected = selectAdvertisedWallet(
       metadata.wallets,
@@ -133,14 +136,15 @@ export default defineCommand({
       name: args.name,
       address: selected.address,
       chainType: selected.chain,
-      broker: url,
+      signerUrl: url,
       ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
     });
+    bootstrapDefaultWallet(args.name);
     out.data({
       name: args.name,
       address: selected.address,
       chain: selected.chain,
-      broker: url,
+      signerUrl: url,
     });
   },
 });

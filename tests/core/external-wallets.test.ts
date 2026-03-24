@@ -26,7 +26,7 @@ describe("ExternalWalletRegistry", () => {
       name: "my-ledger",
       address: EVM_ADDRESS,
       chainType: "evm",
-      broker: "http://127.0.0.1:8787/",
+      signerUrl: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);
@@ -41,14 +41,14 @@ describe("ExternalWalletRegistry", () => {
       name: "hw-evm",
       address: EVM_ADDRESS,
       chainType: "evm",
-      broker: "http://localhost:8080/",
+      signerUrl: "http://localhost:8080/",
     };
     const solWallet: ExternalWalletRecord = {
       name: "hw-sol",
       address: SOL_ADDRESS,
       chainType: "solana",
-      broker: "http://localhost:9090/",
-      authEnv: "BROKER_TOKEN",
+      signerUrl: "http://localhost:9090/",
+      authEnv: "SIGNER_TOKEN",
     };
 
     registry.add(evmWallet);
@@ -65,7 +65,7 @@ describe("ExternalWalletRegistry", () => {
       name: "remote-signer",
       address: EVM_ADDRESS,
       chainType: "evm",
-      broker: "http://localhost:7777/",
+      signerUrl: "http://localhost:7777/",
     };
 
     registry.add(wallet);
@@ -84,7 +84,7 @@ describe("ExternalWalletRegistry", () => {
       name: "to-remove",
       address: EVM_ADDRESS,
       chainType: "evm",
-      broker: "http://127.0.0.1:8787/",
+      signerUrl: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);
@@ -99,7 +99,7 @@ describe("ExternalWalletRegistry", () => {
       name: "duplicate",
       address: EVM_ADDRESS,
       chainType: "evm",
-      broker: "http://127.0.0.1:8787/",
+      signerUrl: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);
@@ -108,5 +108,19 @@ describe("ExternalWalletRegistry", () => {
 
   test("throws on removing unknown wallet", () => {
     expect(() => registry.remove("ghost")).toThrow(/not found/i);
+  });
+
+  test("creates the config directory on first save", () => {
+    const missingDir = join(tempDir, "nested", "config");
+    const nestedRegistry = new ExternalWalletRegistry(missingDir);
+
+    nestedRegistry.add({
+      name: "first-wallet",
+      address: EVM_ADDRESS,
+      chainType: "evm",
+      signerUrl: "http://127.0.0.1:8787/",
+    });
+
+    expect(nestedRegistry.list()).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChainFamily } from "./chain-ids";
 
@@ -6,7 +6,7 @@ export interface ExternalWalletRecord {
   name: string;
   address: string;
   chainType: ChainFamily;
-  broker: string;
+  signerUrl: string;
   authEnv?: string;
 }
 
@@ -18,6 +18,9 @@ export class ExternalWalletRegistry {
   private filePath: string;
 
   constructor(configDir: string) {
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
     this.filePath = join(configDir, "external-wallets.json");
   }
 

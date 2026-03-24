@@ -3,8 +3,8 @@ import { exportWallet } from "@open-wallet-standard/core";
 import ansis from "ansis";
 import { defineCommand } from "citty";
 import { getConfigDir } from "../../core/config";
-import { resolvePassphrase } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { resolveOwsPassphrase } from "../../core/ows";
 
 export default defineCommand({
   meta: { name: "export", description: "Export wallet secret material" },
@@ -32,7 +32,7 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const passphrase = await resolvePassphrase();
+    const passphrase = await resolveOwsPassphrase();
     const vaultPath = join(getConfigDir(), "vault");
     const exported = exportWallet(args.name, passphrase, vaultPath);
     const out = createOutput(resolveOutputOptions(args));

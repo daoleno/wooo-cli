@@ -68,9 +68,6 @@ describe("HyperliquidClient", () => {
       async sendTransaction() {
         throw new Error("not used");
       },
-      async signMessage() {
-        throw new Error("not used");
-      },
       async signHyperliquidL1Action(request) {
         captured.signedRequests.push({
           action: request.action,

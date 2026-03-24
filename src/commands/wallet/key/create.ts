@@ -1,7 +1,8 @@
-import { createApiKey } from "@open-wallet-standard/core";
+import { createApiKey, getWallet } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
-import { resolvePassphrase } from "../../../core/context";
+import { getVaultPath } from "../../../core/config";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
+import { resolveOwsPassphrase } from "../../../core/ows";
 
 export default defineCommand({
   meta: { name: "create", description: "Create an API key for agent access" },
@@ -28,11 +29,13 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
+    const vaultPath = getVaultPath();
     const walletIds = args.wallet
       ? args.wallet
           .split(",")
           .map((s: string) => s.trim())
           .filter(Boolean)
+          .map((walletName: string) => getWallet(walletName, vaultPath).id)
       : [];
     const policyIds = args.policy
       ? args.policy
@@ -41,7 +44,7 @@ export default defineCommand({
           .filter(Boolean)
       : [];
 
-    const passphrase = await resolvePassphrase();
+    const passphrase = await resolveOwsPassphrase();
     if (!passphrase) {
       throw new Error("A passphrase is required to create an API key");
     }
@@ -52,6 +55,7 @@ export default defineCommand({
       policyIds,
       passphrase,
       args.expires,
+      vaultPath,
     );
 
     const out = createOutput(resolveOutputOptions(args));

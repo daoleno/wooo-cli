@@ -20,9 +20,9 @@ import {
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const TEST_TX_HASH = `0x${"ab".repeat(32)}`;
-const BROKER_AUTH_TOKEN = "broker-token-test";
+const SIGNER_AUTH_TOKEN = "signer-token-test";
 
-interface ReferenceBrokerHarness {
+interface ReferenceSignerHarness {
   authToken: string;
   baseUrl: string;
   stop(): Promise<void>;
@@ -42,7 +42,7 @@ interface DevRequestSummary {
 }
 
 const tempDirs = new Set<string>();
-const originalBrokerToken = process.env.WOOO_BROKER_TOKEN;
+const originalSignerToken = process.env.WOOO_SIGNER_TOKEN;
 
 async function findFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -95,8 +95,8 @@ async function waitForResult<T>(
 
   throw new Error(
     lastError
-      ? `Timed out while waiting for broker result: ${lastError}`
-      : "Timed out while waiting for broker result",
+      ? `Timed out while waiting for signer result: ${lastError}`
+      : "Timed out while waiting for signer result",
   );
 }
 
@@ -104,14 +104,14 @@ async function readJson<T>(response: Response): Promise<T> {
   return JSON.parse(await response.text()) as T;
 }
 
-async function startReferenceBroker(): Promise<ReferenceBrokerHarness> {
+async function startReferenceSigner(): Promise<ReferenceSignerHarness> {
   const port = await findFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const processHandle = Bun.spawn({
     cmd: [
       "bun",
       "run",
-      "src/examples/signer-broker.ts",
+      "src/examples/async-signer.ts",
       "--address",
       ZERO_ADDRESS,
       "--chain",
@@ -122,7 +122,7 @@ async function startReferenceBroker(): Promise<ReferenceBrokerHarness> {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      WOOO_BROKER_AUTH_TOKEN: BROKER_AUTH_TOKEN,
+      WOOO_SIGNER_TOKEN: SIGNER_AUTH_TOKEN,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -134,7 +134,7 @@ async function startReferenceBroker(): Promise<ReferenceBrokerHarness> {
     await waitForResult(async () => {
       const response = await fetch(`${baseUrl}/`, {
         headers: {
-          authorization: `Bearer ${BROKER_AUTH_TOKEN}`,
+          authorization: `Bearer ${SIGNER_AUTH_TOKEN}`,
         },
       }).catch(() => null);
       if (!response?.ok) {
@@ -149,7 +149,7 @@ async function startReferenceBroker(): Promise<ReferenceBrokerHarness> {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       [
-        `Reference wallet broker failed to start at ${baseUrl}.`,
+        `Reference HTTP signer failed to start at ${baseUrl}.`,
         `Reason: ${message}`,
         `Exit code: ${exitCode}`,
         `stderr:\n${stderr || "<empty>"}`,
@@ -159,7 +159,7 @@ async function startReferenceBroker(): Promise<ReferenceBrokerHarness> {
   }
 
   return {
-    authToken: BROKER_AUTH_TOKEN,
+    authToken: SIGNER_AUTH_TOKEN,
     baseUrl,
     async stop() {
       processHandle.kill();
@@ -175,7 +175,7 @@ async function runCliJson<T>(
     env?: Record<string, string>;
   },
 ): Promise<T> {
-  const tempDir = mkdtempSync(join(tmpdir(), "wooo-broker-example-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "wooo-signer-example-"));
   tempDirs.add(tempDir);
 
   const proc = Bun.spawn({
@@ -213,19 +213,19 @@ afterEach(() => {
   }
   tempDirs.clear();
 
-  if (originalBrokerToken === undefined) {
-    delete process.env.WOOO_BROKER_TOKEN;
+  if (originalSignerToken === undefined) {
+    delete process.env.WOOO_SIGNER_TOKEN;
   } else {
-    process.env.WOOO_BROKER_TOKEN = originalBrokerToken;
+    process.env.WOOO_SIGNER_TOKEN = originalSignerToken;
   }
 });
 
-describe("reference wallet broker example", () => {
+describe("reference async signer example", () => {
   test("serves metadata, enforces auth, and resolves pending requests", async () => {
-    const broker = await startReferenceBroker();
+    const signer = await startReferenceSigner();
 
     try {
-      const unauthorized = await fetch(`${broker.baseUrl}/`);
+      const unauthorized = await fetch(`${signer.baseUrl}/`);
       expect(unauthorized.status).toBe(401);
       expect(
         await readJson<{ error: string; ok: boolean }>(unauthorized),
@@ -234,9 +234,9 @@ describe("reference wallet broker example", () => {
         ok: false,
       });
 
-      const metadataResponse = await fetch(`${broker.baseUrl}/`, {
+      const metadataResponse = await fetch(`${signer.baseUrl}/`, {
         headers: {
-          authorization: `Bearer ${broker.authToken}`,
+          authorization: `Bearer ${signer.authToken}`,
         },
       });
       expect(metadataResponse.status).toBe(200);
@@ -255,7 +255,7 @@ describe("reference wallet broker example", () => {
         version: 1,
         kind: "evm-write-contract",
         wallet: {
-          name: "broker-wallet",
+          name: "signer-wallet",
           address: ZERO_ADDRESS,
           chain: "evm",
           mode: "external",
@@ -269,10 +269,10 @@ describe("reference wallet broker example", () => {
         },
       };
 
-      const createResponse = await fetch(`${broker.baseUrl}/`, {
+      const createResponse = await fetch(`${signer.baseUrl}/`, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${broker.authToken}`,
+          authorization: `Bearer ${signer.authToken}`,
           "content-type": "application/json",
         },
         body: serializeSignerPayload(request),
@@ -284,15 +284,15 @@ describe("reference wallet broker example", () => {
       );
       expect(isSignerCommandPendingResponse(createPayload)).toBe(true);
       if (!isSignerCommandPendingResponse(createPayload)) {
-        throw new Error("Expected a pending broker response");
+        throw new Error("Expected a pending signer response");
       }
 
       const pendingRequestId = createPayload.requestId;
       const pendingListResponse = await fetch(
-        `${broker.baseUrl}/dev/requests`,
+        `${signer.baseUrl}/dev/requests`,
         {
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${signer.authToken}`,
           },
         },
       );
@@ -304,7 +304,7 @@ describe("reference wallet broker example", () => {
         requestId: pendingRequestId,
         kind: "evm-write-contract",
         wallet: {
-          name: "broker-wallet",
+          name: "signer-wallet",
           address: ZERO_ADDRESS,
           chain: "evm",
           mode: "external",
@@ -314,10 +314,10 @@ describe("reference wallet broker example", () => {
       expect(pendingList[0]?.createdAt).toBeString();
 
       const pendingStatusResponse = await fetch(
-        `${broker.baseUrl}/requests/${pendingRequestId}`,
+        `${signer.baseUrl}/requests/${pendingRequestId}`,
         {
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${signer.authToken}`,
           },
         },
       );
@@ -328,11 +328,11 @@ describe("reference wallet broker example", () => {
       expect(isSignerCommandPendingResponse(pendingStatus)).toBe(true);
 
       const resolveResponse = await fetch(
-        `${broker.baseUrl}/dev/requests/${pendingRequestId}/resolve`,
+        `${signer.baseUrl}/dev/requests/${pendingRequestId}/resolve`,
         {
           method: "POST",
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${signer.authToken}`,
             "content-type": "application/json",
           },
           body: serializeSignerPayload({
@@ -350,10 +350,10 @@ describe("reference wallet broker example", () => {
       });
 
       const finalStatusResponse = await fetch(
-        `${broker.baseUrl}/requests/${pendingRequestId}`,
+        `${signer.baseUrl}/requests/${pendingRequestId}`,
         {
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${signer.authToken}`,
           },
         },
       );
@@ -367,37 +367,37 @@ describe("reference wallet broker example", () => {
         txHash: TEST_TX_HASH,
       });
     } finally {
-      await broker.stop();
+      await signer.stop();
     }
   });
 
   test("works with wallet discover and wallet connect over HTTP transport", async () => {
-    const broker = await startReferenceBroker();
+    const signer = await startReferenceSigner();
 
     try {
       const discoverResult = await runCliJson<{
         authEnv: string;
         kind: string;
-        url: string;
+        signerUrl: string;
         wallets: Array<{ address: string; chain: string }>;
       }>(
         [
           "wallet",
           "discover",
-          "--broker",
-          broker.baseUrl,
+          "--signer",
+          signer.baseUrl,
           "--auth-env",
-          "WOOO_BROKER_TOKEN",
+          "WOOO_SIGNER_TOKEN",
         ],
         {
           env: {
-            WOOO_BROKER_TOKEN: broker.authToken,
+            WOOO_SIGNER_TOKEN: signer.authToken,
           },
         },
       );
 
       expect(discoverResult.kind).toBe("wooo-signer");
-      expect(discoverResult.authEnv).toBe("WOOO_BROKER_TOKEN");
+      expect(discoverResult.authEnv).toBe("WOOO_SIGNER_TOKEN");
       expect(discoverResult.wallets).toEqual([
         {
           address: ZERO_ADDRESS,
@@ -406,56 +406,54 @@ describe("reference wallet broker example", () => {
       ]);
 
       const connectResult = await runCliJson<{
-        active: boolean;
         address: string;
-        broker: string;
         chain: string;
-        mode: string;
         name: string;
+        signerUrl: string;
       }>(
         [
           "wallet",
           "connect",
-          "broker-example",
-          "--broker",
-          broker.baseUrl,
+          "signer-example",
+          "--signer",
+          signer.baseUrl,
           "--auth-env",
-          "WOOO_BROKER_TOKEN",
+          "WOOO_SIGNER_TOKEN",
         ],
         {
           env: {
-            WOOO_BROKER_TOKEN: broker.authToken,
+            WOOO_SIGNER_TOKEN: signer.authToken,
           },
         },
       );
 
       expect(connectResult).toEqual({
-        name: "broker-example",
+        name: "signer-example",
         address: ZERO_ADDRESS,
         chain: "evm",
-        broker: `${broker.baseUrl}/`,
+        signerUrl: `${signer.baseUrl}/`,
       });
     } finally {
-      await broker.stop();
+      await signer.stop();
     }
   });
 
-  test("completes an async signer request through the reference wallet broker", async () => {
-    const broker = await startReferenceBroker();
-    process.env.WOOO_BROKER_TOKEN = broker.authToken;
+  test("completes an async signer request through the reference signer", async () => {
+    const transport = await startReferenceSigner();
+    process.env.WOOO_SIGNER_TOKEN = transport.authToken;
 
     try {
       const wallet: ResolvedWallet = {
         source: "external",
-        name: "broker-wallet",
+        name: "signer-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        broker: normalizeSignerUrl(broker.baseUrl),
-        authEnv: "WOOO_BROKER_TOKEN",
+        signerUrl: normalizeSignerUrl(transport.baseUrl),
+        authEnv: "WOOO_SIGNER_TOKEN",
       };
 
-      const signer = createSigner(wallet);
-      const writePromise = signer.writeContract("ethereum", {
+      const walletSigner = createSigner(wallet);
+      const writePromise = walletSigner.writeContract("ethereum", {
         address: ZERO_ADDRESS,
         abi: [] as Abi,
         functionName: "approve",
@@ -463,14 +461,14 @@ describe("reference wallet broker example", () => {
       });
 
       const pendingRequest = await waitForResult(async () => {
-        const response = await fetch(`${broker.baseUrl}/dev/requests`, {
+        const response = await fetch(`${transport.baseUrl}/dev/requests`, {
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${transport.authToken}`,
           },
         });
         if (!response.ok) {
           throw new Error(
-            `Broker request list returned HTTP ${response.status}`,
+            `Signer request list returned HTTP ${response.status}`,
           );
         }
 
@@ -480,7 +478,7 @@ describe("reference wallet broker example", () => {
 
       expect(pendingRequest.kind).toBe("evm-write-contract");
       expect(pendingRequest.wallet).toEqual({
-        name: "broker-wallet",
+        name: "signer-wallet",
         address: ZERO_ADDRESS,
         chain: "evm",
         mode: "external",
@@ -488,11 +486,11 @@ describe("reference wallet broker example", () => {
       expect(pendingRequest.status).toBe("pending");
 
       const resolveResponse = await fetch(
-        `${broker.baseUrl}/dev/requests/${pendingRequest.requestId}/resolve`,
+        `${transport.baseUrl}/dev/requests/${pendingRequest.requestId}/resolve`,
         {
           method: "POST",
           headers: {
-            authorization: `Bearer ${broker.authToken}`,
+            authorization: `Bearer ${transport.authToken}`,
             "content-type": "application/json",
           },
           body: serializeSignerPayload({
@@ -505,7 +503,7 @@ describe("reference wallet broker example", () => {
 
       await expect(writePromise).resolves.toBe(TEST_TX_HASH);
     } finally {
-      await broker.stop();
+      await transport.stop();
     }
   });
 });

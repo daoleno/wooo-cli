@@ -26,10 +26,10 @@ src/
 │   ├── evm.ts            # Shared EVM clients (viem)
 │   ├── execution-plan.ts # Machine-readable dry-run contract
 │   ├── exchange-gateway.ts # Thin execution wrapper for exchange APIs
-│   ├── external-wallets.ts # External wallet registry (broker-based)
+│   ├── external-wallets.ts # External wallet registry (HTTP signer-based)
 │   ├── output.ts         # Structured output (table, JSON)
 │   ├── signer-protocol.ts # External wallet request / response contract
-│   ├── signers.ts        # WoooSigner interface (OWS local + HTTP broker external)
+│   ├── signers.ts        # WoooSigner interface (OWS local + HTTP signer external)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
 │   ├── solana.ts         # Shared Solana connection
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
@@ -173,13 +173,13 @@ Local wallets are managed by the Open Wallet Standard (OWS) SDK:
 - Audit log at `~/.ows/logs/audit.jsonl`
 - Authentication: passphrase (interactive or `OWS_PASSPHRASE`) or API key (`OWS_API_KEY`) for agent access
 
-### External Wallets (HTTP Broker)
+### External Wallets (HTTP Signer)
 
-External wallets connect via an HTTP signing broker:
+External wallets connect via an HTTP signer:
 
-- Registered with `wooo wallet connect <name> --broker <url> [--auth-env VAR]`
-- Stored in `~/.config/wooo/external-wallets.json` (address + broker URL only, no keys)
-- Signing happens via HTTP POST to the broker, which returns tx hash or signature
+- Registered with `wooo wallet connect <name> --signer <url> [--auth-env VAR]`
+- Stored in `~/.config/wooo/external-wallets.json` (address + signer URL only, no keys)
+- Signing happens via HTTP POST to the signer, which returns tx hash or signature
 - Async support via pending/polling pattern for browser-wallet or app-wallet approval flows
 - Auth token resolved from environment variable, never persisted in config
 
@@ -191,7 +191,6 @@ Both wallet types expose the same `WoooSigner` interface:
 - `writeContract()` — EVM contract writes
 - `sendTransaction()` — Solana transactions
 - `signHyperliquidL1Action()` — Hyperliquid L1 actions
-- `signMessage()` — generic message signing
 
 Protocol code uses `getActiveSigner("evm")` or `getActiveSigner("solana")` and does not
 need to know whether the wallet is local or external.

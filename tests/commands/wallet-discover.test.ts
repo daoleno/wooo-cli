@@ -50,7 +50,7 @@ describe("wallet discover command", () => {
           "src/index.ts",
           "wallet",
           "discover",
-          "--broker",
+          "--signer",
           server.url.toString(),
           "--json",
         ],
@@ -74,14 +74,14 @@ describe("wallet discover command", () => {
 
       const output = JSON.parse(stdout) as {
         kind: string;
+        signerUrl: string;
         supportedKinds: string[];
-        url: string;
         wallets: Array<{ address: string; chain: string }>;
       };
 
       expect(output.kind).toBe("wooo-signer");
       expect(output.supportedKinds).toEqual(["evm-write-contract"]);
-      expect(output.url).toBe(server.url.toString());
+      expect(output.signerUrl).toBe(server.url.toString());
       expect(output.wallets).toEqual([
         {
           address: ZERO_ADDRESS,
@@ -129,17 +129,17 @@ describe("wallet discover command", () => {
           "src/index.ts",
           "wallet",
           "discover",
-          "--broker",
+          "--signer",
           server.url.toString(),
           "--auth-env",
-          "WOOO_BROKER_TOKEN",
+          "WOOO_SIGNER_TOKEN",
           "--json",
         ],
         cwd: process.cwd(),
         env: {
           ...process.env,
           WOOO_CONFIG_DIR: tempDir,
-          WOOO_BROKER_TOKEN: "broker-token-test",
+          WOOO_SIGNER_TOKEN: "signer-token-test",
         },
         stderr: "pipe",
         stdout: "pipe",
@@ -153,18 +153,18 @@ describe("wallet discover command", () => {
 
       expect(exitCode).toBe(0);
       expect(stderr.trim()).toBe("");
-      expect(capturedAuthHeader).toBe("Bearer broker-token-test");
+      expect(capturedAuthHeader).toBe("Bearer signer-token-test");
 
       const output = JSON.parse(stdout) as {
         authEnv?: string;
         kind: string;
-        url: string;
+        signerUrl: string;
         wallets: Array<{ address: string; chain: string }>;
       };
 
       expect(output.kind).toBe("wooo-signer");
-      expect(output.authEnv).toBe("WOOO_BROKER_TOKEN");
-      expect(output.url).toBe(server.url.toString());
+      expect(output.authEnv).toBe("WOOO_SIGNER_TOKEN");
+      expect(output.signerUrl).toBe(server.url.toString());
       expect(output.wallets).toEqual([
         {
           address: ZERO_ADDRESS,

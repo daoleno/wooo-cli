@@ -1,5 +1,6 @@
 import { listApiKeys } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
+import { getVaultPath } from "../../../core/config";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({
@@ -9,7 +10,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const keys = listApiKeys();
+    const keys = listApiKeys(getVaultPath());
     const out = createOutput(resolveOutputOptions(args));
     out.data(keys);
   },

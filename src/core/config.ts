@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -40,6 +40,10 @@ export function getConfigDir(): string {
 
 export function getConfigPath(cwd = getConfigDir()): string {
   return join(cwd, "wooo.config.json");
+}
+
+export function getVaultPath(cwd = getConfigDir()): string {
+  return join(cwd, "vault");
 }
 
 export function ensureConfigDir(cwd = getConfigDir()): void {
@@ -94,4 +98,50 @@ export function loadWoooConfigSync(cwd?: string): WoooConfig {
 
 export async function loadWoooConfig(cwd?: string): Promise<WoooConfig> {
   return loadWoooConfigSync(cwd);
+}
+
+export function setDefaultWalletIfMissing(
+  walletName: string,
+  options?: {
+    cwd?: string;
+    shouldReplace?: (currentWallet: string) => boolean;
+  },
+): void {
+  const cwd = options?.cwd ?? getConfigDir();
+  let config: Record<string, unknown>;
+  try {
+    config = loadUserConfigSync(cwd);
+  } catch {
+    return;
+  }
+
+  const defaultConfig = config.default;
+  let configuredWallet: string | undefined;
+  if (
+    typeof defaultConfig === "object" &&
+    defaultConfig !== null &&
+    !Array.isArray(defaultConfig) &&
+    typeof (defaultConfig as Record<string, unknown>).wallet === "string"
+  ) {
+    configuredWallet = (defaultConfig as Record<string, unknown>)
+      .wallet as string;
+  }
+
+  if (configuredWallet) {
+    if (!options?.shouldReplace?.(configuredWallet)) {
+      return;
+    }
+  }
+
+  ensureConfigDir(cwd);
+  const nextDefault =
+    typeof defaultConfig === "object" &&
+    defaultConfig !== null &&
+    !Array.isArray(defaultConfig)
+      ? { ...(defaultConfig as Record<string, unknown>) }
+      : {};
+  nextDefault.wallet = walletName;
+  config.default = nextDefault;
+
+  writeFileSync(getConfigPath(cwd), JSON.stringify(config, null, 2));
 }

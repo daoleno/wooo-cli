@@ -7,7 +7,7 @@ Status:
 
 - protocol version: `1`
 - implementation status: `beta`
-- transport: HTTP broker
+- transport: HTTP signer
 
 The design goal is simple:
 
@@ -22,7 +22,7 @@ For a higher-level integration walkthrough, see
 
 This spec defines:
 
-- the HTTP broker transport contract
+- the HTTP signer transport contract
 - asynchronous completion via pending/polling
 - metadata discovery
 - the JSON request and response payloads
@@ -41,8 +41,8 @@ Implementers should preserve these invariants:
 1. The signer is the trust boundary. `wooo-cli` constructs a request, but the signer decides whether to authorize it.
 2. Private keys must remain outside the main `wooo-cli` process.
 3. Human approval and policy enforcement belong inside the signer, not just inside the planner.
-4. Non-local broker URLs must use `https://`.
-5. Broker auth authorizes request creation, not implicit signing. The broker must still require user approval or equivalent signer-side policy before returning a terminal success response.
+4. Non-local signer URLs must use `https://`.
+5. Signer auth authorizes request creation, not implicit signing. The signer must still require user approval or equivalent signer-side policy before returning a terminal success response.
 6. `--yes` only skips the CLI confirmation layer. It does not remove signer-side approval or signer-side policy.
 
 ## 3. Versioning Rules
@@ -58,17 +58,17 @@ Compatibility rules:
 
 ## 4. Transport
 
-Register a wallet backed by an HTTP signing broker:
+Register a wallet backed by an HTTP signer:
 
 ```bash
-wooo-cli wallet connect my-signer --broker http://127.0.0.1:8787/
-wooo-cli wallet connect remote --broker https://signer.example.com/ --auth-env SIGNER_TOKEN
+wooo-cli wallet connect my-signer --signer http://127.0.0.1:8787/
+wooo-cli wallet connect remote --signer https://signer.example.com/ --auth-env SIGNER_TOKEN
 ```
 
-Before connecting, users can inspect the broker:
+Before connecting, users can inspect the signer:
 
 ```bash
-wooo-cli wallet discover --broker http://127.0.0.1:8787/ --json
+wooo-cli wallet discover --signer http://127.0.0.1:8787/ --json
 ```
 
 Transport contract:
@@ -80,17 +80,17 @@ Transport contract:
 URL requirements:
 
 - supported URL schemes are `http://` and `https://`
-- non-local broker URLs must use `https://`
+- non-local signer URLs must use `https://`
 - auth token is resolved from an env var name stored on the wallet record, not persisted in config
 
 Request requirements:
 
 - if `authEnv` is configured, `wooo-cli` sends `Authorization: Bearer <token>` with every request
-- the broker should authenticate the caller before accepting a signer request
+- the signer should authenticate the caller before accepting a signer request
 
 ## 5. Metadata Discovery
 
-The broker must expose metadata on `GET /`.
+The signer must expose metadata on `GET /`.
 
 Required payload:
 
@@ -280,4 +280,4 @@ An external wallet transport is ready for `wooo-cli` when:
 4. it never exposes raw private key material to `wooo-cli`
 5. it implements `GET /` metadata and `POST /` request acceptance
 6. if async, it implements `GET /requests/:requestId` for polling
-7. if authenticated, it does not let broker auth bypass signer-side approval
+7. if authenticated, it does not let signer auth bypass signer-side approval

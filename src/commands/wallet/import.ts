@@ -1,13 +1,13 @@
-import { join } from "node:path";
 import {
   importWalletMnemonic,
   importWalletPrivateKey,
 } from "@open-wallet-standard/core";
 import ansis from "ansis";
 import { defineCommand } from "citty";
-import { getConfigDir } from "../../core/config";
-import { resolvePassphrase } from "../../core/context";
+import { getVaultPath } from "../../core/config";
+import { bootstrapDefaultWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { resolveOwsPassphrase } from "../../core/ows";
 
 export default defineCommand({
   meta: {
@@ -42,7 +42,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const vaultPath = join(getConfigDir(), "vault");
+    const vaultPath = getVaultPath();
     const out = createOutput(resolveOutputOptions(args));
 
     // Mnemonic import (interactive)
@@ -56,7 +56,7 @@ export default defineCommand({
         console.error("No mnemonic provided");
         process.exit(6);
       }
-      const passphrase = await resolvePassphrase();
+      const passphrase = await resolveOwsPassphrase();
       const wallet = await importWalletMnemonic(
         args.name,
         value,
@@ -64,6 +64,7 @@ export default defineCommand({
         undefined,
         vaultPath,
       );
+      bootstrapDefaultWallet(wallet.name);
       out.data({
         name: wallet.name,
         id: wallet.id,
@@ -107,7 +108,7 @@ export default defineCommand({
     // Detect if the secret looks like a mnemonic (space-separated words)
     const isMnemonic = secret.split(/\s+/).length >= 12;
 
-    const passphrase = await resolvePassphrase();
+    const passphrase = await resolveOwsPassphrase();
 
     if (isMnemonic) {
       const wallet = await importWalletMnemonic(
@@ -117,6 +118,7 @@ export default defineCommand({
         undefined,
         vaultPath,
       );
+      bootstrapDefaultWallet(wallet.name);
       out.data({
         name: wallet.name,
         id: wallet.id,
@@ -134,6 +136,7 @@ export default defineCommand({
         vaultPath,
         args.chain,
       );
+      bootstrapDefaultWallet(wallet.name);
       out.data({
         name: wallet.name,
         id: wallet.id,

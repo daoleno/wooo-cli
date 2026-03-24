@@ -1,9 +1,9 @@
-import { join } from "node:path";
 import { createWallet } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
-import { getConfigDir } from "../../core/config";
-import { resolvePassphrase } from "../../core/context";
+import { getVaultPath } from "../../core/config";
+import { bootstrapDefaultWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
+import { resolveOwsPassphrase } from "../../core/ows";
 
 export default defineCommand({
   meta: { name: "create", description: "Create a new OWS wallet" },
@@ -28,9 +28,10 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const passphrase = await resolvePassphrase();
-    const vaultPath = join(getConfigDir(), "vault");
+    const passphrase = await resolveOwsPassphrase();
+    const vaultPath = getVaultPath();
     const wallet = await createWallet(args.name, passphrase, words, vaultPath);
+    bootstrapDefaultWallet(wallet.name);
     const out = createOutput(resolveOutputOptions(args));
     out.data({
       name: wallet.name,

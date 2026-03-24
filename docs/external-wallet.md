@@ -4,7 +4,7 @@ This guide is for teams integrating their own external wallet system with `wooo-
 
 Use this document when you need to decide:
 
-- how to expose your wallet system as a signing broker
+- how to expose your wallet system as an HTTP signer
 - how to connect it to `wooo-cli`
 - what security properties the integration must preserve
 - what users can expect when humans and AI both drive the CLI
@@ -28,7 +28,7 @@ This keeps the core safety property intact:
 
 ## Integration Shape
 
-External wallets connect via an HTTP signing broker. The broker is an HTTP endpoint that:
+External wallets connect via an HTTP signer. The signer endpoint:
 
 1. Exposes `GET /` to return signer metadata (advertised wallets, supported request kinds)
 2. Accepts `POST /` with a JSON signer request
@@ -52,30 +52,30 @@ Authentication is optional. When configured, `wooo-cli` reads a bearer token fro
 Discover and connect:
 
 ```bash
-wooo-cli wallet discover --broker http://127.0.0.1:8787/ --json
+wooo-cli wallet discover --signer http://127.0.0.1:8787/ --json
 
-wooo-cli wallet connect my-signer --broker http://127.0.0.1:8787/
+wooo-cli wallet connect my-signer --signer http://127.0.0.1:8787/
 ```
 
 With authentication:
 
 ```bash
 wooo-cli wallet connect remote-signer \
-  --broker https://signer.example.com/ \
+  --signer https://signer.example.com/ \
   --auth-env SIGNER_TOKEN
 ```
 
-If the broker advertises multiple wallets, specify one explicitly:
+If the signer advertises multiple wallets, specify one explicitly:
 
 ```bash
 wooo-cli wallet connect my-signer \
-  --broker http://127.0.0.1:8787/ \
+  --signer http://127.0.0.1:8787/ \
   --address 0xabc123...
 ```
 
 ## Metadata Discovery
 
-The broker must expose metadata on `GET /`:
+The signer must expose metadata on `GET /`:
 
 ```json
 {
@@ -137,7 +137,7 @@ An integration is aligned with the intended model when:
 
 1. `wooo-cli` never receives raw private keys, seed phrases, or wallet backups
 2. The signer enforces its own allowlist, rate limits, policy, or human approval
-3. Broker auth authorizes request creation, not implicit signing
+3. Signer auth authorizes request creation, not implicit signing
 4. Rejections are fail-closed — malformed or unsupported requests return errors
 5. Audit logs are kept on the signer side
 
@@ -146,6 +146,6 @@ An integration is aligned with the intended model when:
 This repo includes two reference implementations:
 
 - local signer service: [src/examples/signer-service.ts](../src/examples/signer-service.ts)
-- async wallet broker: [src/examples/signer-broker.ts](../src/examples/signer-broker.ts)
+- async signer example: [src/examples/async-signer.ts](../src/examples/async-signer.ts)
 
-The broker example is intentionally a coordinator, not a signer. It demonstrates metadata discovery, authenticated request creation, async `pending` polling, and out-of-band request resolution.
+The async signer example is intentionally a coordinator, not the signing key holder. It demonstrates metadata discovery, authenticated request creation, async `pending` polling, and out-of-band request resolution.

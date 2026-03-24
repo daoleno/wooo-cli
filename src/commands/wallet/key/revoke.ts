@@ -1,5 +1,6 @@
 import { revokeApiKey } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
+import { getVaultPath } from "../../../core/config";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({
@@ -14,7 +15,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    revokeApiKey(args.id);
+    revokeApiKey(args.id, getVaultPath());
     const out = createOutput(resolveOutputOptions(args));
     out.success(`Revoked API key "${args.id}"`);
   },

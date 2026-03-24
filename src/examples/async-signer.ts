@@ -26,38 +26,38 @@ interface AdvertisedWallet {
   chain: "evm" | "solana";
 }
 
-interface BrokerRequestState {
+interface SignerRequestState {
   createdAt: string;
   request: SignerCommandRequest;
   response: SignerCommandTerminalResponse | null;
 }
 
 function parsePort(args: string[]): number {
-  const rawPort = getFlagValue(args, "--port") || process.env.WOOO_BROKER_PORT;
+  const rawPort = getFlagValue(args, "--port") || process.env.WOOO_SIGNER_PORT;
   if (!rawPort) {
     return 8788;
   }
 
   const port = Number.parseInt(rawPort, 10);
   if (!Number.isFinite(port) || port <= 0 || port > 65535) {
-    throw new Error(`Invalid broker port: ${rawPort}`);
+    throw new Error(`Invalid signer port: ${rawPort}`);
   }
   return port;
 }
 
 function parseAdvertisedWallet(args: string[]): AdvertisedWallet {
   const address =
-    getFlagValue(args, "--address") || process.env.WOOO_BROKER_ADDRESS;
+    getFlagValue(args, "--address") || process.env.WOOO_SIGNER_ADDRESS;
   if (!address?.trim()) {
-    throw new Error("Broker example requires --address or WOOO_BROKER_ADDRESS");
+    throw new Error("Signer example requires --address or WOOO_SIGNER_ADDRESS");
   }
 
   const rawChain =
-    getFlagValue(args, "--chain") || process.env.WOOO_BROKER_CHAIN || "evm";
+    getFlagValue(args, "--chain") || process.env.WOOO_SIGNER_CHAIN || "evm";
   const chain = resolveWalletType(rawChain);
   if (!chain) {
     throw new Error(
-      `Unsupported broker wallet type: ${rawChain}. Use evm or solana.`,
+      `Unsupported signer wallet type: ${rawChain}. Use evm or solana.`,
     );
   }
 
@@ -69,7 +69,7 @@ function parseAdvertisedWallet(args: string[]): AdvertisedWallet {
 
 function resolveAuthToken(args: string[]): string | null {
   const token =
-    getFlagValue(args, "--auth-token") || process.env.WOOO_BROKER_AUTH_TOKEN;
+    getFlagValue(args, "--auth-token") || process.env.WOOO_SIGNER_TOKEN;
   if (!token?.trim()) {
     return null;
   }
@@ -164,12 +164,12 @@ function createBaseUrl(host: string, port: number): string {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const host = process.env.WOOO_BROKER_HOST || "127.0.0.1";
+  const host = process.env.WOOO_SIGNER_HOST || "127.0.0.1";
   const port = parsePort(args);
   const wallet = parseAdvertisedWallet(args);
   const authToken = resolveAuthToken(args);
   const metadata = createMetadata(wallet);
-  const requestState = new Map<string, BrokerRequestState>();
+  const requestState = new Map<string, SignerRequestState>();
   const baseUrl = createBaseUrl(host, port);
   const authHeader = authToken ? " -H 'Authorization: Bearer <token>'" : "";
 
@@ -209,7 +209,7 @@ async function main(): Promise<void> {
       });
 
       console.error(
-        `Broker request ${requestId} queued for ${signerRequest.kind} (${signerRequest.wallet.chain}:${signerRequest.wallet.address})`,
+        `Signer request ${requestId} queued for ${signerRequest.kind} (${signerRequest.wallet.chain}:${signerRequest.wallet.address})`,
       );
       console.error(
         `Inspect pending requests: curl${authHeader} ${baseUrl}/dev/requests`,
@@ -317,7 +317,7 @@ async function main(): Promise<void> {
       }
 
       state.response = terminalResponse;
-      console.error(`Broker request ${resolveRequestId} resolved`);
+      console.error(`Signer request ${resolveRequestId} resolved`);
       sendJson(response, 200, {
         ok: true,
         resolved: true,
@@ -336,10 +336,10 @@ async function main(): Promise<void> {
     });
   });
 
-  console.error(`Reference wallet broker listening on ${baseUrl}`);
+  console.error(`Reference HTTP signer listening on ${baseUrl}`);
   console.error(`Advertised wallet: ${wallet.chain}:${wallet.address}`);
   if (authToken) {
-    console.error("Broker auth: bearer token required");
+    console.error("Signer auth: bearer token required");
   }
 
   await new Promise(() => {});

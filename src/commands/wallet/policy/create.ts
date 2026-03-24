@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createPolicy } from "@open-wallet-standard/core";
 import { defineCommand } from "citty";
+import { getVaultPath } from "../../../core/config";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({
@@ -19,7 +20,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const policyJson = readFileSync(args.file, "utf-8");
-    createPolicy(policyJson);
+    createPolicy(policyJson, getVaultPath());
     const out = createOutput(resolveOutputOptions(args));
     out.success("Policy created successfully");
   },

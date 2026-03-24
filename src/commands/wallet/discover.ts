@@ -8,9 +8,9 @@ export default defineCommand({
     description: "Inspect an HTTP signer and list its advertised wallets",
   },
   args: {
-    broker: {
+    signer: {
       type: "string",
-      description: "HTTP signer broker URL, for example http://127.0.0.1:8787/",
+      description: "HTTP signer URL, for example http://127.0.0.1:8787/",
       required: true,
     },
     "auth-env": {
@@ -21,17 +21,17 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    if (!args.broker) {
-      throw new Error("Missing --broker value");
+    if (!args.signer) {
+      throw new Error("Missing --signer value");
     }
 
-    const url = normalizeSignerUrl(args.broker);
+    const url = normalizeSignerUrl(args.signer);
     const metadata = await fetchSignerMetadata(url, args["auth-env"]);
     const out = createOutput(resolveOutputOptions(args));
 
     if (args.json || args.format === "json") {
       out.data({
-        url,
+        signerUrl: url,
         ...metadata,
         ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
       });

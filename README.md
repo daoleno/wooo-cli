@@ -56,9 +56,9 @@ wooo-cli wallet info trading-wallet
 wooo-cli wallet switch trading-wallet
 wooo-cli wallet balance
 wooo-cli wallet export trading-wallet --confirm
-wooo-cli wallet discover --broker http://127.0.0.1:8787/ --json
-wooo-cli wallet connect ledger --broker http://127.0.0.1:8787/
-wooo-cli wallet connect remote-signer --broker https://signer.example.com --auth-env SIGNER_TOKEN
+wooo-cli wallet discover --signer http://127.0.0.1:8787/ --json
+wooo-cli wallet connect ledger --signer http://127.0.0.1:8787/
+wooo-cli wallet connect remote-signer --signer https://signer.example.com --auth-env SIGNER_TOKEN
 wooo-cli wallet disconnect ledger
 ```
 
@@ -262,7 +262,7 @@ wooo-cli config set okxOnchain.passphrase ...
 
 ### On-Chain Protocols
 
-On-chain operations use the OWS (Open Wallet Standard) vault for local wallets and HTTP broker transport for external wallets.
+On-chain operations use the OWS (Open Wallet Standard) vault for local wallets and HTTP signer transport for external wallets.
 
 For a local wallet:
 
@@ -273,11 +273,11 @@ wooo-cli wallet import my-key 0xprivatekey...
 
 `wooo-cli wallet create` and `wooo-cli wallet import` prompt for the vault passphrase on TTYs. Set `OWS_PASSPHRASE` for non-interactive use, or `OWS_API_KEY` for agent/automated access with policy enforcement.
 
-For an external wallet, connect to an HTTP signing broker:
+For an external wallet, connect to an HTTP signer:
 
 ```bash
-wooo-cli wallet connect my-signer --broker http://127.0.0.1:8787/
-wooo-cli wallet connect remote --broker https://signer.example.com --auth-env SIGNER_TOKEN
+wooo-cli wallet connect my-signer --signer http://127.0.0.1:8787/
+wooo-cli wallet connect remote --signer https://signer.example.com --auth-env SIGNER_TOKEN
 ```
 
 Reference signer implementations ship in `src/examples/`:
@@ -286,12 +286,12 @@ Reference signer implementations ship in `src/examples/`:
 # Local signer service
 export WOOO_SIGNER_SECRET_FILE="$HOME/.config/wooo/dev-wallet.secret"
 bun run src/examples/signer-service.ts --port 8787
-wooo-cli wallet connect dev --broker http://127.0.0.1:8787/
+wooo-cli wallet connect dev --signer http://127.0.0.1:8787/
 
-# Async broker (demonstrates pending/polling flow)
-export WOOO_BROKER_AUTH_TOKEN=dev-broker-token
-bun run src/examples/signer-broker.ts --address 0xabc... --chain ethereum --port 8788
-wooo-cli wallet connect broker-dev --broker http://127.0.0.1:8788/ --auth-env WOOO_BROKER_AUTH_TOKEN
+# Async signer (demonstrates pending/polling flow)
+export WOOO_SIGNER_TOKEN=dev-signer-token
+bun run src/examples/async-signer.ts --address 0xabc... --chain ethereum --port 8788
+wooo-cli wallet connect signer-dev --signer http://127.0.0.1:8788/ --auth-env WOOO_SIGNER_TOKEN
 ```
 
 OWS policy management:
@@ -310,7 +310,7 @@ Security model:
 - Policy is enforced by the OWS policy engine before signing
 - Audit log at `~/.ows/logs/audit.jsonl`
 - `--yes` skips CLI confirmation only; signer-side authorization remains separate
-- External wallets connect via HTTP broker — keys never enter the CLI process
+- External wallets connect via HTTP signer transport — keys never enter the CLI process
 - For teams integrating an external wallet, see [docs/external-wallet.md](docs/external-wallet.md)
 
 ## Development
