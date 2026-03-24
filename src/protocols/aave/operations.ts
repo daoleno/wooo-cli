@@ -1,10 +1,10 @@
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { AaveClient } from "./client";
 import type {
@@ -66,7 +66,7 @@ export interface PreparedAaveRepay extends Required<AaveRepayParams> {
 
 export function createAaveSupplyOperation(
   params: AaveSupplyParams,
-): WriteOperation<PreparedAaveSupply, EvmSigner, AaveSupplyResult> {
+): WriteOperation<PreparedAaveSupply, WoooSigner, AaveSupplyResult> {
   return {
     protocol: "aave",
     prepare: async () => {
@@ -120,7 +120,7 @@ export function createAaveSupplyOperation(
           amount: prepared.amount,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new AaveClient(prepared.chain, signer);
       return await client.supply(
@@ -134,7 +134,7 @@ export function createAaveSupplyOperation(
 
 export function createAaveBorrowOperation(
   params: AaveBorrowParams,
-): WriteOperation<PreparedAaveBorrow, EvmSigner, AaveBorrowResult> {
+): WriteOperation<PreparedAaveBorrow, WoooSigner, AaveBorrowResult> {
   return {
     protocol: "aave",
     prepare: async () => {
@@ -189,7 +189,7 @@ export function createAaveBorrowOperation(
           interestRateMode: "variable",
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new AaveClient(prepared.chain, signer);
       return await client.borrow(
@@ -203,7 +203,7 @@ export function createAaveBorrowOperation(
 
 export function createAaveWithdrawOperation(
   params: AaveWithdrawParams,
-): WriteOperation<PreparedAaveWithdraw, EvmSigner, AaveWithdrawResult> {
+): WriteOperation<PreparedAaveWithdraw, WoooSigner, AaveWithdrawResult> {
   return {
     protocol: "aave",
     prepare: async () => {
@@ -259,7 +259,7 @@ export function createAaveWithdrawOperation(
           all: prepared.all,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new AaveClient(prepared.chain, signer);
       return await client.withdraw(
@@ -274,7 +274,7 @@ export function createAaveWithdrawOperation(
 
 export function createAaveRepayOperation(
   params: AaveRepayParams,
-): WriteOperation<PreparedAaveRepay, EvmSigner, AaveRepayResult> {
+): WriteOperation<PreparedAaveRepay, WoooSigner, AaveRepayResult> {
   return {
     protocol: "aave",
     prepare: async () => {
@@ -338,7 +338,7 @@ export function createAaveRepayOperation(
           interestRateMode: "variable",
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new AaveClient(prepared.chain, signer);
       return await client.repay(

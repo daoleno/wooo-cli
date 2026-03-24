@@ -1,10 +1,10 @@
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { NATIVE_WRAPS } from "../uniswap/constants";
 import { CurveClient } from "./client";
@@ -27,7 +27,7 @@ function isNativeToken(symbol: string): boolean {
 
 export function createCurveSwapOperation(
   params: CurveSwapParams,
-): WriteOperation<PreparedCurveSwap, EvmSigner, CurveSwapResult> {
+): WriteOperation<PreparedCurveSwap, WoooSigner, CurveSwapResult> {
   return {
     protocol: "curve",
     prepare: async () => {
@@ -90,7 +90,7 @@ export function createCurveSwapOperation(
           quote: prepared.quote,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new CurveClient(prepared.chain, signer);
       return await client.swap(

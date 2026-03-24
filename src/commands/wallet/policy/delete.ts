@@ -1,5 +1,5 @@
-import { defineCommand } from "citty";
 import { deletePolicy } from "@open-wallet-standard/core";
+import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({
@@ -20,9 +20,7 @@ export default defineCommand({
   },
   async run({ args }) {
     if (!args.confirm) {
-      throw new Error(
-        `Pass --confirm to delete policy "${args.id}"`,
-      );
+      throw new Error(`Pass --confirm to delete policy "${args.id}"`);
     }
     deletePolicy(args.id);
     const out = createOutput(resolveOutputOptions(args));

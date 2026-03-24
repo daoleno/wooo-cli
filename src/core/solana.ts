@@ -1,8 +1,4 @@
-import {
-  type Cluster,
-  Connection,
-  clusterApiUrl,
-} from "@solana/web3.js";
+import { type Cluster, Connection, clusterApiUrl } from "@solana/web3.js";
 import { loadWoooConfigSync } from "./config";
 
 const RPC_URLS: Record<string, string> = {

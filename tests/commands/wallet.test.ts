@@ -26,12 +26,12 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
       name: "http-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     });
     const wallets = registry.list();
     expect(wallets).toHaveLength(1);
     expect(wallets[0]?.name).toBe("http-wallet");
-    expect(wallets[0]?.transport.url).toBe("http://127.0.0.1:8787/");
+    expect(wallets[0]?.broker).toBe("http://127.0.0.1:8787/");
   });
 
   test("adds and lists an external wallet with auth", () => {
@@ -39,16 +39,14 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
       name: "auth-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
       chainType: "evm",
-      transport: {
-        url: "https://broker.example.com/",
-        authEnv: "WOOO_BROKER_TOKEN",
-      },
+      broker: "https://broker.example.com/",
+      authEnv: "WOOO_BROKER_TOKEN",
     });
     const wallets = registry.list();
     expect(wallets).toHaveLength(1);
     expect(wallets[0]?.name).toBe("auth-wallet");
-    expect(wallets[0]?.transport.url).toBe("https://broker.example.com/");
-    expect(wallets[0]?.transport.authEnv).toBe("WOOO_BROKER_TOKEN");
+    expect(wallets[0]?.broker).toBe("https://broker.example.com/");
+    expect(wallets[0]?.authEnv).toBe("WOOO_BROKER_TOKEN");
   });
 
   test("retrieves a wallet by name", () => {
@@ -56,7 +54,7 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
       name: "my-wallet",
       address: "0x000000000000000000000000000000000000dEaD",
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     });
     const wallet = registry.get("my-wallet");
     expect(wallet).toBeDefined();
@@ -69,7 +67,7 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
       name: "to-remove",
       address: "0x000000000000000000000000000000000000dEaD",
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     });
     expect(registry.list()).toHaveLength(1);
     registry.remove("to-remove");
@@ -81,12 +79,12 @@ describe("ExternalWalletRegistry (via wallet commands)", () => {
       name: "persistent",
       address: "0x000000000000000000000000000000000000dEaD",
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:9999/" },
+      broker: "http://127.0.0.1:9999/",
     });
 
     const registry2 = new ExternalWalletRegistry(tempDir);
     expect(registry2.list()).toHaveLength(1);
-    expect(registry2.get("persistent")?.transport.url).toBe(
+    expect(registry2.get("persistent")?.broker).toBe(
       "http://127.0.0.1:9999/",
     );
   });

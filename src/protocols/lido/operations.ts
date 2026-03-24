@@ -1,9 +1,9 @@
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { LidoClient } from "./client";
 import type { LidoStakeResult } from "./types";
@@ -16,7 +16,7 @@ export interface PreparedLidoStake extends LidoStakeParams {}
 
 export function createLidoStakeOperation(
   params: LidoStakeParams,
-): WriteOperation<PreparedLidoStake, EvmSigner, LidoStakeResult> {
+): WriteOperation<PreparedLidoStake, WoooSigner, LidoStakeResult> {
   return {
     protocol: "lido",
     prepare: async () => params,
@@ -50,7 +50,7 @@ export function createLidoStakeOperation(
           estimatedStETH: prepared.amount,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new LidoClient(signer);
       return await client.stake(prepared.amount);

@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { importWalletPrivateKey } from "@open-wallet-standard/core";
 import { CONFIG_DEFAULTS } from "../../src/core/config";
-import { WalletStore } from "../../src/core/wallet-store";
 
 const MASTER_PASSWORD = "wooo-anvil-e2e-password";
 const DEFAULT_ETHEREUM_FORK_URL = "https://ethereum.publicnode.com";
@@ -328,14 +328,14 @@ class EvmAnvilHarness {
       ),
     );
 
-    const walletStore = new WalletStore(join(this.configDir, "keystore"));
-    await walletStore.importKey(
+    const vaultPath = join(this.configDir, "vault");
+    importWalletPrivateKey(
       this.options.walletName,
       this.privateKey,
-      "evm",
       MASTER_PASSWORD,
+      vaultPath,
+      "eip155:1",
     );
-    await walletStore.setActive(this.options.walletName);
   }
 
   async stop(): Promise<void> {

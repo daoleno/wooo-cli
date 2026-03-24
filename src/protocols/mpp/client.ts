@@ -1,22 +1,12 @@
 import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import {
-  getActiveLocalSecret,
-  getActiveWallet,
-  getActiveWalletRecord,
-} from "../../core/context";
+import { getActivePrivateKey, getActiveWallet } from "../../core/context";
 import { getPublicClient } from "../../core/evm";
 import { MPP_DIRECTORY_URL, TEMPO_CHAIN_NAME } from "./constants";
 import type { MppBalance, MppCallResult, MppService } from "./types";
 
 async function createViemAccount() {
-  const wallet = await getActiveWalletRecord("evm");
-  if (wallet.connection.mode !== "local") {
-    throw new Error(
-      "MPP currently requires a local wallet. External wallet support coming soon.",
-    );
-  }
-  const secret = await getActiveLocalSecret("evm");
+  const secret = await getActivePrivateKey("evm");
   return privateKeyToAccount(secret as `0x${string}`);
 }
 

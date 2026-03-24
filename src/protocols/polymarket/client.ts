@@ -10,12 +10,12 @@ import {
   type TickSize,
 } from "@polymarket/clob-client";
 import { type Address, isAddress } from "viem";
-import { getActiveEvmSigner, getActiveWallet } from "../../core/context";
+import { getActiveSigner, getActiveWallet } from "../../core/context";
 import type {
   EvmTypedDataField,
   SignerPrompt,
 } from "../../core/signer-protocol";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 
 const DEFAULT_CLOB_HOST = "https://clob.polymarket.com";
 const DEFAULT_DATA_HOST = "https://data-api.polymarket.com";
@@ -163,7 +163,7 @@ function inferPolymarketPrompt(
   };
 }
 
-function createClobSignerAdapter(signer: EvmSigner): ClobSigner {
+function createClobSignerAdapter(signer: WoooSigner): ClobSigner {
   return {
     account: {
       address: signer.address,
@@ -189,13 +189,11 @@ function createClobSignerAdapter(signer: EvmSigner): ClobSigner {
           message,
         },
         {
-          origin: {
-            group: "prediction",
-            protocol: "polymarket",
-            command: primaryType === "ClobAuth" ? "auth" : "order",
-          },
-          prompt: inferPolymarketPrompt(primaryType, domain, message),
+          group: "prediction",
+          protocol: "polymarket",
+          command: primaryType === "ClobAuth" ? "auth" : "order",
         },
+        inferPolymarketPrompt(primaryType, domain, message),
       );
     },
   } as unknown as ClobSigner;
@@ -306,7 +304,7 @@ export class PolymarketClient {
   async createAuthenticatedClobClient(
     authOptions: PolymarketAuthOptions,
   ): Promise<ClobClient> {
-    const signer = await getActiveEvmSigner();
+    const signer = await getActiveSigner("evm");
     const clobSigner = createClobSignerAdapter(signer);
     const initialClient = new ClobClient(
       this.clobHost,

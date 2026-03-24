@@ -1,10 +1,10 @@
-import { getActiveEvmSigner, getActiveWallet } from "../../core/context";
+import { getActiveSigner, getActiveWallet } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { MorphoClient } from "./client";
 import type { MorphoPreparedWrite, MorphoWriteResult } from "./types";
@@ -123,7 +123,7 @@ function createMorphoPlan(prepared: MorphoPreparedWrite) {
 
 function createMorphoOperation(
   prepare: () => Promise<MorphoPreparedWrite>,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return {
     protocol: "morpho",
     prepare,
@@ -144,7 +144,7 @@ function createMorphoOperation(
       };
     },
     createPlan: createMorphoPlan,
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const client = new MorphoClient(prepared.chain, signer);
       return await client.executeWrite(prepared);
@@ -154,7 +154,7 @@ function createMorphoOperation(
 
 export function createMorphoSupplyOperation(
   params: MorphoAmountWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     return await client.prepareSupply(params.marketId, params.amount);
@@ -163,7 +163,7 @@ export function createMorphoSupplyOperation(
 
 export function createMorphoWithdrawOperation(
   params: MorphoAllModeWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     const wallet = params.all ? await getActiveWallet("evm") : undefined;
@@ -177,7 +177,7 @@ export function createMorphoWithdrawOperation(
 
 export function createMorphoBorrowOperation(
   params: MorphoAmountWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     return await client.prepareBorrow(params.marketId, params.amount);
@@ -186,7 +186,7 @@ export function createMorphoBorrowOperation(
 
 export function createMorphoRepayOperation(
   params: MorphoAllModeWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     const wallet = params.all ? await getActiveWallet("evm") : undefined;
@@ -200,7 +200,7 @@ export function createMorphoRepayOperation(
 
 export function createMorphoSupplyCollateralOperation(
   params: MorphoAmountWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     return await client.prepareSupplyCollateral(params.marketId, params.amount);
@@ -209,7 +209,7 @@ export function createMorphoSupplyCollateralOperation(
 
 export function createMorphoWithdrawCollateralOperation(
   params: MorphoAllModeWriteParams,
-): WriteOperation<MorphoPreparedWrite, EvmSigner, MorphoWriteResult> {
+): WriteOperation<MorphoPreparedWrite, WoooSigner, MorphoWriteResult> {
   return createMorphoOperation(async () => {
     const client = new MorphoClient(params.chain);
     const wallet = params.all ? await getActiveWallet("evm") : undefined;

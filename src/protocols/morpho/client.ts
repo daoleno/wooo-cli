@@ -19,7 +19,7 @@ import {
   zeroAddress,
 } from "viem";
 import { getChain, getPublicClient } from "../../core/evm";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { ERC20_ABI } from "../uniswap/constants";
 import type {
@@ -193,7 +193,7 @@ async function queryMorpho<T>(
 export class MorphoClient {
   constructor(
     private chain: string,
-    private signer?: EvmSigner,
+    private signer?: WoooSigner,
   ) {}
 
   private getChainId(): number {
@@ -204,7 +204,7 @@ export class MorphoClient {
     return getAddress(getChainAddresses(this.getChainId()).morpho);
   }
 
-  private requireSigner(): EvmSigner {
+  private requireSigner(): WoooSigner {
     if (!this.signer) {
       throw new Error("Signer required");
     }

@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { getActiveLocalSecret, getActiveWallet } from "../../core/context";
+import { getActivePrivateKey, getActiveWallet } from "../../core/context";
 import { getPublicClient } from "../../core/evm";
 import {
   CHAIN_TO_X402_NETWORK,
@@ -13,7 +13,7 @@ import {
 import type { X402Balance, X402CallResult } from "./types";
 
 async function getLocalAccount() {
-  const secret = await getActiveLocalSecret("evm");
+  const secret = await getActivePrivateKey("evm");
   return privateKeyToAccount(secret as `0x${string}`);
 }
 

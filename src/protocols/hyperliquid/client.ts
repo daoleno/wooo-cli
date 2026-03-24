@@ -4,7 +4,7 @@ import type {
   HyperliquidActionSignature,
   HyperliquidActionSigningRequest,
 } from "../../core/signer-protocol";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type {
   HyperliquidFunding,
   HyperliquidOrderResult,
@@ -83,16 +83,16 @@ export class HyperliquidClient {
   private address?: string;
   private command?: string;
   private exchange: HyperliquidExchangeInternal;
-  private signer?: EvmSigner;
+  private signer?: WoooSigner;
 
-  constructor(address?: string, signer?: EvmSigner, command?: string) {
+  constructor(address?: string, signer?: WoooSigner, command?: string) {
     this.address = address;
     this.command = command;
     this.exchange = createExchange(address);
     this.signer = signer;
   }
 
-  private requireSigner(): EvmSigner {
+  private requireSigner(): WoooSigner {
     if (!this.signer) {
       throw new Error("Hyperliquid write operation requires an active signer");
     }

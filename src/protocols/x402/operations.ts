@@ -1,9 +1,9 @@
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { X402Client } from "./client";
 import { DEFAULT_CHAIN } from "./constants";
@@ -18,7 +18,7 @@ export interface X402CallParams {
 
 export function createX402CallOperation(
   params: X402CallParams,
-): WriteOperation<X402CallParams, EvmSigner, X402CallResult> {
+): WriteOperation<X402CallParams, WoooSigner, X402CallResult> {
   return {
     protocol: "x402",
     prepare: async () => params,
@@ -51,7 +51,7 @@ export function createX402CallOperation(
           url: prepared.url,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared) => {
       const client = new X402Client();
       return await client.call(prepared.url, {

@@ -93,9 +93,9 @@ describe("getChainFamily()", () => {
   });
 
   test("returns 'solana' for solana mainnet CAIP-2", () => {
-    expect(
-      getChainFamily("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
-    ).toBe("solana");
+    expect(getChainFamily("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")).toBe(
+      "solana",
+    );
   });
 
   test("throws on unsupported namespace", () => {

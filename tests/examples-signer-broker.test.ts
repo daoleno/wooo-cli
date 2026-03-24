@@ -384,7 +384,7 @@ describe("reference wallet broker example", () => {
         [
           "wallet",
           "discover",
-          "--url",
+          "--broker",
           broker.baseUrl,
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -408,16 +408,16 @@ describe("reference wallet broker example", () => {
       const connectResult = await runCliJson<{
         active: boolean;
         address: string;
+        broker: string;
         chain: string;
         mode: string;
         name: string;
-        transport: string;
       }>(
         [
           "wallet",
           "connect",
           "broker-example",
-          "--url",
+          "--broker",
           broker.baseUrl,
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -433,7 +433,7 @@ describe("reference wallet broker example", () => {
         name: "broker-example",
         address: ZERO_ADDRESS,
         chain: "evm",
-        transport: "http",
+        broker: `${broker.baseUrl}/`,
       });
     } finally {
       await broker.stop();
@@ -450,10 +450,8 @@ describe("reference wallet broker example", () => {
         name: "broker-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(broker.baseUrl),
-          authEnv: "WOOO_BROKER_TOKEN",
-        },
+        broker: normalizeSignerUrl(broker.baseUrl),
+        authEnv: "WOOO_BROKER_TOKEN",
       };
 
       const signer = createSigner(wallet);

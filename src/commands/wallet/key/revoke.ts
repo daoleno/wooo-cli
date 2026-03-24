@@ -1,5 +1,5 @@
-import { defineCommand } from "citty";
 import { revokeApiKey } from "@open-wallet-standard/core";
+import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({

@@ -1,4 +1,4 @@
-import type { SolanaSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import { getSolanaConnection } from "../../core/solana";
 import { SolanaGateway } from "../../core/solana-gateway";
 import { JUPITER_API, resolveTokenMint } from "./constants";
@@ -23,7 +23,7 @@ interface JupiterSwapResponse {
 export class JupiterClient {
   private connection = getSolanaConnection();
 
-  constructor(private signer?: SolanaSigner) {}
+  constructor(private signer?: WoooSigner) {}
 
   async quote(
     tokenInSymbol: string,

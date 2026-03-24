@@ -51,7 +51,7 @@ describe("wallet connect command", () => {
           "wallet",
           "connect",
           "service-wallet",
-          "--url",
+          "--broker",
           server.url.toString(),
           "--json",
         ],
@@ -75,15 +75,15 @@ describe("wallet connect command", () => {
 
       const output = JSON.parse(stdout) as {
         address: string;
+        broker: string;
         chain: string;
         name: string;
-        transport: string;
       };
 
       expect(output.name).toBe("service-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.transport).toBe("http");
+      expect(output.broker).toBe(server.url.toString());
     } finally {
       server.stop(true);
     }
@@ -126,7 +126,7 @@ describe("wallet connect command", () => {
           "wallet",
           "connect",
           "broker-wallet",
-          "--url",
+          "--broker",
           server.url.toString(),
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -154,15 +154,15 @@ describe("wallet connect command", () => {
 
       const output = JSON.parse(stdout) as {
         address: string;
+        broker: string;
         chain: string;
         name: string;
-        transport: string;
       };
 
       expect(output.name).toBe("broker-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.transport).toBe("http");
+      expect(output.broker).toBe(server.url.toString());
     } finally {
       server.stop(true);
     }

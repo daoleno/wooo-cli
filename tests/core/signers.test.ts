@@ -74,7 +74,7 @@ describe("signers", () => {
       name: "ext-wallet",
       address: ZERO_ADDRESS,
       chainId: "eip155:1",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     };
 
     const signer = createSigner(wallet);
@@ -120,9 +120,7 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
       };
 
       const signer = createSigner(wallet);
@@ -217,9 +215,7 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
       };
 
       const signer = createSigner(wallet);
@@ -286,9 +282,7 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
       };
 
       const signer = createSigner(wallet);
@@ -339,9 +333,7 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
       };
 
       const signer = createSigner(wallet);
@@ -392,9 +384,7 @@ describe("signers", () => {
         name: "service-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
       };
 
       const signer = createSigner(wallet);
@@ -451,10 +441,8 @@ describe("signers", () => {
         name: "broker-wallet",
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
-        transport: {
-          url: normalizeSignerUrl(server.url.toString()),
-          authEnv: "WOOO_BROKER_TOKEN",
-        },
+        broker: normalizeSignerUrl(server.url.toString()),
+        authEnv: "WOOO_BROKER_TOKEN",
       };
 
       const signer = createSigner(wallet);

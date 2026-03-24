@@ -5,7 +5,11 @@ import { createOutput, resolveOutputOptions } from "../../core/output";
 export default defineCommand({
   meta: { name: "disconnect", description: "Remove an external wallet" },
   args: {
-    name: { type: "positional", description: "Wallet name to disconnect", required: true },
+    name: {
+      type: "positional",
+      description: "Wallet name to disconnect",
+      required: true,
+    },
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
   },

@@ -6,7 +6,7 @@ import {
 } from "@open-wallet-standard/core";
 import { encodeFunctionData, type Hash, type Hex, hexToSignature } from "viem";
 import { getChainFamily, getChainName } from "./chain-ids";
-import type { ExternalTransport } from "./external-wallets";
+import type { ExternalWalletRecord } from "./external-wallets";
 import type {
   EvmApprovalRequest,
   EvmContractWriteRequest,
@@ -44,7 +44,8 @@ export type ResolvedWallet =
       name: string;
       address: string;
       chainId: string;
-      transport: ExternalTransport;
+      broker: string;
+      authEnv?: string;
     };
 
 // ---------------------------------------------------------------------------
@@ -613,14 +614,14 @@ async function pollHttpSignerResponse(
 }
 
 async function invokeHttpSigner(
-  transport: ExternalTransport,
+  broker: string,
+  authEnv: string | undefined,
   _walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
   const transportLabel = "Signer transport";
-  const authEnv = transport.authEnv;
 
-  const response = await fetch(transport.url, {
+  const response = await fetch(broker, {
     method: "POST",
     headers: createHttpSignerHeaders({
       authEnv,
@@ -629,7 +630,7 @@ async function invokeHttpSigner(
     body: serializeSignerPayload(request),
   });
   const parsed = await parseHttpSignerResponse(
-    transport.url,
+    broker,
     response,
     transportLabel,
   );
@@ -639,7 +640,7 @@ async function invokeHttpSigner(
       throw new Error(parsed.error);
     }
     throw new Error(
-      `${transportLabel} at ${transport.url} returned HTTP ${response.status}`,
+      `${transportLabel} at ${broker} returned HTTP ${response.status}`,
     );
   }
 
@@ -647,7 +648,7 @@ async function invokeHttpSigner(
     throw new Error(parsed.error);
   }
 
-  return await pollHttpSignerResponse(transport.url, parsed, {
+  return await pollHttpSignerResponse(broker, parsed, {
     authEnv,
     transportLabel,
   });
@@ -661,13 +662,15 @@ export class ExternalSigner implements WoooSigner {
   readonly walletName: string;
   readonly address: string;
   private readonly chainId: string;
-  private readonly transport: ExternalTransport;
+  private readonly broker: string;
+  private readonly authEnv: string | undefined;
 
   constructor(wallet: Extract<ResolvedWallet, { source: "external" }>) {
     this.walletName = wallet.name;
     this.address = wallet.address;
     this.chainId = wallet.chainId;
-    this.transport = wallet.transport;
+    this.broker = wallet.broker;
+    this.authEnv = wallet.authEnv;
   }
 
   private toWalletContext() {
@@ -687,7 +690,7 @@ export class ExternalSigner implements WoooSigner {
     prompt?: SignerPrompt,
   ): Promise<Hex> {
     const chainName = getChainName(chainId);
-    const response = await invokeHttpSigner(this.transport, this.walletName, {
+    const response = await invokeHttpSigner(this.broker, this.authEnv, this.walletName, {
       version: 1,
       kind: "evm-sign-typed-data",
       wallet: this.toWalletContext(),
@@ -715,7 +718,7 @@ export class ExternalSigner implements WoooSigner {
     approval?: EvmApprovalRequest,
   ): Promise<Hash> {
     const chainName = getChainName(chainId);
-    const response = await invokeHttpSigner(this.transport, this.walletName, {
+    const response = await invokeHttpSigner(this.broker, this.authEnv, this.walletName, {
       version: 1,
       kind: "evm-write-contract",
       wallet: this.toWalletContext(),
@@ -740,7 +743,7 @@ export class ExternalSigner implements WoooSigner {
     origin?: SignerRequestOrigin,
     prompt?: SignerPrompt,
   ): Promise<string> {
-    const response = await invokeHttpSigner(this.transport, this.walletName, {
+    const response = await invokeHttpSigner(this.broker, this.authEnv, this.walletName, {
       version: 1,
       kind: "solana-send-versioned-transaction",
       wallet: this.toWalletContext(),
@@ -762,7 +765,7 @@ export class ExternalSigner implements WoooSigner {
     request: HyperliquidActionSigningRequest,
     origin?: SignerRequestOrigin,
   ): Promise<HyperliquidActionSignature> {
-    const response = await invokeHttpSigner(this.transport, this.walletName, {
+    const response = await invokeHttpSigner(this.broker, this.authEnv, this.walletName, {
       version: 1,
       kind: "hyperliquid-sign-l1-action",
       wallet: this.toWalletContext(),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { EvmSigner } from "../../../src/core/signers";
+import type { WoooSigner } from "../../../src/core/signers";
 import { HyperliquidClient } from "../../../src/protocols/hyperliquid/client";
 import { createHyperliquidExecutionPlan } from "../../../src/protocols/hyperliquid/plan";
 
@@ -56,9 +56,19 @@ describe("HyperliquidClient", () => {
       }>,
     };
 
-    const signer: EvmSigner = {
+    const signer: WoooSigner = {
+      walletName: "test-wallet",
       address: "0x0000000000000000000000000000000000000000",
+      async signTypedData() {
+        throw new Error("not used");
+      },
       async writeContract() {
+        throw new Error("not used");
+      },
+      async sendTransaction() {
+        throw new Error("not used");
+      },
+      async signMessage() {
         throw new Error("not used");
       },
       async signHyperliquidL1Action(request) {

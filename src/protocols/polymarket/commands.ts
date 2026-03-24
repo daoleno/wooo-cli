@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { type Address, erc20Abi, isAddress, maxUint256, parseAbi } from "viem";
 import { confirmTransaction } from "../../core/confirm";
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import { getPublicClient } from "../../core/evm";
 import {
   createApprovalStep,
@@ -2030,7 +2030,7 @@ const approve = defineCommand({
             return;
           }
 
-          const signer = await getActiveEvmSigner();
+          const signer = await getActiveSigner("evm");
           const publicClient = getPublicClient("polygon");
           const results: Array<{
             contract: string;

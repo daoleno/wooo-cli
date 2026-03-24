@@ -1,5 +1,5 @@
-import { getActiveEvmSigner, getActiveWallet } from "../../core/context";
-import type { EvmSigner } from "../../core/signers";
+import { getActiveSigner, getActiveWallet } from "../../core/context";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { HyperliquidClient } from "./client";
 import { createHyperliquidExecutionPlan } from "./plan";
@@ -24,7 +24,11 @@ function getOrderSide(side: "long" | "short"): "buy" | "sell" {
 
 export function createHyperliquidOrderOperation(
   params: HyperliquidOrderParams,
-): WriteOperation<PreparedHyperliquidOrder, EvmSigner, HyperliquidOrderResult> {
+): WriteOperation<
+  PreparedHyperliquidOrder,
+  WoooSigner,
+  HyperliquidOrderResult
+> {
   return {
     protocol: "hyperliquid",
     prepare: async () => {
@@ -59,7 +63,7 @@ export function createHyperliquidOrderOperation(
         estimatedPrice: prepared.ticker.last,
         leverage: prepared.leverage,
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared, signer) => {
       const wallet = await getActiveWallet("evm");
       const client = new HyperliquidClient(

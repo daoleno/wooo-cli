@@ -1,9 +1,9 @@
-import { getActiveEvmSigner } from "../../core/context";
+import { getActiveSigner } from "../../core/context";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
 import { MppClient } from "./client";
 import { TEMPO_CHAIN_NAME } from "./constants";
@@ -18,7 +18,7 @@ export interface MppCallParams {
 
 export function createMppCallOperation(
   params: MppCallParams,
-): WriteOperation<MppCallParams, EvmSigner, MppCallResult> {
+): WriteOperation<MppCallParams, WoooSigner, MppCallResult> {
   return {
     protocol: "mpp",
     prepare: async () => params,
@@ -51,7 +51,7 @@ export function createMppCallOperation(
           url: prepared.url,
         },
       }),
-    resolveAuth: async () => await getActiveEvmSigner(),
+    resolveAuth: async () => await getActiveSigner("evm"),
     execute: async (prepared) => {
       const client = new MppClient();
       return await client.call(prepared.url, {

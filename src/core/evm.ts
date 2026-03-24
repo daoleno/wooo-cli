@@ -1,9 +1,4 @@
-import {
-  type Chain,
-  createPublicClient,
-  http,
-  type PublicClient,
-} from "viem";
+import { type Chain, createPublicClient, http, type PublicClient } from "viem";
 import { arbitrum, base, mainnet, optimism, polygon, tempo } from "viem/chains";
 import { formatSupportedChains, normalizeChainName } from "./chain-ids";
 import { loadWoooConfigSync } from "./config";

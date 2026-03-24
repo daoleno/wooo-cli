@@ -178,14 +178,14 @@ describe("wooo-cli smoke tests", () => {
 
   test("wallet connect help shows external wallet transport options", async () => {
     const result = await $`bun run src/index.ts wallet connect --help`.text();
-    expect(result).toContain("url");
+    expect(result).toContain("broker");
     expect(result).toContain("auth-env");
     expect(result).toContain("HTTP signer");
   });
 
   test("wallet discover help shows signer options", async () => {
     const result = await $`bun run src/index.ts wallet discover --help`.text();
-    expect(result).toContain("url");
+    expect(result).toContain("broker");
     expect(result).toContain("auth-env");
     expect(result).toContain("HTTP signer");
   });

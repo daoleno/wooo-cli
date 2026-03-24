@@ -127,7 +127,8 @@ export async function resolveWallet(
       name: walletName,
       address: extWallet.address,
       chainId,
-      transport: extWallet.transport,
+      broker: extWallet.broker,
+      authEnv: extWallet.authEnv,
     };
   }
 

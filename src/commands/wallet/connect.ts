@@ -96,9 +96,9 @@ export default defineCommand({
       description:
         "Wallet address. Optional when signer discovery yields one match",
     },
-    url: {
+    broker: {
       type: "string",
-      description: "HTTP signer URL, for example http://127.0.0.1:8787/",
+      description: "HTTP signer broker URL, for example http://127.0.0.1:8787/",
       required: true,
     },
     "auth-env": {
@@ -116,13 +116,13 @@ export default defineCommand({
   async run({ args }) {
     const registry = getExternalWalletRegistry();
 
-    if (!args.url) {
-      throw new Error("Missing --url value");
+    if (!args.broker) {
+      throw new Error("Missing --broker value");
     }
 
     const out = createOutput(resolveOutputOptions(args));
 
-    const url = normalizeSignerUrl(args.url);
+    const url = normalizeSignerUrl(args.broker);
     const metadata = await fetchSignerMetadata(url, args["auth-env"]);
     const selected = selectAdvertisedWallet(
       metadata.wallets,
@@ -133,16 +133,14 @@ export default defineCommand({
       name: args.name,
       address: selected.address,
       chainType: selected.chain,
-      transport: {
-        url,
-        ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
-      },
+      broker: url,
+      ...(args["auth-env"] ? { authEnv: args["auth-env"] } : {}),
     });
     out.data({
       name: args.name,
       address: selected.address,
       chain: selected.chain,
-      transport: "http",
+      broker: url,
     });
   },
 });

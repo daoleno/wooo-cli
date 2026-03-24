@@ -26,9 +26,7 @@ describe("ExternalWalletRegistry", () => {
       name: "my-ledger",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: {
-        url: "http://127.0.0.1:8787/",
-      },
+      broker: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);
@@ -43,16 +41,14 @@ describe("ExternalWalletRegistry", () => {
       name: "hw-evm",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { url: "http://localhost:8080/" },
+      broker: "http://localhost:8080/",
     };
     const solWallet: ExternalWalletRecord = {
       name: "hw-sol",
       address: SOL_ADDRESS,
       chainType: "solana",
-      transport: {
-        url: "http://localhost:9090/",
-        authEnv: "BROKER_TOKEN",
-      },
+      broker: "http://localhost:9090/",
+      authEnv: "BROKER_TOKEN",
     };
 
     registry.add(evmWallet);
@@ -69,7 +65,7 @@ describe("ExternalWalletRegistry", () => {
       name: "remote-signer",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { url: "http://localhost:7777/" },
+      broker: "http://localhost:7777/",
     };
 
     registry.add(wallet);
@@ -88,7 +84,7 @@ describe("ExternalWalletRegistry", () => {
       name: "to-remove",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);
@@ -103,7 +99,7 @@ describe("ExternalWalletRegistry", () => {
       name: "duplicate",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { url: "http://127.0.0.1:8787/" },
+      broker: "http://127.0.0.1:8787/",
     };
 
     registry.add(wallet);

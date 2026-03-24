@@ -1,7 +1,7 @@
 import type { LidoSDKCoreProps } from "@lidofinance/lido-ethereum-sdk";
-import { formatEther, parseEther, zeroAddress } from "viem";
+import { type Address, formatEther, parseEther, zeroAddress } from "viem";
 import { getPublicClient } from "../../core/evm";
-import type { EvmSigner } from "../../core/signers";
+import type { WoooSigner } from "../../core/signers";
 import { TxGateway } from "../../core/tx-gateway";
 import { STETH_ABI, STETH_ADDRESS } from "./constants";
 import type { LidoRewards, LidoStakeResult } from "./types";
@@ -9,7 +9,7 @@ import type { LidoRewards, LidoStakeResult } from "./types";
 export class LidoClient {
   private chain = "ethereum";
 
-  constructor(private signer?: EvmSigner) {}
+  constructor(private signer?: WoooSigner) {}
 
   async stake(amountETH: number): Promise<LidoStakeResult> {
     if (!this.signer) throw new Error("Signer required for staking");
@@ -24,7 +24,7 @@ export class LidoClient {
       address: STETH_ADDRESS,
       abi: STETH_ABI,
       functionName: "balanceOf",
-      args: [this.signer.address],
+      args: [this.signer.address as Address],
     })) as bigint;
 
     const { receipt, txHash } = await txGateway.simulateAndWriteContract({
@@ -39,7 +39,7 @@ export class LidoClient {
       address: STETH_ADDRESS,
       abi: STETH_ABI,
       functionName: "balanceOf",
-      args: [this.signer.address],
+      args: [this.signer.address as Address],
     })) as bigint;
 
     return {

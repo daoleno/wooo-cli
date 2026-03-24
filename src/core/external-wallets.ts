@@ -2,16 +2,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChainFamily } from "./chain-ids";
 
-export interface ExternalTransport {
-  url: string;
-  authEnv?: string;
-}
-
 export interface ExternalWalletRecord {
   name: string;
   address: string;
   chainType: ChainFamily;
-  transport: ExternalTransport;
+  broker: string;
+  authEnv?: string;
 }
 
 interface RegistryData {
