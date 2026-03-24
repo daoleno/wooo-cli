@@ -20,18 +20,18 @@ That contract is the architecture. File layout is secondary.
 src/
 ├── index.ts              # Entry point — command registration, protocol group wiring
 ├── core/                 # Shared infrastructure
+│   ├── chain-ids.ts      # CAIP-2 chain identifiers and aliases
 │   ├── config.ts         # Configuration loading (c12)
-│   ├── context.ts        # Active wallet / signer resolution
+│   ├── context.ts        # Active wallet / signer resolution (OWS + external registry)
 │   ├── evm.ts            # Shared EVM clients (viem)
 │   ├── execution-plan.ts # Machine-readable dry-run contract
 │   ├── exchange-gateway.ts # Thin execution wrapper for exchange APIs
+│   ├── external-wallets.ts # External wallet registry (broker-based)
 │   ├── output.ts         # Structured output (table, JSON)
-│   ├── signer-audit.ts   # Local signer JSONL audit log
-│   ├── signer-policy.ts  # Signer-side policy evaluation
 │   ├── signer-protocol.ts # External wallet request / response contract
-│   ├── signers.ts        # Wallet signer adapters (local wallet bridge / external wallet transports)
+│   ├── signers.ts        # WoooSigner interface (OWS local + HTTP broker external)
 │   ├── solana-gateway.ts # Thin execution wrapper for Solana transactions
-│   ├── solana.ts         # Shared Solana connection and keypair helpers
+│   ├── solana.ts         # Shared Solana connection
 │   ├── tx-gateway.ts     # Thin execution wrapper for EVM contract writes
 │   └── write-operation.ts # Shared write-command runner
 ├── commands/             # Cross-protocol commands
@@ -40,7 +40,7 @@ src/
 │   ├── market/           # wooo-cli market price/search
 │   ├── portfolio/        # wooo-cli portfolio overview
 │   ├── swap/             # wooo-cli swap (aggregated route selection)
-│   └── wallet/           # wooo-cli wallet connect/generate/import/list/balance/switch
+│   └── wallet/           # wooo-cli wallet create/import/list/connect/policy/key/...
 ├── protocols/            # Protocol modules
 │   ├── types.ts          # ProtocolManifest, ProtocolType, ProtocolGroup
 │   ├── registry.ts       # Protocol registration, listProtocolsByGroup()
@@ -54,6 +54,7 @@ src/
 │   ├── lido/
 │   ├── morpho/
 │   ├── okx/
+│   ├── polymarket/
 │   └── uniswap/
 └── tests/
 ```
@@ -159,92 +160,41 @@ The aggregator only does three things:
 2. select the best quote
 3. annotate the selected protocol plan/result with route comparison metadata
 
-## Multi-Chain Support
+## Wallet Architecture
 
-### Wallet Modes
+### Local Wallets (OWS)
 
-Wallet metadata and signer connection are separate concerns.
+Local wallets are managed by the Open Wallet Standard (OWS) SDK:
 
-- Wallet registry stores `name`, `address`, `chain`, and signer connection config
-- Local wallets keep encrypted secrets in the keystore, but signing is delegated to an internal signer subprocess
-- External wallets are integrated through a command signer, local signer service, or wallet broker transport
-- The main CLI never needs a raw private key in protocol execution code
-- Local signer policy is configured per wallet via `config.signerPolicy[walletName]`
-- Local signer approvals and rejections are appended to `~/.config/wooo/signer-audit.jsonl`
+- Wallet storage: `~/.ows/wallets/` with AES-256-GCM encryption
+- Single mnemonic derives both EVM and Solana addresses
+- CAIP-2 chain identifiers used throughout (`eip155:1`, `solana:...`)
+- Policy enforcement via OWS policy engine (`wooo wallet policy`)
+- Audit log at `~/.ows/logs/audit.jsonl`
+- Authentication: passphrase (interactive or `OWS_PASSPHRASE`) or API key (`OWS_API_KEY`) for agent access
 
-The command transport for external wallets is file-based:
+### External Wallets (HTTP Broker)
 
-1. CLI writes a JSON request file
-2. CLI invokes the signer command with `--request-file` and `--response-file`
-3. Signer performs local confirmation / policy checks
-4. Signer writes a JSON response file containing a tx hash or signature
+External wallets connect via an HTTP signing broker:
 
-External wallets using service transport use the same request / response payloads over local HTTP:
+- Registered with `wooo wallet connect <name> --broker <url> [--auth-env VAR]`
+- Stored in `~/.config/wooo/external-wallets.json` (address + broker URL only, no keys)
+- Signing happens via HTTP POST to the broker, which returns tx hash or signature
+- Async support via pending/polling pattern for browser-wallet or app-wallet approval flows
+- Auth token resolved from environment variable, never persisted in config
 
-1. CLI serializes the same JSON signer request
-2. CLI `POST`s it to the configured local signer service URL
-3. Service either completes immediately or accepts the request asynchronously
-4. If the service responds with `pending`, CLI polls `GET /requests/:requestId`
-5. Service eventually returns the same terminal signer response contract
+### Unified Signer Interface
 
-Broker-backed wallets use the same HTTP request / response payloads, but with a different trust model:
+Both wallet types expose the same `WoooSigner` interface:
 
-1. CLI `POST`s the signer request to the configured broker URL
-2. Broker authenticates the caller, correlates the wallet session, and either completes immediately or returns `pending`
-3. If the broker responds with `pending`, CLI polls `GET /requests/:requestId`
-4. Broker coordinates user approval in the external wallet system and eventually returns the same terminal signer response contract
+- `signTypedData()` — EIP-712 signing
+- `writeContract()` — EVM contract writes
+- `sendTransaction()` — Solana transactions
+- `signHyperliquidL1Action()` — Hyperliquid L1 actions
+- `signMessage()` — generic message signing
 
-`--yes` only bypasses the CLI confirmation layer. Signer-side policy and signer-side
-approval still apply.
-
-Signer subprocess environment is intentionally constrained:
-
-- `WOOO_CONFIG_DIR` is forwarded so the signer can load shared policy config
-- `WOOO_SIGNER_*` variables are forwarded for signer-specific configuration
-- common shell / terminal variables such as `PATH`, `HOME`, and `TERM` are forwarded
-- the rest of the parent environment is not inherited by default
-
-This keeps unrelated parent-process secrets from leaking into external command signer processes.
-
-Signer service URLs are restricted to local hosts. `wooo-cli` does not treat arbitrary
-remote HTTP endpoints as trusted signer backends.
-
-Broker URLs are explicit remote coordination endpoints. They may be remote, but
-non-local brokers must use `https://`, and any auth token is resolved from an env var
-configured on the wallet record instead of being stored in the wallet manifest.
-
-For the built-in local signer:
-
-- EVM requests can be constrained by chain, contract, function, native value, and token approval policy
-- Solana requests can be constrained by network
-- Hyperliquid requests can be constrained by action type, symbol, leverage, and order size
-- Matching requests can be auto-approved within an explicit time window
-
-External wallet transports use the same request / response contract and are responsible for
-enforcing equivalent confirmation, policy, and audit behavior inside their own
-trusted environment.
-
-`src/examples/command-signer.ts` is the in-repo reference implementation of that
-contract. It shares the same signer-side policy and audit runtime as the built-in
-local signer, but resolves the signing secret from signer-local inputs instead of
-from the `wooo-cli` keystore.
-
-`src/examples/signer-service.ts` provides the equivalent reference implementation
-for non-CLI wallet systems that expose a local signer service.
-
-`src/examples/signer-broker.ts` provides the equivalent reference coordinator for
-external wallet systems that approve outside the CLI host and return asynchronous
-results through the broker contract.
-
-`wooo-cli wallet discover --url <local-service>` and
-`wooo-cli wallet discover --broker-url <broker>` let users inspect advertised wallet
-metadata before connecting it as a wallet.
-
-Current transport support:
-
-- EVM works with local wallets, external command signers, local signer services, and wallet brokers
-- Solana works with local wallets, external command signers, local signer services, and wallet brokers
-- Hyperliquid works with local wallets, external command signers, local signer services, and wallet brokers
+Protocol code uses `getActiveSigner("evm")` or `getActiveSigner("solana")` and does not
+need to know whether the wallet is local or external.
 
 ### EVM
 
@@ -252,20 +202,16 @@ Current transport support:
 
 - `CHAIN_MAP`
 - `getPublicClient(chain)`
-- `getWalletClient(key, chain)` for local signer subprocess execution only
-- `getAccountAddress(key)`
 
-EVM write protocols use `TxGateway` on top of `getPublicClient()` plus an `EvmSigner`.
+EVM write protocols use `TxGateway` on top of `getPublicClient()` plus a `WoooSigner`.
 
 ### Solana
 
 `src/core/solana.ts` provides:
 
 - `getSolanaConnection()`
-- `getSolanaKeypair(privateKey)` for local signer subprocess execution only
-- `getSolanaAddress(privateKey)`
 
-Solana write protocols use `SolanaGateway` plus a `SolanaSigner`.
+Solana write protocols use `SolanaGateway` plus a `WoooSigner`.
 
 ### Exchange APIs
 
