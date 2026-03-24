@@ -6,9 +6,9 @@ import {
 } from "node:http";
 import {
   deserializeSignerPayload,
+  type HttpSignerMetadata,
   isSignerCommandPendingResponse,
   isSignerCommandResponse,
-  type SignerBrokerMetadata,
   type SignerCommandRequest,
   type SignerCommandTerminalResponse,
   serializeSignerPayload,
@@ -16,7 +16,7 @@ import {
 import { getFlagValue } from "./signer-example-utils";
 
 function resolveWalletType(raw: string): "evm" | "solana" | null {
-  if (raw === "evm") return "evm";
+  if (raw === "evm" || raw === "ethereum") return "evm";
   if (raw === "solana") return "solana";
   return null;
 }
@@ -76,10 +76,10 @@ function resolveAuthToken(args: string[]): string | null {
   return token.trim();
 }
 
-function createMetadata(wallet: AdvertisedWallet): SignerBrokerMetadata {
+function createMetadata(wallet: AdvertisedWallet): HttpSignerMetadata {
   return {
     version: 1,
-    kind: "wooo-wallet-broker",
+    kind: "wooo-signer",
     wallets: [wallet],
     supportedKinds:
       wallet.chain === "evm"

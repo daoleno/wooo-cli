@@ -161,29 +161,33 @@ describe("wooo-cli smoke tests", () => {
 
   test("wallet help shows subcommands", async () => {
     const result = await $`bun run src/index.ts wallet --help`.text();
-    expect(result).toContain("connect");
-    expect(result).toContain("discover");
-    expect(result).toContain("generate");
+    expect(result).toContain("create");
     expect(result).toContain("import");
+    expect(result).toContain("export");
     expect(result).toContain("list");
-    expect(result).toContain("balance");
+    expect(result).toContain("info");
+    expect(result).toContain("delete");
     expect(result).toContain("switch");
+    expect(result).toContain("balance");
+    expect(result).toContain("connect");
+    expect(result).toContain("disconnect");
+    expect(result).toContain("discover");
+    expect(result).toContain("policy");
+    expect(result).toContain("key");
   });
 
   test("wallet connect help shows external wallet transport options", async () => {
     const result = await $`bun run src/index.ts wallet connect --help`.text();
-    expect(result).toContain("command");
-    expect(result).toContain("broker-url");
+    expect(result).toContain("url");
     expect(result).toContain("auth-env");
-    expect(result).toContain("local signer service");
+    expect(result).toContain("HTTP signer");
   });
 
-  test("wallet discover help shows service and broker options", async () => {
+  test("wallet discover help shows signer options", async () => {
     const result = await $`bun run src/index.ts wallet discover --help`.text();
-    expect(result).toContain("broker-url");
+    expect(result).toContain("url");
     expect(result).toContain("auth-env");
-    expect(result).toContain("signer service");
-    expect(result).toContain("wallet broker");
+    expect(result).toContain("HTTP signer");
   });
 
   test("market help shows subcommands", async () => {

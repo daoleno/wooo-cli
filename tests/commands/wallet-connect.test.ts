@@ -16,86 +16,7 @@ describe("wallet connect command", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test("local wallet commands do not expose transport details in JSON output", async () => {
-    const env = {
-      ...process.env,
-      WOOO_CONFIG_DIR: tempDir,
-      WOOO_MASTER_PASSWORD: "test-master-password-32-chars-ok!",
-    };
-
-    const generateResult = Bun.spawn({
-      cmd: [
-        "bun",
-        "run",
-        "src/index.ts",
-        "wallet",
-        "generate",
-        "local-wallet",
-        "--json",
-      ],
-      cwd: process.cwd(),
-      env,
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-
-    const [generateStdout, generateStderr, generateExitCode] =
-      await Promise.all([
-        new Response(generateResult.stdout).text(),
-        new Response(generateResult.stderr).text(),
-        generateResult.exited,
-      ]);
-
-    expect(generateExitCode).toBe(0);
-    expect(generateStderr.trim()).toBe("");
-
-    const generatedWallet = JSON.parse(generateStdout) as {
-      active: boolean;
-      address: string;
-      chain: string;
-      mode: string;
-      name: string;
-      transport?: string;
-    };
-
-    expect(generatedWallet.name).toBe("local-wallet");
-    expect(generatedWallet.mode).toBe("local");
-    expect("transport" in generatedWallet).toBe(false);
-
-    const listResult = Bun.spawn({
-      cmd: ["bun", "run", "src/index.ts", "wallet", "list", "--json"],
-      cwd: process.cwd(),
-      env,
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-
-    const [listStdout, listStderr, listExitCode] = await Promise.all([
-      new Response(listResult.stdout).text(),
-      new Response(listResult.stderr).text(),
-      listResult.exited,
-    ]);
-
-    expect(listExitCode).toBe(0);
-    expect(listStderr.trim()).toBe("");
-
-    const wallets = JSON.parse(listStdout) as Array<{
-      active: boolean;
-      address: string;
-      chain: string;
-      mode: string;
-      name: string;
-      transport?: string;
-    }>;
-
-    expect(wallets).toHaveLength(1);
-    expect(wallets[0]?.name).toBe("local-wallet");
-    expect(wallets[0]?.mode).toBe("local");
-    expect(wallets[0]?.active).toBe(true);
-    expect("transport" in (wallets[0] ?? {})).toBe(false);
-  });
-
-  test("auto-discovers a service wallet from signer metadata", async () => {
+  test("auto-discovers a wallet from signer metadata", async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -103,7 +24,7 @@ describe("wallet connect command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer-service",
+            kind: "wooo-signer",
             wallets: [
               {
                 address: ZERO_ADDRESS,
@@ -155,22 +76,20 @@ describe("wallet connect command", () => {
       const output = JSON.parse(stdout) as {
         address: string;
         chain: string;
-        mode: string;
         name: string;
-        transport: string | null;
+        transport: string;
       };
 
       expect(output.name).toBe("service-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.mode).toBe("external");
-      expect(output.transport).toBe("service");
+      expect(output.transport).toBe("http");
     } finally {
       server.stop(true);
     }
   });
 
-  test("auto-discovers a wallet broker transport from broker metadata", async () => {
+  test("auto-discovers a wallet with auth from signer metadata", async () => {
     let capturedAuthHeader: string | null = null;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -180,7 +99,7 @@ describe("wallet connect command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-wallet-broker",
+            kind: "wooo-signer",
             wallets: [
               {
                 address: ZERO_ADDRESS,
@@ -207,7 +126,7 @@ describe("wallet connect command", () => {
           "wallet",
           "connect",
           "broker-wallet",
-          "--broker-url",
+          "--url",
           server.url.toString(),
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -236,16 +155,14 @@ describe("wallet connect command", () => {
       const output = JSON.parse(stdout) as {
         address: string;
         chain: string;
-        mode: string;
         name: string;
-        transport: string | null;
+        transport: string;
       };
 
       expect(output.name).toBe("broker-wallet");
       expect(output.address).toBe(ZERO_ADDRESS);
       expect(output.chain).toBe("evm");
-      expect(output.mode).toBe("external");
-      expect(output.transport).toBe("broker");
+      expect(output.transport).toBe("http");
     } finally {
       server.stop(true);
     }

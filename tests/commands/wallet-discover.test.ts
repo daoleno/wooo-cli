@@ -16,7 +16,7 @@ describe("wallet discover command", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test("returns signer service metadata as JSON", async () => {
+  test("returns signer metadata as JSON", async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -24,7 +24,7 @@ describe("wallet discover command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-signer-service",
+            kind: "wooo-signer",
             wallets: [
               {
                 address: ZERO_ADDRESS,
@@ -79,7 +79,7 @@ describe("wallet discover command", () => {
         wallets: Array<{ address: string; chain: string }>;
       };
 
-      expect(output.kind).toBe("wooo-signer-service");
+      expect(output.kind).toBe("wooo-signer");
       expect(output.supportedKinds).toEqual(["evm-write-contract"]);
       expect(output.url).toBe(server.url.toString());
       expect(output.wallets).toEqual([
@@ -93,7 +93,7 @@ describe("wallet discover command", () => {
     }
   });
 
-  test("returns wallet broker metadata as JSON", async () => {
+  test("returns signer metadata with auth as JSON", async () => {
     let capturedAuthHeader: string | null = null;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -103,7 +103,7 @@ describe("wallet discover command", () => {
         return new Response(
           JSON.stringify({
             version: 1,
-            kind: "wooo-wallet-broker",
+            kind: "wooo-signer",
             wallets: [
               {
                 address: ZERO_ADDRESS,
@@ -129,7 +129,7 @@ describe("wallet discover command", () => {
           "src/index.ts",
           "wallet",
           "discover",
-          "--broker-url",
+          "--url",
           server.url.toString(),
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -158,13 +158,11 @@ describe("wallet discover command", () => {
       const output = JSON.parse(stdout) as {
         authEnv?: string;
         kind: string;
-        transport: string;
         url: string;
         wallets: Array<{ address: string; chain: string }>;
       };
 
-      expect(output.kind).toBe("wooo-wallet-broker");
-      expect(output.transport).toBe("broker");
+      expect(output.kind).toBe("wooo-signer");
       expect(output.authEnv).toBe("WOOO_BROKER_TOKEN");
       expect(output.url).toBe(server.url.toString());
       expect(output.wallets).toEqual([

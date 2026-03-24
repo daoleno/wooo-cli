@@ -6,14 +6,17 @@ import { join } from "node:path";
 import type { Abi } from "viem";
 import {
   deserializeSignerPayload,
+  type HttpSignerMetadata,
   isSignerCommandPendingResponse,
-  type SignerBrokerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
   serializeSignerPayload,
 } from "../src/core/signer-protocol";
-import { createEvmSigner, normalizeSignerBrokerUrl } from "../src/core/signers";
-import type { WalletRecord } from "../src/core/wallet-store";
+import {
+  createSigner,
+  normalizeSignerUrl,
+  type ResolvedWallet,
+} from "../src/core/signers";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const TEST_TX_HASH = `0x${"ab".repeat(32)}`;
@@ -238,8 +241,8 @@ describe("reference wallet broker example", () => {
       });
       expect(metadataResponse.status).toBe(200);
 
-      const metadata = await readJson<SignerBrokerMetadata>(metadataResponse);
-      expect(metadata.kind).toBe("wooo-wallet-broker");
+      const metadata = await readJson<HttpSignerMetadata>(metadataResponse);
+      expect(metadata.kind).toBe("wooo-signer");
       expect(metadata.wallets).toEqual([
         {
           address: ZERO_ADDRESS,
@@ -368,21 +371,20 @@ describe("reference wallet broker example", () => {
     }
   });
 
-  test("works with wallet discover and wallet connect over broker transport", async () => {
+  test("works with wallet discover and wallet connect over HTTP transport", async () => {
     const broker = await startReferenceBroker();
 
     try {
       const discoverResult = await runCliJson<{
         authEnv: string;
         kind: string;
-        transport: string;
         url: string;
         wallets: Array<{ address: string; chain: string }>;
       }>(
         [
           "wallet",
           "discover",
-          "--broker-url",
+          "--url",
           broker.baseUrl,
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -394,8 +396,7 @@ describe("reference wallet broker example", () => {
         },
       );
 
-      expect(discoverResult.kind).toBe("wooo-wallet-broker");
-      expect(discoverResult.transport).toBe("broker");
+      expect(discoverResult.kind).toBe("wooo-signer");
       expect(discoverResult.authEnv).toBe("WOOO_BROKER_TOKEN");
       expect(discoverResult.wallets).toEqual([
         {
@@ -416,7 +417,7 @@ describe("reference wallet broker example", () => {
           "wallet",
           "connect",
           "broker-example",
-          "--broker-url",
+          "--url",
           broker.baseUrl,
           "--auth-env",
           "WOOO_BROKER_TOKEN",
@@ -429,12 +430,10 @@ describe("reference wallet broker example", () => {
       );
 
       expect(connectResult).toEqual({
-        active: true,
         name: "broker-example",
         address: ZERO_ADDRESS,
         chain: "evm",
-        mode: "external",
-        transport: "broker",
+        transport: "http",
       });
     } finally {
       await broker.stop();
@@ -446,19 +445,18 @@ describe("reference wallet broker example", () => {
     process.env.WOOO_BROKER_TOKEN = broker.authToken;
 
     try {
-      const wallet: WalletRecord = {
+      const wallet: ResolvedWallet = {
+        source: "external",
         name: "broker-wallet",
         address: ZERO_ADDRESS,
-        chain: "evm",
-        connection: {
-          mode: "external",
-          transport: "broker",
-          url: normalizeSignerBrokerUrl(broker.baseUrl),
+        chainId: "eip155:1",
+        transport: {
+          url: normalizeSignerUrl(broker.baseUrl),
           authEnv: "WOOO_BROKER_TOKEN",
         },
       };
 
-      const signer = createEvmSigner(wallet);
+      const signer = createSigner(wallet);
       const writePromise = signer.writeContract("ethereum", {
         address: ZERO_ADDRESS,
         abi: [] as Abi,

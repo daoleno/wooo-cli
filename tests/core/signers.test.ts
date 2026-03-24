@@ -1,23 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Abi } from "viem";
 import {
   deserializeSignerPayload,
-  type SignerBrokerMetadata,
+  type HttpSignerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
-  type SignerServiceMetadata,
   serializeSignerPayload,
 } from "../../src/core/signer-protocol";
 import {
   createSigner,
   ExternalSigner,
-  fetchSignerBrokerMetadata,
-  fetchSignerServiceMetadata,
-  normalizeSignerBrokerUrl,
-  normalizeSignerServiceUrl,
+  fetchSignerMetadata,
+  normalizeSignerUrl,
   OwsSigner,
   type ResolvedWallet,
 } from "../../src/core/signers";
@@ -25,22 +22,14 @@ import {
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const TEST_TX_HASH = `0x${"12".repeat(32)}`;
 const TEST_SIGNATURE_HEX = `0x${"78".repeat(65)}`;
-const FIXTURE_PATH = join(
-  process.cwd(),
-  "tests",
-  "fixtures",
-  "mock-command-signer.ts",
-);
 
 describe("signers", () => {
   const originalEnv = {
     WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR,
     WOOO_MASTER_PASSWORD: process.env.WOOO_MASTER_PASSWORD,
-    WOOO_SIGNER_CAPTURE_PATH: process.env.WOOO_SIGNER_CAPTURE_PATH,
     WOOO_HTTP_SIGNER_POLL_INTERVAL_MS:
       process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS,
     WOOO_HTTP_SIGNER_TIMEOUT_MS: process.env.WOOO_HTTP_SIGNER_TIMEOUT_MS,
-    WOOO_SIGNER_TEST_VALUE: process.env.WOOO_SIGNER_TEST_VALUE,
     WOOO_BROKER_TOKEN: process.env.WOOO_BROKER_TOKEN,
   };
 
@@ -50,8 +39,6 @@ describe("signers", () => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-signers-test-"));
     process.env.WOOO_CONFIG_DIR = tempDir;
     process.env.WOOO_MASTER_PASSWORD = "top-secret";
-    process.env.WOOO_SIGNER_TEST_VALUE = "signer-visible";
-    process.env.WOOO_SIGNER_CAPTURE_PATH = join(tempDir, "capture.json");
     process.env.WOOO_BROKER_TOKEN = "broker-token-test";
   });
 
@@ -87,7 +74,7 @@ describe("signers", () => {
       name: "ext-wallet",
       address: ZERO_ADDRESS,
       chainId: "eip155:1",
-      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
+      transport: { url: "http://127.0.0.1:8787/" },
     };
 
     const signer = createSigner(wallet);
@@ -96,122 +83,14 @@ describe("signers", () => {
     expect(signer.address).toBe(ZERO_ADDRESS);
   });
 
-  test("ExternalSigner invokes the external command signer transport for writeContract", async () => {
-    const wallet: ResolvedWallet = {
-      source: "external",
-      name: "external",
-      address: ZERO_ADDRESS,
-      chainId: "eip155:1",
-      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
-    };
-
-    const signer = createSigner(wallet);
-    const txHash = await signer.writeContract("eip155:1", {
-      address: ZERO_ADDRESS,
-      abi: [] as Abi,
-      functionName: "approve",
-      args: [],
-    });
-
-    expect(txHash).toBe(TEST_TX_HASH);
-
-    const capturePath = process.env.WOOO_SIGNER_CAPTURE_PATH;
-    expect(capturePath).toBeString();
-
-    const capture = JSON.parse(
-      readFileSync(capturePath as string, "utf-8"),
-    ) as {
-      env: {
-        WOOO_CONFIG_DIR: string | null;
-        WOOO_MASTER_PASSWORD: string | null;
-        WOOO_SIGNER_TEST_VALUE: string | null;
-      };
-      request: {
-        kind: string;
-        walletName: string;
-      };
-    };
-
-    expect(capture.request.kind).toBe("evm-write-contract");
-    expect(capture.request.walletName).toBe("external");
-    expect(capture.env.WOOO_SIGNER_TEST_VALUE).toBe("signer-visible");
-    expect(capture.env.WOOO_CONFIG_DIR).toBe(tempDir);
-  });
-
-  test("ExternalSigner invokes typed data signing over the signer transport", async () => {
-    const wallet: ResolvedWallet = {
-      source: "external",
-      name: "external",
-      address: ZERO_ADDRESS,
-      chainId: "eip155:137",
-      transport: { type: "command", command: ["bun", "run", FIXTURE_PATH] },
-    };
-
-    const signer = createSigner(wallet);
-    const signatureHex = await signer.signTypedData(
-      "eip155:137",
-      {
-        domain: {
-          name: "ClobAuthDomain",
-          version: "1",
-          chainId: 137,
-        },
-        types: {
-          ClobAuth: [
-            { name: "address", type: "address" },
-            { name: "timestamp", type: "string" },
-          ],
-        },
-        primaryType: "ClobAuth",
-        message: {
-          address: ZERO_ADDRESS,
-          timestamp: "123456",
-        },
-      },
-      {
-        group: "prediction",
-        protocol: "polymarket",
-        command: "auth",
-      },
-    );
-
-    expect(signatureHex).toBe(TEST_SIGNATURE_HEX);
-
-    const capturePath = process.env.WOOO_SIGNER_CAPTURE_PATH;
-    expect(capturePath).toBeString();
-
-    const capture = JSON.parse(
-      readFileSync(capturePath as string, "utf-8"),
-    ) as {
-      request: {
-        kind: string;
-        walletName: string;
-      };
-    };
-
-    expect(capture.request.kind).toBe("evm-sign-typed-data");
-    expect(capture.request.walletName).toBe("external");
-  });
-
-  test("normalizeSignerServiceUrl only allows local HTTP endpoints", () => {
-    expect(normalizeSignerServiceUrl("http://127.0.0.1:8787")).toBe(
+  test("normalizeSignerUrl validates URLs", () => {
+    expect(normalizeSignerUrl("http://127.0.0.1:8787")).toBe(
       "http://127.0.0.1:8787/",
     );
-    expect(() =>
-      normalizeSignerServiceUrl("https://example.com/signer"),
-    ).toThrow(/local host/);
-  });
-
-  test("normalizeSignerBrokerUrl allows https remotes and rejects insecure remote http", () => {
-    expect(normalizeSignerBrokerUrl("https://broker.example.com/signer")).toBe(
+    expect(normalizeSignerUrl("https://broker.example.com/signer")).toBe(
       "https://broker.example.com/signer",
     );
-    expect(normalizeSignerBrokerUrl("http://127.0.0.1:8788")).toBe(
-      "http://127.0.0.1:8788/",
-    );
-    expect(() =>
-      normalizeSignerBrokerUrl("http://broker.example.com/signer"),
-    ).toThrow(/https/);
+    expect(() => normalizeSignerUrl("ftp://example.com")).toThrow(/protocol/);
   });
 
   test("ExternalSigner invokes a local signer service", async () => {
@@ -242,8 +121,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "service",
-          url: normalizeSignerServiceUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
         },
       };
 
@@ -340,8 +218,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "service",
-          url: normalizeSignerServiceUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
         },
       };
 
@@ -410,8 +287,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "service",
-          url: normalizeSignerServiceUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
         },
       };
 
@@ -464,8 +340,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "service",
-          url: normalizeSignerServiceUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
         },
       };
 
@@ -518,8 +393,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "service",
-          url: normalizeSignerServiceUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
         },
       };
 
@@ -547,7 +421,7 @@ describe("signers", () => {
     }
   });
 
-  test("ExternalSigner invokes a broker transport with bearer auth", async () => {
+  test("ExternalSigner invokes a transport with bearer auth", async () => {
     let capturedAuthHeader: string | null = null;
     let capturedRequest: SignerCommandRequest | null = null;
 
@@ -578,8 +452,7 @@ describe("signers", () => {
         address: ZERO_ADDRESS,
         chainId: "eip155:1",
         transport: {
-          type: "broker",
-          url: normalizeSignerBrokerUrl(server.url.toString()),
+          url: normalizeSignerUrl(server.url.toString()),
           authEnv: "WOOO_BROKER_TOKEN",
         },
       };
@@ -601,14 +474,14 @@ describe("signers", () => {
     }
   });
 
-  test("fetchSignerServiceMetadata loads and validates local service metadata", async () => {
+  test("fetchSignerMetadata loads and validates signer metadata", async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch() {
-        const metadata: SignerServiceMetadata = {
+        const metadata: HttpSignerMetadata = {
           version: 1,
-          kind: "wooo-signer-service",
+          kind: "wooo-signer",
           wallets: [
             {
               address: ZERO_ADDRESS,
@@ -626,7 +499,7 @@ describe("signers", () => {
     });
 
     try {
-      const metadata = await fetchSignerServiceMetadata(server.url.toString());
+      const metadata = await fetchSignerMetadata(server.url.toString());
       expect(metadata.wallets[0]?.address).toBe(ZERO_ADDRESS);
       expect(metadata.supportedKinds).toEqual(["evm-write-contract"]);
     } finally {
@@ -634,16 +507,16 @@ describe("signers", () => {
     }
   });
 
-  test("fetchSignerBrokerMetadata loads metadata with bearer auth", async () => {
+  test("fetchSignerMetadata loads metadata with bearer auth", async () => {
     let capturedAuthHeader: string | null = null;
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch(request) {
         capturedAuthHeader = request.headers.get("authorization");
-        const metadata: SignerBrokerMetadata = {
+        const metadata: HttpSignerMetadata = {
           version: 1,
-          kind: "wooo-wallet-broker",
+          kind: "wooo-signer",
           wallets: [
             {
               address: ZERO_ADDRESS,
@@ -661,13 +534,13 @@ describe("signers", () => {
     });
 
     try {
-      const metadata = await fetchSignerBrokerMetadata(
+      const metadata = await fetchSignerMetadata(
         server.url.toString(),
         "WOOO_BROKER_TOKEN",
       );
       expect(capturedAuthHeader).toBe("Bearer broker-token-test");
       expect(metadata.wallets[0]?.address).toBe(ZERO_ADDRESS);
-      expect(metadata.kind).toBe("wooo-wallet-broker");
+      expect(metadata.kind).toBe("wooo-signer");
     } finally {
       await server.stop(true);
     }

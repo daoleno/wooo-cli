@@ -77,26 +77,12 @@ export interface AdvertisedWalletDescriptor {
   chain: "evm" | "solana";
 }
 
-export type HttpSignerMetadataKind =
-  | "wooo-signer-service"
-  | "wooo-wallet-broker";
-
-interface HttpSignerMetadataBase {
-  kind: HttpSignerMetadataKind;
+export interface HttpSignerMetadata {
+  kind: "wooo-signer";
   supportedKinds: SignerCommandRequestBase["kind"][];
   version: 1;
   wallets: AdvertisedWalletDescriptor[];
 }
-
-export interface SignerServiceMetadata extends HttpSignerMetadataBase {
-  kind: "wooo-signer-service";
-}
-
-export interface SignerBrokerMetadata extends HttpSignerMetadataBase {
-  kind: "wooo-wallet-broker";
-}
-
-export type HttpSignerMetadata = SignerServiceMetadata | SignerBrokerMetadata;
 
 interface SignerCommandRequestBase {
   kind:

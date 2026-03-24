@@ -2,132 +2,92 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PublicKey } from "@solana/web3.js";
-import bs58 from "bs58";
-import { WalletStore } from "../../src/core/wallet-store";
+import { ExternalWalletRegistry } from "../../src/core/external-wallets";
 
-const TEST_PASSWORD = "test-master-password-32-chars-ok!";
-
-describe("WalletStore", () => {
+describe("ExternalWalletRegistry (via wallet commands)", () => {
   let tempDir: string;
-  let store: WalletStore;
+  let registry: ExternalWalletRegistry;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-wallet-test-"));
-    store = new WalletStore(tempDir);
+    registry = new ExternalWalletRegistry(tempDir);
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test("generates a new EVM wallet", async () => {
-    const wallet = await store.generate("test-wallet", "evm", TEST_PASSWORD);
-    expect(wallet.name).toBe("test-wallet");
-    expect(wallet.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    expect(wallet.chain).toBe("evm");
-    expect(wallet.mode).toBe("local");
-    expect(wallet.transport).toBeUndefined();
+  test("starts with an empty list", () => {
+    expect(registry.list()).toEqual([]);
   });
 
-  test("generates a new Solana wallet", async () => {
-    const wallet = await store.generate("sol-wallet", "solana", TEST_PASSWORD);
-    expect(wallet.name).toBe("sol-wallet");
-    expect(() => new PublicKey(wallet.address)).not.toThrow();
-    expect(wallet.chain).toBe("solana");
-    expect(wallet.mode).toBe("local");
-    expect(wallet.transport).toBeUndefined();
+  test("adds and lists an external wallet", () => {
+    registry.add({
+      name: "http-wallet",
+      address: "0x000000000000000000000000000000000000dEaD",
+      chainType: "evm",
+      transport: { url: "http://127.0.0.1:8787/" },
+    });
+    const wallets = registry.list();
+    expect(wallets).toHaveLength(1);
+    expect(wallets[0]?.name).toBe("http-wallet");
+    expect(wallets[0]?.transport.url).toBe("http://127.0.0.1:8787/");
   });
 
-  test("lists wallets", async () => {
-    await store.generate("w1", "evm", TEST_PASSWORD);
-    await store.generate("w2", "evm", TEST_PASSWORD);
-    const wallets = await store.list();
-    expect(wallets.length).toBe(2);
-    expect(wallets.map((w) => w.name)).toContain("w1");
-    expect(wallets.map((w) => w.name)).toContain("w2");
-  });
-
-  test("imports a wallet from private key", async () => {
-    const { generatePrivateKey, privateKeyToAccount } = await import(
-      "viem/accounts"
-    );
-    const pk = generatePrivateKey();
-    const account = privateKeyToAccount(pk);
-    const wallet = await store.importKey("imported", pk, "evm", TEST_PASSWORD);
-    expect(wallet.address).toBe(account.address);
-  });
-
-  test("imports a Solana wallet from secret key", async () => {
-    const { Keypair } = await import("@solana/web3.js");
-    const keypair = Keypair.generate();
-    const secret = bs58.encode(keypair.secretKey);
-    const wallet = await store.importKey(
-      "solana-imported",
-      secret,
-      "solana",
-      TEST_PASSWORD,
-    );
-    expect(wallet.address).toBe(keypair.publicKey.toBase58());
-    expect(wallet.chain).toBe("solana");
-  });
-
-  test("retrieves local secret for local wallets", async () => {
-    const { generatePrivateKey } = await import("viem/accounts");
-    const pk = generatePrivateKey();
-    await store.importKey("local-secret", pk, "evm", TEST_PASSWORD);
-    const secret = await store.getLocalSecret("local-secret", TEST_PASSWORD);
-    expect(secret).toBe(pk);
-  });
-
-  test("connects an external command wallet", async () => {
-    const wallet = await store.connectExternalWallet(
-      "external",
-      "0x000000000000000000000000000000000000dEaD",
-      "evm",
-      {
-        transport: "command",
-        command: ["/usr/local/bin/mock-signer", "--profile", "test"],
-      },
-    );
-    expect(wallet.mode).toBe("external");
-    expect(wallet.transport).toBe("command");
-  });
-
-  test("connects a local signer service wallet", async () => {
-    const wallet = await store.connectExternalWallet(
-      "service-wallet",
-      "0x000000000000000000000000000000000000dEaD",
-      "evm",
-      {
-        transport: "service",
-        url: "http://127.0.0.1:8787/",
-      },
-    );
-    expect(wallet.mode).toBe("external");
-    expect(wallet.transport).toBe("service");
-  });
-
-  test("connects a wallet broker transport", async () => {
-    const wallet = await store.connectExternalWallet(
-      "broker-wallet",
-      "0x000000000000000000000000000000000000dEaD",
-      "evm",
-      {
-        transport: "broker",
+  test("adds and lists an external wallet with auth", () => {
+    registry.add({
+      name: "auth-wallet",
+      address: "0x000000000000000000000000000000000000dEaD",
+      chainType: "evm",
+      transport: {
         url: "https://broker.example.com/",
         authEnv: "WOOO_BROKER_TOKEN",
       },
-    );
-    expect(wallet.mode).toBe("external");
-    expect(wallet.transport).toBe("broker");
+    });
+    const wallets = registry.list();
+    expect(wallets).toHaveLength(1);
+    expect(wallets[0]?.name).toBe("auth-wallet");
+    expect(wallets[0]?.transport.url).toBe("https://broker.example.com/");
+    expect(wallets[0]?.transport.authEnv).toBe("WOOO_BROKER_TOKEN");
   });
 
-  test("switches active wallet", async () => {
-    await store.generate("w1", "evm", TEST_PASSWORD);
-    await store.generate("w2", "evm", TEST_PASSWORD);
-    await store.setActive("w2");
-    const active = await store.getActive();
-    expect(active?.name).toBe("w2");
+  test("retrieves a wallet by name", () => {
+    registry.add({
+      name: "my-wallet",
+      address: "0x000000000000000000000000000000000000dEaD",
+      chainType: "evm",
+      transport: { url: "http://127.0.0.1:8787/" },
+    });
+    const wallet = registry.get("my-wallet");
+    expect(wallet).toBeDefined();
+    expect(wallet?.name).toBe("my-wallet");
+    expect(registry.get("nonexistent")).toBeUndefined();
+  });
+
+  test("removes a wallet by name", () => {
+    registry.add({
+      name: "to-remove",
+      address: "0x000000000000000000000000000000000000dEaD",
+      chainType: "evm",
+      transport: { url: "http://127.0.0.1:8787/" },
+    });
+    expect(registry.list()).toHaveLength(1);
+    registry.remove("to-remove");
+    expect(registry.list()).toHaveLength(0);
+  });
+
+  test("persists wallets across instances", () => {
+    registry.add({
+      name: "persistent",
+      address: "0x000000000000000000000000000000000000dEaD",
+      chainType: "evm",
+      transport: { url: "http://127.0.0.1:9999/" },
+    });
+
+    const registry2 = new ExternalWalletRegistry(tempDir);
+    expect(registry2.list()).toHaveLength(1);
+    expect(registry2.get("persistent")?.transport.url).toBe(
+      "http://127.0.0.1:9999/",
+    );
   });
 });

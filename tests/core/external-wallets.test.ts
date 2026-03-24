@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExternalWalletRegistry } from "../../src/core/external-wallets";
 import type { ExternalWalletRecord } from "../../src/core/external-wallets";
+import { ExternalWalletRegistry } from "../../src/core/external-wallets";
 
 const EVM_ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const SOL_ADDRESS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
@@ -26,7 +26,9 @@ describe("ExternalWalletRegistry", () => {
       name: "my-ledger",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { type: "command", command: ["ledger-signer", "--index", "0"] },
+      transport: {
+        url: "http://127.0.0.1:8787/",
+      },
     };
 
     registry.add(wallet);
@@ -41,13 +43,16 @@ describe("ExternalWalletRegistry", () => {
       name: "hw-evm",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { type: "service", url: "http://localhost:8080" },
+      transport: { url: "http://localhost:8080/" },
     };
     const solWallet: ExternalWalletRecord = {
       name: "hw-sol",
       address: SOL_ADDRESS,
       chainType: "solana",
-      transport: { type: "broker", url: "http://localhost:9090", authEnv: "BROKER_TOKEN" },
+      transport: {
+        url: "http://localhost:9090/",
+        authEnv: "BROKER_TOKEN",
+      },
     };
 
     registry.add(evmWallet);
@@ -64,7 +69,7 @@ describe("ExternalWalletRegistry", () => {
       name: "remote-signer",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { type: "service", url: "http://localhost:7777" },
+      transport: { url: "http://localhost:7777/" },
     };
 
     registry.add(wallet);
@@ -83,7 +88,7 @@ describe("ExternalWalletRegistry", () => {
       name: "to-remove",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { type: "command", command: ["signer"] },
+      transport: { url: "http://127.0.0.1:8787/" },
     };
 
     registry.add(wallet);
@@ -98,7 +103,7 @@ describe("ExternalWalletRegistry", () => {
       name: "duplicate",
       address: EVM_ADDRESS,
       chainType: "evm",
-      transport: { type: "command", command: ["signer"] },
+      transport: { url: "http://127.0.0.1:8787/" },
     };
 
     registry.add(wallet);

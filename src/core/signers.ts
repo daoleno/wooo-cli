@@ -1,13 +1,3 @@
-import { spawn } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { password as clackPassword } from "@clack/prompts";
 import {
   signAndSend as owsSignAndSend,
@@ -22,16 +12,13 @@ import type {
   EvmContractWriteRequest,
   EvmTypedDataSignRequest,
   HttpSignerMetadata,
-  HttpSignerMetadataKind,
   HyperliquidActionSignature,
   HyperliquidActionSigningRequest,
-  SignerBrokerMetadata,
   SignerCommandRequest,
   SignerCommandResponse,
   SignerCommandTerminalResponse,
   SignerPrompt,
   SignerRequestOrigin,
-  SignerServiceMetadata,
 } from "./signer-protocol";
 import {
   deserializeSignerPayload,
@@ -326,33 +313,9 @@ export class OwsSigner implements WoooSigner {
 }
 
 // ---------------------------------------------------------------------------
-// External transport helpers (preserved from original signers.ts)
+// HTTP transport helpers
 // ---------------------------------------------------------------------------
 
-interface CommandInvocationPaths {
-  dir: string;
-  requestFile: string;
-  responseFile: string;
-}
-
-const SAFE_SIGNER_ENV_KEYS = [
-  "BUN_INSTALL",
-  "COLORTERM",
-  "FORCE_COLOR",
-  "HOME",
-  "LANG",
-  "LC_ALL",
-  "LOGNAME",
-  "NO_COLOR",
-  "PATH",
-  "SHELL",
-  "TEMP",
-  "TERM",
-  "TMP",
-  "TMPDIR",
-  "USER",
-] as const;
-const LOCAL_SIGNER_SERVICE_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
   "evm-sign-typed-data",
   "evm-write-contract",
@@ -362,67 +325,25 @@ const SUPPORTED_SIGNER_REQUEST_KINDS = new Set<SignerCommandRequest["kind"]>([
 const DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_HTTP_SIGNER_TIMEOUT_MS = 5 * 60 * 1_000;
 
-function normalizeHttpSignerUrl(
-  rawUrl: string,
-  options: {
-    allowRemoteHosts: boolean;
-    label: string;
-  },
-): string {
+export function normalizeSignerUrl(rawUrl: string): string {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid ${options.label} URL: ${message}`);
+    throw new Error(`Invalid signer URL: ${message}`);
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(
-      `Unsupported ${options.label} protocol: ${url.protocol}. Use http:// or https://.`,
-    );
-  }
-
-  if (
-    !options.allowRemoteHosts &&
-    !LOCAL_SIGNER_SERVICE_HOSTS.has(url.hostname)
-  ) {
-    throw new Error(
-      `${options.label} URL must point to a local host. Received host "${url.hostname}".`,
-    );
-  }
-
-  if (
-    options.allowRemoteHosts &&
-    url.protocol === "http:" &&
-    !LOCAL_SIGNER_SERVICE_HOSTS.has(url.hostname)
-  ) {
-    throw new Error(
-      `${options.label} URL must use https:// unless it points to a local host.`,
+      `Unsupported signer URL protocol: ${url.protocol}. Use http:// or https://.`,
     );
   }
 
   return url.toString();
 }
 
-export function normalizeSignerServiceUrl(rawUrl: string): string {
-  return normalizeHttpSignerUrl(rawUrl, {
-    allowRemoteHosts: false,
-    label: "Signer service",
-  });
-}
-
-export function normalizeSignerBrokerUrl(rawUrl: string): string {
-  return normalizeHttpSignerUrl(rawUrl, {
-    allowRemoteHosts: true,
-    label: "Wallet broker",
-  });
-}
-
-function isHttpSignerMetadata(
-  value: unknown,
-  expectedKind: HttpSignerMetadataKind,
-): value is HttpSignerMetadata {
+function isHttpSignerMetadata(value: unknown): value is HttpSignerMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -436,7 +357,7 @@ function isHttpSignerMetadata(
 
   return (
     metadata.version === 1 &&
-    metadata.kind === expectedKind &&
+    metadata.kind === "wooo-signer" &&
     Array.isArray(metadata.supportedKinds) &&
     metadata.supportedKinds.every(
       (item) =>
@@ -459,16 +380,14 @@ function isHttpSignerMetadata(
   );
 }
 
-function resolveBrokerAuthToken(authEnv?: string): string | null {
+function resolveAuthToken(authEnv?: string): string | null {
   if (!authEnv) {
     return null;
   }
 
   const value = process.env[authEnv];
   if (!value?.trim()) {
-    throw new Error(
-      `Wallet broker auth env "${authEnv}" is not set or is empty.`,
-    );
+    throw new Error(`Signer auth env "${authEnv}" is not set or is empty.`);
   }
 
   return value.trim();
@@ -486,7 +405,7 @@ function createHttpSignerHeaders(options?: {
     headers["content-type"] = "application/json";
   }
 
-  const token = resolveBrokerAuthToken(options?.authEnv);
+  const token = resolveAuthToken(options?.authEnv);
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
@@ -494,24 +413,20 @@ function createHttpSignerHeaders(options?: {
   return headers;
 }
 
-async function fetchHttpSignerMetadata(
-  url: string,
-  options: {
-    authEnv?: string;
-    expectedKind: HttpSignerMetadataKind;
-  },
+export async function fetchSignerMetadata(
+  rawUrl: string,
+  authEnv?: string,
 ): Promise<HttpSignerMetadata> {
+  const url = normalizeSignerUrl(rawUrl);
   const response = await fetch(url, {
     method: "GET",
-    headers: createHttpSignerHeaders({
-      authEnv: options.authEnv,
-    }),
+    headers: createHttpSignerHeaders({ authEnv }),
   });
 
   const payload = await response.text();
   if (!response.ok) {
     throw new Error(
-      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} metadata request failed with HTTP ${response.status}: ${payload || "<empty>"}`,
+      `Signer metadata request failed with HTTP ${response.status}: ${payload || "<empty>"}`,
     );
   }
 
@@ -520,108 +435,22 @@ async function fetchHttpSignerMetadata(
     parsed = JSON.parse(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} returned invalid JSON metadata: ${message}`,
-    );
+    throw new Error(`Signer returned invalid JSON metadata: ${message}`);
   }
 
-  if (!isHttpSignerMetadata(parsed, options.expectedKind)) {
-    throw new Error(
-      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} returned an invalid metadata payload`,
-    );
+  if (!isHttpSignerMetadata(parsed)) {
+    throw new Error("Signer returned an invalid metadata payload");
   }
 
   if (parsed.wallets.length === 0) {
-    throw new Error(
-      `${options.expectedKind === "wooo-signer-service" ? "Signer service" : "Wallet broker"} did not advertise any wallets`,
-    );
+    throw new Error("Signer did not advertise any wallets");
   }
 
   return parsed;
 }
 
-export async function fetchSignerServiceMetadata(
-  rawUrl: string,
-): Promise<SignerServiceMetadata> {
-  const url = normalizeSignerServiceUrl(rawUrl);
-  return (await fetchHttpSignerMetadata(url, {
-    expectedKind: "wooo-signer-service",
-  })) as SignerServiceMetadata;
-}
-
-export async function fetchSignerBrokerMetadata(
-  rawUrl: string,
-  authEnv?: string,
-): Promise<SignerBrokerMetadata> {
-  const url = normalizeSignerBrokerUrl(rawUrl);
-  return (await fetchHttpSignerMetadata(url, {
-    expectedKind: "wooo-wallet-broker",
-    authEnv,
-  })) as SignerBrokerMetadata;
-}
-
 // ---------------------------------------------------------------------------
-// Env isolation for command subprocess
-// ---------------------------------------------------------------------------
-
-function createSignerChildEnv(
-  _transport: ExternalTransport,
-): Record<string, string> {
-  const env: Record<string, string> = {};
-
-  for (const key of SAFE_SIGNER_ENV_KEYS) {
-    const value = process.env[key];
-    if (value) {
-      env[key] = value;
-    }
-  }
-
-  if (process.env.WOOO_CONFIG_DIR) {
-    env.WOOO_CONFIG_DIR = process.env.WOOO_CONFIG_DIR;
-  }
-
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith("WOOO_SIGNER_") && value) {
-      env[key] = value;
-    }
-  }
-
-  // Never pass WOOO_MASTER_PASSWORD to external transports
-  // (OWS wallets don't use it; external signers manage their own auth)
-
-  return env;
-}
-
-// ---------------------------------------------------------------------------
-// Temp-file invocation paths for command transport
-// ---------------------------------------------------------------------------
-
-function createInvocationPaths(
-  request: SignerCommandRequest,
-): CommandInvocationPaths {
-  const dir = mkdtempSync(join(tmpdir(), "wooo-signer-"));
-  const requestFile = join(dir, "request.json");
-  const responseFile = join(dir, "response.json");
-  writeFileSync(requestFile, serializeSignerPayload(request));
-  return { dir, requestFile, responseFile };
-}
-
-function readSignerResponse(
-  paths: CommandInvocationPaths,
-): SignerCommandResponse {
-  if (!existsSync(paths.responseFile)) {
-    throw new Error("Signer did not produce a response");
-  }
-  const payload = readFileSync(paths.responseFile, "utf-8");
-  return deserializeSignerPayload<SignerCommandResponse>(payload);
-}
-
-function cleanupInvocationPaths(paths: CommandInvocationPaths): void {
-  rmSync(paths.dir, { recursive: true, force: true });
-}
-
-// ---------------------------------------------------------------------------
-// HTTP transport helpers
+// HTTP signer invocation
 // ---------------------------------------------------------------------------
 
 function parsePositiveIntegerEnv(envKey: string, fallback: number): number {
@@ -784,13 +613,12 @@ async function pollHttpSignerResponse(
 }
 
 async function invokeHttpSigner(
-  transport: ExternalTransport & { type: "service" | "broker" },
+  transport: ExternalTransport,
   _walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
-  const transportLabel =
-    transport.type === "broker" ? "Wallet broker" : "Signer service";
-  const authEnv = transport.type === "broker" ? transport.authEnv : undefined;
+  const transportLabel = "Signer transport";
+  const authEnv = transport.authEnv;
 
   const response = await fetch(transport.url, {
     method: "POST",
@@ -825,51 +653,8 @@ async function invokeHttpSigner(
   });
 }
 
-async function invokeSignerCommand(
-  transport: ExternalTransport,
-  walletName: string,
-  request: SignerCommandRequest,
-): Promise<SignerCommandResponse> {
-  if (transport.type === "service" || transport.type === "broker") {
-    return await invokeHttpSigner(transport, walletName, request);
-  }
-
-  const paths = createInvocationPaths(request);
-  const command = [
-    ...transport.command,
-    "--request-file",
-    paths.requestFile,
-    "--response-file",
-    paths.responseFile,
-  ];
-
-  try {
-    const child = spawn(command[0], command.slice(1), {
-      env: createSignerChildEnv(transport),
-      stdio: "inherit",
-    });
-
-    const exitCode = await new Promise<number>((resolve, reject) => {
-      child.once("error", reject);
-      child.once("exit", (code) => resolve(code ?? 1));
-    });
-
-    const response = readSignerResponse(paths);
-    if (exitCode !== 0) {
-      if (!response.ok) {
-        throw new Error(response.error);
-      }
-      throw new Error(`Signer exited with code ${exitCode}`);
-    }
-
-    return response;
-  } finally {
-    cleanupInvocationPaths(paths);
-  }
-}
-
 // ---------------------------------------------------------------------------
-// ExternalSigner — delegates to external transport (command/service/broker)
+// ExternalSigner — delegates to external HTTP transport
 // ---------------------------------------------------------------------------
 
 export class ExternalSigner implements WoooSigner {
@@ -902,19 +687,15 @@ export class ExternalSigner implements WoooSigner {
     prompt?: SignerPrompt,
   ): Promise<Hex> {
     const chainName = getChainName(chainId);
-    const response = await invokeSignerCommand(
-      this.transport,
-      this.walletName,
-      {
-        version: 1,
-        kind: "evm-sign-typed-data",
-        wallet: this.toWalletContext(),
-        origin,
-        chainName,
-        typedData: request,
-        prompt,
-      },
-    );
+    const response = await invokeHttpSigner(this.transport, this.walletName, {
+      version: 1,
+      kind: "evm-sign-typed-data",
+      wallet: this.toWalletContext(),
+      origin,
+      chainName,
+      typedData: request,
+      prompt,
+    });
 
     if (!response.ok || !("signatureHex" in response)) {
       throw new Error(
@@ -934,20 +715,16 @@ export class ExternalSigner implements WoooSigner {
     approval?: EvmApprovalRequest,
   ): Promise<Hash> {
     const chainName = getChainName(chainId);
-    const response = await invokeSignerCommand(
-      this.transport,
-      this.walletName,
-      {
-        version: 1,
-        kind: "evm-write-contract",
-        wallet: this.toWalletContext(),
-        origin,
-        chainName,
-        contract: request,
-        approval,
-        prompt,
-      },
-    );
+    const response = await invokeHttpSigner(this.transport, this.walletName, {
+      version: 1,
+      kind: "evm-write-contract",
+      wallet: this.toWalletContext(),
+      origin,
+      chainName,
+      contract: request,
+      approval,
+      prompt,
+    });
 
     if (!response.ok || !("txHash" in response)) {
       throw new Error(
@@ -963,19 +740,15 @@ export class ExternalSigner implements WoooSigner {
     origin?: SignerRequestOrigin,
     prompt?: SignerPrompt,
   ): Promise<string> {
-    const response = await invokeSignerCommand(
-      this.transport,
-      this.walletName,
-      {
-        version: 1,
-        kind: "solana-send-versioned-transaction",
-        wallet: this.toWalletContext(),
-        origin,
-        network,
-        serializedTransactionBase64: serializedTx,
-        prompt,
-      },
-    );
+    const response = await invokeHttpSigner(this.transport, this.walletName, {
+      version: 1,
+      kind: "solana-send-versioned-transaction",
+      wallet: this.toWalletContext(),
+      origin,
+      network,
+      serializedTransactionBase64: serializedTx,
+      prompt,
+    });
 
     if (!response.ok || !("txHash" in response)) {
       throw new Error(
@@ -989,17 +762,13 @@ export class ExternalSigner implements WoooSigner {
     request: HyperliquidActionSigningRequest,
     origin?: SignerRequestOrigin,
   ): Promise<HyperliquidActionSignature> {
-    const response = await invokeSignerCommand(
-      this.transport,
-      this.walletName,
-      {
-        version: 1,
-        kind: "hyperliquid-sign-l1-action",
-        wallet: this.toWalletContext(),
-        origin,
-        request,
-      },
-    );
+    const response = await invokeHttpSigner(this.transport, this.walletName, {
+      version: 1,
+      kind: "hyperliquid-sign-l1-action",
+      wallet: this.toWalletContext(),
+      origin,
+      request,
+    });
 
     if (!response.ok || !("signature" in response)) {
       throw new Error(

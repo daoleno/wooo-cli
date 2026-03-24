@@ -15,9 +15,9 @@
 import { createServer } from "node:http";
 import {
   deserializeSignerPayload,
+  type HttpSignerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
-  type SignerServiceMetadata,
   serializeSignerPayload,
 } from "../core/signer-protocol";
 import { getFlagValue } from "./signer-example-utils";
@@ -58,10 +58,10 @@ function parseAddress(args: string[]): string {
 function createMetadata(
   address: string,
   chain: "evm" | "solana",
-): SignerServiceMetadata {
+): HttpSignerMetadata {
   return {
     version: 1,
-    kind: "wooo-signer-service",
+    kind: "wooo-signer",
     wallets: [{ address, chain }],
     supportedKinds:
       chain === "evm"
