@@ -13,8 +13,13 @@ import {
   type SignerCommandTerminalResponse,
   serializeSignerPayload,
 } from "../core/signer-protocol";
-import { resolveWalletType } from "../core/wallet-store";
 import { getFlagValue } from "./signer-example-utils";
+
+function resolveWalletType(raw: string): "evm" | "solana" | null {
+  if (raw === "evm") return "evm";
+  if (raw === "solana") return "solana";
+  return null;
+}
 
 interface AdvertisedWallet {
   address: string;

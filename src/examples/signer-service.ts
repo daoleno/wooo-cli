@@ -1,10 +1,18 @@
+/**
+ * Reference external signer service example.
+ *
+ * This demonstrates the external signer service protocol. The service exposes
+ * two endpoints:
+ *   GET  /  → SignerServiceMetadata  (advertise wallets and supported kinds)
+ *   POST /  → SignerCommandResponse  (execute a signing request)
+ *
+ * The actual signing logic is left as a TODO — replace the stub below with
+ * your own implementation (hardware wallet, KMS, MPC service, etc.).
+ *
+ * Usage:
+ *   bun run src/examples/signer-service.ts [--port 8787] [--address 0x...] [--chain evm|solana]
+ */
 import { createServer } from "node:http";
-import { getAccountAddress } from "../core/evm";
-import {
-  authorizeSignerRequest,
-  executeSignerRequest,
-  recordSignerAudit,
-} from "../core/signer-backend";
 import {
   deserializeSignerPayload,
   type SignerCommandRequest,
@@ -12,9 +20,7 @@ import {
   type SignerServiceMetadata,
   serializeSignerPayload,
 } from "../core/signer-protocol";
-import { getSolanaAddress } from "../core/solana";
-import { resolveWalletType } from "../core/wallet-store";
-import { getFlagValue, resolveSignerSecret } from "./signer-example-utils";
+import { getFlagValue } from "./signer-example-utils";
 
 function parsePort(args: string[]): number {
   const rawPort = getFlagValue(args, "--port") || process.env.WOOO_SIGNER_PORT;
@@ -29,69 +35,81 @@ function parsePort(args: string[]): number {
   return port;
 }
 
-function parseServiceWalletType(args: string[]): "evm" | "solana" {
-  const rawChain =
-    getFlagValue(args, "--chain") || process.env.WOOO_SIGNER_CHAIN;
-  if (!rawChain) {
-    return "evm";
-  }
+function parseChain(args: string[]): "evm" | "solana" {
+  const raw = getFlagValue(args, "--chain") || process.env.WOOO_SIGNER_CHAIN;
+  if (!raw || raw === "evm") return "evm";
+  if (raw === "solana") return "solana";
+  throw new Error(
+    `Unsupported signer service wallet type: ${raw}. Use evm or solana.`,
+  );
+}
 
-  const walletType = resolveWalletType(rawChain);
-  if (!walletType) {
+function parseAddress(args: string[]): string {
+  const address =
+    getFlagValue(args, "--address") || process.env.WOOO_SIGNER_ADDRESS;
+  if (!address?.trim()) {
     throw new Error(
-      `Unsupported signer service wallet type: ${rawChain}. Use evm or solana.`,
+      "Signer service example requires --address or WOOO_SIGNER_ADDRESS",
     );
   }
+  return address.trim();
+}
 
-  return walletType;
+function createMetadata(
+  address: string,
+  chain: "evm" | "solana",
+): SignerServiceMetadata {
+  return {
+    version: 1,
+    kind: "wooo-signer-service",
+    wallets: [{ address, chain }],
+    supportedKinds:
+      chain === "evm"
+        ? [
+            "evm-sign-typed-data",
+            "evm-write-contract",
+            "hyperliquid-sign-l1-action",
+          ]
+        : ["solana-send-versioned-transaction"],
+  };
+}
+
+/**
+ * TODO: Replace this stub with your actual signing implementation.
+ *
+ * The request contains all the information needed to sign:
+ *   - request.kind — the type of signing operation
+ *   - request.wallet — the target wallet (address + chain)
+ *   - request-specific fields (e.g. request.tx for evm-write-contract)
+ *
+ * Return a SignerCommandResponse with ok: true and the result, or ok: false
+ * and an error message if the request is rejected.
+ */
+async function handleSignerRequest(
+  request: SignerCommandRequest,
+): Promise<SignerCommandResponse> {
+  // Example: reject everything — replace with real signing logic.
+  console.error(
+    `Received ${request.kind} request for ${request.wallet.chain}:${request.wallet.address}`,
+  );
+  return {
+    ok: false,
+    error: "Not implemented — replace this stub with your signing logic",
+  };
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const secretFile = getFlagValue(args, "--secret-file");
   const host = process.env.WOOO_SIGNER_HOST || "127.0.0.1";
   const port = parsePort(args);
-  const walletType = parseServiceWalletType(args);
-  let cachedSecretPromise: Promise<string> | null = null;
-
-  function getSecret(): Promise<string> {
-    cachedSecretPromise ??= resolveSignerSecret({ secretFile });
-    return cachedSecretPromise;
-  }
-
-  async function createMetadata(): Promise<SignerServiceMetadata> {
-    const secret = await getSecret();
-    const address =
-      walletType === "evm"
-        ? getAccountAddress(secret)
-        : getSolanaAddress(secret).toBase58();
-
-    return {
-      version: 1,
-      kind: "wooo-signer-service",
-      wallets: [
-        {
-          address,
-          chain: walletType,
-        },
-      ],
-      supportedKinds:
-        walletType === "evm"
-          ? [
-              "evm-sign-typed-data",
-              "evm-write-contract",
-              "hyperliquid-sign-l1-action",
-            ]
-          : ["solana-send-versioned-transaction"],
-    };
-  }
+  const chain = parseChain(args);
+  const address = parseAddress(args);
+  const metadata = createMetadata(address, chain);
 
   const server = createServer(async (request, response) => {
     if (request.method === "GET") {
-      response.writeHead(200, {
-        "content-type": "application/json",
-      });
-      response.end(serializeSignerPayload(await createMetadata()));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(serializeSignerPayload(metadata));
       return;
     }
 
@@ -122,27 +140,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    let signerResult: SignerCommandResponse;
-    let autoApproved = false;
-    try {
-      autoApproved = await authorizeSignerRequest(signerRequest);
-      signerResult = await executeSignerRequest(
-        signerRequest,
-        await getSecret(),
-      );
-      recordSignerAudit(signerRequest, "approved", autoApproved);
-    } catch (error) {
-      signerResult = {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-      recordSignerAudit(
-        signerRequest,
-        "rejected",
-        autoApproved,
-        signerResult.error,
-      );
-    }
+    const signerResult = await handleSignerRequest(signerRequest);
 
     response.writeHead(signerResult.ok ? 200 : 400, {
       "content-type": "application/json",
@@ -159,6 +157,7 @@ async function main(): Promise<void> {
   });
 
   console.error(`Reference signer service listening on http://${host}:${port}`);
+  console.error(`Advertised wallet: ${chain}:${address}`);
 
   await new Promise(() => {});
   server.close();
