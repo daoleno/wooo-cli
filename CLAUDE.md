@@ -12,20 +12,27 @@
 
 ## Architecture
 
-Crypto all-in-one CLI using Citty (unjs). Protocols are grouped by type under `src/protocols/` and exposed as `wooo <group> <protocol> <action>` (e.g. `wooo cex okx buy`, `wooo perps hyperliquid long`).
+Crypto all-in-one CLI using Citty (unjs). Protocols are grouped by type under `src/protocols/` and exposed as `wooo <group> <protocol> <action>` (e.g. `wooo cex okx buy`, `wooo perps hyperliquid long`). Wallets are stored and managed via OWS (Open Wallet Standard) vault at `~/.ows/`.
 
 ### Key Directories
-- `src/core/` - Config (c12), output engine, keystore (AES-256-GCM), signer protocol/adapters, signer policy/audit, EVM/Solana clients, logger
+- `src/core/` - Config (c12), output engine, OWS wallet integration, signer protocol/adapters, EVM/Solana clients, logger
+- `src/core/chain-ids.ts` - CAIP-2 chain identifiers and aliases
+- `src/core/external-wallets.ts` - External wallet registry
 - `src/protocols/` - Each protocol has commands.ts + client.ts + types.ts + constants.ts
 - `src/protocols/cex-base/` - Shared CEX base client and command templates (CCXT)
 - `src/commands/` - Universal commands (wallet, config, market, portfolio, chain, swap)
 - `tests/` - Mirrors src structure
+- `~/.ows/` - OWS vault directory (wallet keys, policy, audit logs)
 
 ### Command Structure
 ```
 wooo
 ├── config                # Configuration management
-├── wallet                # Wallet management (connect, generate, import, list, balance, switch)
+├── wallet                # Wallet management
+│   ├── create / import / export / list / info / delete / switch / balance
+│   ├── connect / disconnect / discover
+│   ├── policy create / list / show / delete
+│   └── key create / list / revoke
 ├── market                # Aggregated market data (price, search)
 ├── portfolio             # Cross-protocol portfolio (overview)
 ├── chain                 # On-chain operations (tx, balance, ens, call)
@@ -61,17 +68,17 @@ All commands support: `--json`, `--format`, `--chain`, `--wallet`, `--yes`, `--d
 - Token addresses and ABIs live in each protocol's `constants.ts`
 
 ### Environment Variables
-- `WOOO_MASTER_PASSWORD` - Optional master password source for local-keystore wallet generation/import and local signer execution; interactive prompt is preferred on TTYs
-- `WOOO_SIGNER_AUTO_APPROVE` - Unsafe test-only bypass for local signer confirmation
+- `OWS_PASSPHRASE` - Optional wallet passphrase for OWS vault
+- `OWS_API_KEY` - OWS API key for agent/automated access (replaces interactive passphrase)
 - `WOOO_CONFIG_DIR` - Override config directory (default: ~/.config/wooo)
 - `WOOO_OKX_API_KEY` / `WOOO_OKX_API_SECRET` / `WOOO_OKX_PASSPHRASE` - OKX credentials
 - `WOOO_BINANCE_API_KEY` / `WOOO_BINANCE_API_SECRET` - Binance credentials
 - `WOOO_BYBIT_API_KEY` / `WOOO_BYBIT_API_SECRET` - Bybit credentials
 
 ### Signer Security Model
-- On-chain writes resolve to signer backends, not raw private keys in protocol code
-- `config.signerPolicy[walletName]` is enforced by the local signer subprocess
-- Local signer audit records are written to `~/.config/wooo/signer-audit.jsonl`
+- On-chain writes use the OWS signing SDK for local wallets or external signer transports for hardware/remote wallets
+- Policy is managed via OWS policy engine (`wooo wallet policy`)
+- Audit log at `~/.ows/logs/audit.jsonl`
 - `--yes` bypasses CLI confirmation only; signer-side authorization remains separate
 - External signer subprocesses receive `WOOO_CONFIG_DIR`, `WOOO_SIGNER_*`, and basic shell env only, not the full parent environment
 - External signer services are restricted to local HTTP endpoints

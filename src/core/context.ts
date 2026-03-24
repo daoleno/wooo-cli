@@ -1,17 +1,9 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-  getWallet,
-  listWallets,
-  exportWallet,
-} from "@open-wallet-standard/core";
 import { password } from "@clack/prompts";
+import { exportWallet, getWallet } from "@open-wallet-standard/core";
+import { type ChainFamily, getChainFamily, resolveChainId } from "./chain-ids";
 import { loadWoooConfigSync } from "./config";
-import {
-  resolveChainId,
-  getChainFamily,
-  type ChainFamily,
-} from "./chain-ids";
 import { ExternalWalletRegistry } from "./external-wallets";
 import { createSigner, type ResolvedWallet, type WoooSigner } from "./signers";
 
@@ -97,19 +89,15 @@ export async function resolveWallet(
   try {
     const owsWallet = getWallet(walletName, vaultPath);
     // Match by chain family: same EVM address across all eip155:* chains
-    const account = owsWallet.accounts.find(
-      (a) => {
-        try {
-          return getChainFamily(a.chainId) === chainFamily;
-        } catch {
-          return false;
-        }
-      },
-    );
+    const account = owsWallet.accounts.find((a) => {
+      try {
+        return getChainFamily(a.chainId) === chainFamily;
+      } catch {
+        return false;
+      }
+    });
     if (!account) {
-      throw new Error(
-        `Wallet "${walletName}" has no ${chainFamily} account`,
-      );
+      throw new Error(`Wallet "${walletName}" has no ${chainFamily} account`);
     }
     return {
       source: "ows",
@@ -185,7 +173,7 @@ export async function getActiveWallet(
  * @param chainType - "evm" or "solana"
  */
 export async function getActiveSigner(
-  chainType: ChainFamily,
+  _chainType: ChainFamily,
 ): Promise<WoooSigner> {
   const config = loadWoooConfigSync();
   const chainAlias = config.default?.chain ?? "ethereum";

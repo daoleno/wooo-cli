@@ -8,13 +8,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { password as clackPassword } from "@clack/prompts";
 import {
   signAndSend as owsSignAndSend,
   signMessage as owsSignMessage,
   signTypedData as owsSignTypedData,
 } from "@open-wallet-standard/core";
-import { password as clackPassword } from "@clack/prompts";
-import { type Hash, type Hex, encodeFunctionData, hexToSignature } from "viem";
+import { encodeFunctionData, type Hash, type Hex, hexToSignature } from "viem";
 import { getChainFamily, getChainName } from "./chain-ids";
 import type { ExternalTransport } from "./external-wallets";
 import type {
@@ -224,7 +224,7 @@ export class OwsSigner implements WoooSigner {
     const txHex = JSON.stringify(txObj, bigintReplacer);
 
     // Get the chain name to look up an RPC URL
-    const chainName = getChainName(chainId);
+    const _chainName = getChainName(chainId);
 
     const result = owsSignAndSend(
       this.walletId,
@@ -250,12 +250,7 @@ export class OwsSigner implements WoooSigner {
     const txBytes = Buffer.from(serializedTx, "base64");
     const txHex = txBytes.toString("hex");
 
-    const result = owsSignAndSend(
-      this.walletId,
-      family,
-      txHex,
-      passphrase,
-    );
+    const result = owsSignAndSend(this.walletId, family, txHex, passphrase);
     return result.txHash;
   }
 
@@ -325,12 +320,7 @@ export class OwsSigner implements WoooSigner {
   ): Promise<string> {
     const passphrase = await this.getPassphrase();
     const family = getChainFamily(chainId);
-    const result = owsSignMessage(
-      this.walletId,
-      family,
-      message,
-      passphrase,
-    );
+    const result = owsSignMessage(this.walletId, family, message, passphrase);
     return result.signature;
   }
 }
@@ -575,7 +565,7 @@ export async function fetchSignerBrokerMetadata(
 // ---------------------------------------------------------------------------
 
 function createSignerChildEnv(
-  transport: ExternalTransport,
+  _transport: ExternalTransport,
 ): Record<string, string> {
   const env: Record<string, string> = {};
 
@@ -795,13 +785,12 @@ async function pollHttpSignerResponse(
 
 async function invokeHttpSigner(
   transport: ExternalTransport & { type: "service" | "broker" },
-  walletName: string,
+  _walletName: string,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
   const transportLabel =
     transport.type === "broker" ? "Wallet broker" : "Signer service";
-  const authEnv =
-    transport.type === "broker" ? transport.authEnv : undefined;
+  const authEnv = transport.type === "broker" ? transport.authEnv : undefined;
 
   const response = await fetch(transport.url, {
     method: "POST",
@@ -1023,9 +1012,9 @@ export class ExternalSigner implements WoooSigner {
   }
 
   async signMessage(
-    chainId: string,
-    message: string,
-    origin?: SignerRequestOrigin,
+    _chainId: string,
+    _message: string,
+    _origin?: SignerRequestOrigin,
   ): Promise<string> {
     // Sign message is not a standard signer-protocol command yet.
     // For external signers, we use the typed data path with a simple message wrapper.

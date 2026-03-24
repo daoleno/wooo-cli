@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { defineCommand } from "citty";
 import { createPolicy } from "@open-wallet-standard/core";
+import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../../core/output";
 
 export default defineCommand({
-  meta: { name: "create", description: "Create a signing policy from a JSON file" },
+  meta: {
+    name: "create",
+    description: "Create a signing policy from a JSON file",
+  },
   args: {
     file: {
       type: "positional",
