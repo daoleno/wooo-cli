@@ -6,7 +6,7 @@ const DEFAULT_OKX_ONCHAIN_BASE_URL = "https://web3.okx.com";
 const DEFAULT_HEADERS = {
   accept: "application/json",
   "content-type": "application/json",
-  "user-agent": "wooo-cli/0.1.0",
+  "user-agent": "wooo-cli/0.1.1",
 } as const;
 
 const OKX_ONCHAIN_CHAIN_INDEX_BY_NAME = {

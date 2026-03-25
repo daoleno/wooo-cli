@@ -23,7 +23,7 @@ const DEFAULT_DATA_HOST = "https://data-api.polymarket.com";
 const DEFAULT_GAMMA_HOST = "https://gamma-api.polymarket.com";
 const DEFAULT_HEADERS = {
   accept: "application/json",
-  "user-agent": "wooo-cli/0.1.0",
+  "user-agent": "wooo-cli/0.1.1",
 } as const;
 
 export type PolymarketSignatureMode = "eoa" | "proxy" | "gnosis-safe";

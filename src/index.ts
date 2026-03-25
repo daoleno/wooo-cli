@@ -32,7 +32,7 @@ for (const [group, protocols] of Object.entries(groups)) {
 const main = defineCommand({
   meta: {
     name: "wooo-cli",
-    version: "0.1.0",
+    version: "0.1.1",
     description: "Crypto All-in-One CLI",
   },
   args: globalArgs,
@@ -49,7 +49,7 @@ const main = defineCommand({
   run({ rawArgs }) {
     const hasSubcommand = rawArgs.some((arg) => !arg.startsWith("-"));
     if (!hasSubcommand) {
-      console.log("wooo-cli v0.1.0 — run `wooo-cli --help` for commands");
+      console.log("wooo-cli v0.1.1 — run `wooo-cli --help` for commands");
     }
   },
 });

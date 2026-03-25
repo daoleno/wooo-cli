@@ -1,6 +1,6 @@
 {
   "name": "wooo-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Terminal-native copilot for trading, DeFi, and on-chain execution.",
   "type": "module",
   "repository": {
