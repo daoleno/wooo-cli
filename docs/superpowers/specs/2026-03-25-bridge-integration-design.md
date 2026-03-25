@@ -4,6 +4,8 @@
 
 Integrate two bridge aggregator protocols into wooo-cli: **LI.FI** and **OKX DEX Cross-Chain**. Both appear as independent protocols under `wooo bridge <protocol>`, following the existing protocol architecture. Both use the unified WriteOperation flow for transaction execution.
 
+**Scope**: EVM chains only for this iteration. Solana-to-EVM or cross-family bridging is out of scope — both protocols validate at the command level that `--from-chain` and `--to-chain` are EVM chains.
+
 ## Commands
 
 Each bridge protocol exposes four subcommands:
@@ -11,18 +13,18 @@ Each bridge protocol exposes four subcommands:
 ```
 wooo bridge lifi quote <token> --to <token> --amount <n> --from-chain <c> --to-chain <c>
 wooo bridge lifi bridge <token> --to <token> --amount <n> --from-chain <c> --to-chain <c>
-wooo bridge lifi status <txHash> --from-chain <c> --to-chain <c>
+wooo bridge lifi status <txHash> --from-chain <c> --to-chain <c> [--bridge <name>]
 wooo bridge lifi chains [--tokens]
 
 wooo bridge okx quote <token> --to <token> --amount <n> --from-chain <c> --to-chain <c>
 wooo bridge okx bridge <token> --to <token> --amount <n> --from-chain <c> --to-chain <c>
-wooo bridge okx status <txHash> --from-chain <c> --to-chain <c>
+wooo bridge okx status <txHash>
 wooo bridge okx chains [--tokens]
 ```
 
 - `quote` — read-only, returns route + estimated output + fees + estimated time
 - `bridge` — write operation via `runWriteOperation()`: prepare → preview → confirm → execute
-- `status` — read-only, polls cross-chain transaction status by tx hash
+- `status` — read-only, polls cross-chain transaction status. LI.FI requires `--from-chain`, `--to-chain`, optional `--bridge`; OKX only requires `<txHash>`
 - `chains` — read-only, lists supported chains (optionally with tokens)
 
 ## Architecture
@@ -47,7 +49,11 @@ src/protocols/
 │   └── commands.ts       # okxBridgeProtocol: ProtocolDefinition, type: "bridge", name: "okx"
 ```
 
-Note: `protocol.name = "okx"` in the bridge protocol. The directory is named `okx-bridge/` to avoid filesystem conflict with the existing `okx/` CEX directory. The registry allows duplicate names across different groups since CLI routing is `wooo <group> <protocol>`, and `getProtocol(name)` is not used in business code.
+Note: `protocol.name = "okx"` in the bridge protocol. The directory is named `okx-bridge/` to avoid filesystem conflict with the existing `okx/` CEX directory. CLI routing (`index.ts`) groups by type first then uses `protocol.name` as subcommand key, so `wooo cex okx` and `wooo bridge okx` don't collide.
+
+`getProtocol(name)` currently uses `.find()` and would return the first match. Since it's not used in business code (only tests), we leave it as-is. If it's needed later, extend to `getProtocol(name, group?)`.
+
+Both protocols omit the `chains` field in ProtocolDefinition (supported chains are dynamic, fetched from the `chains` subcommand at runtime). Neither needs a `constants.ts` file — both are API-based with no direct contract interactions.
 
 ## LI.FI Protocol
 
@@ -75,11 +81,16 @@ Methods:
 `createLifiBridgeOperation()`:
 - `prepare()`: Call `getQuote()`. Extract `transactionRequest` + route metadata (estimated output, fees, duration, bridge name).
 - `createPreview()`: Display source chain/token/amount → destination chain/token/estimated amount, fees, estimated time, bridge used.
-- `createPlan()`: Build ExecutionPlan with steps:
-  1. `approval` step (if fromToken is ERC-20 and approval needed — check from quote response)
-  2. `transaction` step (the bridge tx from `transactionRequest`)
-- `execute()`: Use EVM signer from OWS to send `transactionRequest`. Return tx hash.
-- `formatResult()`: Show tx hash + link to explorer + suggestion to run `status` command.
+- `createPlan()`: Build ExecutionPlan with:
+  - `chain` set to the **source chain** (where the tx is submitted)
+  - `metadata: { destinationChain, estimatedTime, bridgeName }` for the destination chain and other cross-chain info
+  - Steps:
+    1. `approval` step (if fromToken is ERC-20 and approval needed — check from quote response)
+    2. `transaction` step (the bridge tx from `transactionRequest`)
+- `resolveAuth()`: `await getActiveWalletPort("evm")` — resolves the EVM signer from OWS.
+- `execute()`: Use resolved signer to send `transactionRequest`. Return tx hash.
+
+Note: `formatResult` is not a WriteOperation method. It is passed via `WriteOperationRuntimeOptions` to `runWriteOperation()`. Shows tx hash + explorer link + suggestion to run `status`.
 
 ### Authentication
 
@@ -108,11 +119,16 @@ Methods:
 `createOkxBridgeOperation()`:
 - `prepare()`: Call `getQuote()` for route. Call `getApproveData()` if approval needed. Extract tx calldata.
 - `createPreview()`: Display source/dest chain/token/amount, fees, bridge name, gas estimates.
-- `createPlan()`: Build ExecutionPlan with steps:
-  1. `approval` step (if approve calldata returned)
-  2. `transaction` step (bridge tx)
-- `execute()`: Use EVM signer from OWS to send transaction. Return tx hash.
-- `formatResult()`: Show tx hash + explorer link + suggestion to run `status`.
+- `createPlan()`: Build ExecutionPlan with:
+  - `chain` set to the **source chain**
+  - `metadata: { destinationChain, bridgeName }` for cross-chain info
+  - Steps:
+    1. `approval` step (if approve calldata returned)
+    2. `transaction` step (bridge tx)
+- `resolveAuth()`: `await getActiveWalletPort("evm")` — resolves the EVM signer from OWS.
+- `execute()`: Use resolved signer to send transaction. Return tx hash.
+
+Note: `formatResult` is passed via `WriteOperationRuntimeOptions`. Shows tx hash + explorer link + suggestion to run `status`.
 
 ### Authentication
 
@@ -154,3 +170,11 @@ Each protocol gets tests mirroring src structure:
 - `tests/protocols/lifi/` — client tests (mocked API responses), operation tests
 - `tests/protocols/okx-bridge/` — client tests (mocked API responses), operation tests, HMAC signing tests
 - Registry test updated to include both bridge protocols
+
+## Error Handling
+
+- **Missing credentials**: OKX Bridge commands fail early with a clear error if `WOOO_OKX_API_KEY`, `WOOO_OKX_API_SECRET`, `WOOO_OKX_PASSPHRASE`, or `WOOO_OKX_PROJECT_ID` are not set. LI.FI works without API key.
+- **Rate limiting**: On 429 responses, surface the error to the user with a message suggesting they set an API key (LI.FI) or retry later.
+- **Quote expiry**: Quotes are fetched in `prepare()` and used immediately in `execute()`. If the user takes too long to confirm and execution fails due to stale calldata, the error is surfaced and the user is prompted to retry.
+- **Non-EVM chains**: Both protocols validate `--from-chain` and `--to-chain` are EVM chains. Non-EVM chains produce a clear error: "Only EVM chains are supported for bridging in this version."
+- **Native token vs ERC-20**: The `approval` step is only added when the source token is an ERC-20 (not native ETH). Native token bridging sends value directly in the transaction without approval.
