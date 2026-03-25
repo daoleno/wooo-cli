@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 // Mock @lifi/sdk before importing client
 mock.module("@lifi/sdk", () => ({

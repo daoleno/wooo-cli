@@ -1,5 +1,5 @@
-import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import { resolveChainId } from "../../core/chain-ids";
+import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
@@ -119,17 +119,14 @@ export function createOkxBridgeOperation(
     },
     resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
-      const txHash = await signer.signAndSendTransaction(
-        prepared.fromChainId,
-        {
-          format: "evm-transaction",
-          to: prepared.quote.tx.to as `0x${string}`,
-          data: prepared.quote.tx.data as `0x${string}`,
-          value: prepared.quote.tx.value
-            ? BigInt(prepared.quote.tx.value)
-            : undefined,
-        },
-      );
+      const txHash = await signer.signAndSendTransaction(prepared.fromChainId, {
+        format: "evm-transaction",
+        to: prepared.quote.tx.to as `0x${string}`,
+        data: prepared.quote.tx.data as `0x${string}`,
+        value: prepared.quote.tx.value
+          ? BigInt(prepared.quote.tx.value)
+          : undefined,
+      });
       return {
         txHash: String(txHash),
         fromChainId: prepared.quote.fromChainId,

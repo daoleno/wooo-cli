@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type {
   OkxBridgeQuote,
-  OkxBridgeStatus,
   OkxBridgeResult,
+  OkxBridgeStatus,
 } from "../../../src/protocols/okx-bridge/types";
 
 describe("okx-bridge types", () => {

@@ -1,17 +1,16 @@
-import {
-  createConfig,
-  getQuote as sdkGetQuote,
-  getStatus as sdkGetStatus,
-  getChains as sdkGetChains,
-  getTokens as sdkGetTokens,
-} from "@lifi/sdk";
 import type { LifiQuote, LifiStatus } from "./types";
 
-// Initialize SDK once
-createConfig({
-  integrator: "wooo-cli",
-  apiKey: process.env.WOOO_LIFI_API_KEY,
-});
+let sdkInitialized = false;
+
+async function ensureSdkInitialized() {
+  if (sdkInitialized) return;
+  const { createConfig } = await import("@lifi/sdk");
+  createConfig({
+    integrator: "wooo-cli",
+    apiKey: process.env.WOOO_LIFI_API_KEY,
+  });
+  sdkInitialized = true;
+}
 
 export interface LifiQuoteParams {
   fromChain: number;
@@ -25,6 +24,8 @@ export interface LifiQuoteParams {
 
 export class LifiClient {
   async getQuote(params: LifiQuoteParams): Promise<LifiQuote> {
+    await ensureSdkInitialized();
+    const { getQuote: sdkGetQuote } = await import("@lifi/sdk");
     const result = await sdkGetQuote({
       fromChain: params.fromChain,
       toChain: params.toChain,
@@ -82,6 +83,8 @@ export class LifiClient {
     fromChain: number,
     toChain: number,
   ): Promise<LifiStatus> {
+    await ensureSdkInitialized();
+    const { getStatus: sdkGetStatus } = await import("@lifi/sdk");
     const result = await sdkGetStatus({
       txHash,
       bridge,
@@ -94,8 +97,8 @@ export class LifiClient {
       fromChain: String(fromChain),
       toChain: String(toChain),
       txHash,
-      bridgeName: result.tool ?? bridge ?? "",
-      toAmount: result.toAmount,
+      bridgeName: (result as any).tool ?? bridge ?? "",
+      toAmount: (result as any).toAmount,
     };
   }
 
@@ -104,9 +107,9 @@ export class LifiClient {
   ): Promise<
     Array<{ id: number; key: string; name: string; chainType: string }>
   > {
-    const options = chainTypes
-      ? { chainTypes: chainTypes as any }
-      : undefined;
+    await ensureSdkInitialized();
+    const { getChains: sdkGetChains } = await import("@lifi/sdk");
+    const options = chainTypes ? { chainTypes: chainTypes as any } : undefined;
     const chains = await sdkGetChains(options);
     return chains.map((c: any) => ({
       id: c.id,
@@ -121,6 +124,8 @@ export class LifiClient {
   ): Promise<
     Record<number, Array<{ symbol: string; address: string; decimals: number }>>
   > {
+    await ensureSdkInitialized();
+    const { getTokens: sdkGetTokens } = await import("@lifi/sdk");
     const result = await sdkGetTokens(chains ? { chains } : undefined);
     const mapped: Record<
       number,

@@ -59,9 +59,7 @@ export class OkxBridgeClient {
     path: string,
     params?: Record<string, string>,
   ): Promise<T> {
-    const queryString = params
-      ? new URLSearchParams(params).toString()
-      : "";
+    const queryString = params ? new URLSearchParams(params).toString() : "";
     const headers = createOkxSignatureHeaders({
       ...this.auth,
       method,
@@ -132,8 +130,7 @@ export class OkxBridgeClient {
         value: route.tx.value ?? "0",
         gasPrice: route.tx.gasPrice,
       },
-      needApproval:
-        route.needApprove === "true" || route.needApprove === true,
+      needApproval: route.needApprove === "true" || route.needApprove === true,
       approveTo: route.approveTo,
     };
   }
@@ -189,9 +186,7 @@ export class OkxBridgeClient {
     }));
   }
 
-  async getSupportedTokens(
-    chainId?: string,
-  ): Promise<
+  async getSupportedTokens(chainId?: string): Promise<
     Array<{
       symbol: string;
       address: string;

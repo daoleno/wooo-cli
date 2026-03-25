@@ -1,9 +1,9 @@
 // tests/protocols/lifi/types.test.ts
 import { describe, expect, test } from "bun:test";
 import type {
+  LifiBridgeResult,
   LifiQuote,
   LifiStatus,
-  LifiBridgeResult,
 } from "../../../src/protocols/lifi/types";
 
 describe("lifi types", () => {
@@ -18,7 +18,12 @@ describe("lifi types", () => {
       bridgeName: "stargate",
       fees: { total: "0.20", gas: "0.15", bridge: "0.05" },
       estimatedTime: 120,
-      transactionRequest: { to: "0x1234", data: "0x5678", value: "0", gasLimit: "200000" },
+      transactionRequest: {
+        to: "0x1234",
+        data: "0x5678",
+        value: "0",
+        gasLimit: "200000",
+      },
     };
     expect(quote.fromChain).toBe("ethereum");
     expect(quote.transactionRequest.to).toBe("0x1234");

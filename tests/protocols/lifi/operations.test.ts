@@ -1,28 +1,51 @@
-import { describe, expect, test, mock } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
-// Mock the lifi client
-mock.module("../../../src/protocols/lifi/client", () => ({
-  LifiClient: class {
-    async getQuote() {
-      return {
-        fromChain: "ethereum",
-        toChain: "arbitrum",
-        fromToken: "USDC",
-        toToken: "USDC",
-        fromAmount: "100000000",
-        toAmount: "99800000",
-        bridgeName: "stargate",
-        fees: { total: "0.20", gas: "0.15", bridge: "0.05" },
-        estimatedTime: 120,
-        transactionRequest: {
-          to: "0x1234",
-          data: "0x5678",
-          value: "0",
-          gasLimit: "200000",
-        },
-      };
-    }
-  },
+// Mock @lifi/sdk (what the client calls internally) — include all functions
+// to avoid breaking other tests that import from the same module
+mock.module("@lifi/sdk", () => ({
+  createConfig: mock(() => {}),
+  getQuote: mock(async () => ({
+    action: {
+      fromChainId: 1,
+      toChainId: 42161,
+      fromToken: { symbol: "USDC", address: "0xA0b8" },
+      toToken: { symbol: "USDC", address: "0xaf88" },
+      fromAmount: "100000000",
+    },
+    estimate: {
+      toAmount: "99800000",
+      executionDuration: 120,
+      gasCosts: [{ amountUSD: "0.15" }],
+      feeCosts: [{ amountUSD: "0.05" }],
+      approvalAddress: "0xapprove",
+    },
+    tool: "stargate",
+    transactionRequest: {
+      to: "0x1234",
+      data: "0x5678",
+      value: "0",
+      gasLimit: "200000",
+    },
+  })),
+  getStatus: mock(async () => ({
+    status: "DONE",
+    substatus: "COMPLETED",
+    sending: { chainId: 1, txHash: "0xabc" },
+    receiving: { chainId: 42161, txHash: "0xdef" },
+    tool: "stargate",
+    toAmount: "99800000",
+  })),
+  getChains: mock(async () => [
+    { id: 1, key: "eth", name: "Ethereum", chainType: "EVM" },
+    { id: 42161, key: "arb", name: "Arbitrum", chainType: "EVM" },
+  ]),
+  getTokens: mock(async () => ({
+    tokens: {
+      1: [{ symbol: "USDC", address: "0xA0b8", decimals: 6 }],
+      42161: [{ symbol: "USDC", address: "0xaf88", decimals: 6 }],
+    },
+  })),
+  ChainId: { ETH: 1, ARB: 42161 },
 }));
 
 // Mock context
@@ -40,7 +63,7 @@ mock.module("../../../src/core/chain-ids", () => ({
       ethereum: "eip155:1",
       arbitrum: "eip155:42161",
     };
-    return map[name] ?? `eip155:1`;
+    return map[name] ?? "eip155:1";
   }),
 }));
 

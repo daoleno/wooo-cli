@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   createOkxSignatureHeaders,
   OkxBridgeClient,
@@ -85,8 +85,8 @@ describe("OkxBridgeClient", () => {
       ],
     };
 
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify(mockResponse), { status: 200 }),
     ) as any;
 
     const client = new OkxBridgeClient(auth);
@@ -124,8 +124,8 @@ describe("OkxBridgeClient", () => {
       ],
     };
 
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify(mockResponse), { status: 200 }),
     ) as any;
 
     const client = new OkxBridgeClient(auth);
@@ -146,8 +146,8 @@ describe("OkxBridgeClient", () => {
       ],
     };
 
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify(mockResponse), { status: 200 }),
     ) as any;
 
     const client = new OkxBridgeClient(auth);
@@ -159,7 +159,24 @@ describe("OkxBridgeClient", () => {
   });
 
   test("throws on missing credentials", () => {
-    expect(() => new OkxBridgeClient()).toThrow("WOOO_OKX_API_KEY");
+    const saved = {
+      key: process.env.WOOO_OKX_API_KEY,
+      secret: process.env.WOOO_OKX_API_SECRET,
+      pass: process.env.WOOO_OKX_PASSPHRASE,
+      proj: process.env.WOOO_OKX_PROJECT_ID,
+    };
+    delete process.env.WOOO_OKX_API_KEY;
+    delete process.env.WOOO_OKX_API_SECRET;
+    delete process.env.WOOO_OKX_PASSPHRASE;
+    delete process.env.WOOO_OKX_PROJECT_ID;
+    try {
+      expect(() => new OkxBridgeClient()).toThrow("WOOO_OKX_API_KEY");
+    } finally {
+      if (saved.key) process.env.WOOO_OKX_API_KEY = saved.key;
+      if (saved.secret) process.env.WOOO_OKX_API_SECRET = saved.secret;
+      if (saved.pass) process.env.WOOO_OKX_PASSPHRASE = saved.pass;
+      if (saved.proj) process.env.WOOO_OKX_PROJECT_ID = saved.proj;
+    }
   });
 
   test("throws on API error", async () => {
@@ -169,8 +186,8 @@ describe("OkxBridgeClient", () => {
       data: [],
     };
 
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify(mockResponse), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify(mockResponse), { status: 200 }),
     ) as any;
 
     const client = new OkxBridgeClient(auth);

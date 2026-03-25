@@ -23,6 +23,8 @@ describe("protocol registry", () => {
       "lido",
       "mpp",
       "x402",
+      "lifi",
+      "okx",
     ]);
   });
 
@@ -40,6 +42,9 @@ describe("protocol registry", () => {
       expect(protocol?.type).toBe("cex");
       expect(protocol?.writeAccountType).toBe("exchange-api");
     }
+    // Note: "okx" appears twice — once for CEX (type: "cex"), once for bridge (type: "bridge").
+    // getProtocol("okx") returns the first match (CEX). This is expected.
+    expect(getProtocol("okx")?.type).toBe("cex");
   });
 
   test("protocols have correct types and account modes", () => {
@@ -71,7 +76,7 @@ describe("protocol registry", () => {
     ]);
     expect(groups.lend.map((p) => p.name)).toEqual(["aave", "morpho"]);
     expect(groups.stake.map((p) => p.name)).toEqual(["lido"]);
-    expect(groups.bridge).toEqual([]);
+    expect(groups.bridge.map((p) => p.name)).toEqual(["lifi", "okx"]);
     expect(groups.pay.map((p) => p.name)).toEqual(["mpp", "x402"]);
   });
 

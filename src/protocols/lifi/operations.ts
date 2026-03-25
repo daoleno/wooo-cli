@@ -1,5 +1,5 @@
-import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import { resolveChainId } from "../../core/chain-ids";
+import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import {
   createApprovalStep,
   createExecutionPlan,
@@ -102,17 +102,14 @@ export function createLifiBridgeOperation(
     },
     resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
-      const txHash = await signer.signAndSendTransaction(
-        prepared.fromChainId,
-        {
-          format: "evm-transaction",
-          to: prepared.quote.transactionRequest.to as `0x${string}`,
-          data: prepared.quote.transactionRequest.data as `0x${string}`,
-          value: prepared.quote.transactionRequest.value
-            ? BigInt(prepared.quote.transactionRequest.value)
-            : undefined,
-        },
-      );
+      const txHash = await signer.signAndSendTransaction(prepared.fromChainId, {
+        format: "evm-transaction",
+        to: prepared.quote.transactionRequest.to as `0x${string}`,
+        data: prepared.quote.transactionRequest.data as `0x${string}`,
+        value: prepared.quote.transactionRequest.value
+          ? BigInt(prepared.quote.transactionRequest.value)
+          : undefined,
+      });
       return {
         txHash: String(txHash),
         fromChain: prepared.fromChain,

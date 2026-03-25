@@ -1,27 +1,6 @@
-import { describe, expect, test, mock } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
-mock.module("../../../src/protocols/okx-bridge/client", () => ({
-  OkxBridgeClient: class {
-    async getQuote() {
-      return {
-        fromChainId: "1",
-        toChainId: "42161",
-        fromToken: { symbol: "USDC", address: "0xA0b8", decimals: 6 },
-        toToken: { symbol: "USDC", address: "0xaf88", decimals: 6 },
-        fromAmount: "100000000",
-        toAmount: "99800000",
-        bridgeName: "across",
-        estimatedGas: "200000",
-        tx: { to: "0x1234", data: "0x5678", value: "0" },
-        needApproval: false,
-      };
-    }
-    async getApproveData() {
-      return { to: "0x1234", data: "0x5678" };
-    }
-  },
-}));
-
+// Mock context
 mock.module("../../../src/core/context", () => ({
   getActiveWalletPort: mock(async () => ({
     signAndSendTransaction: mock(),
@@ -29,15 +8,56 @@ mock.module("../../../src/core/context", () => ({
   getActiveWallet: mock(async () => ({ address: "0xuser" })),
 }));
 
+// Mock chain-ids
 mock.module("../../../src/core/chain-ids", () => ({
   resolveChainId: mock((name: string) => {
     const map: Record<string, string> = {
       ethereum: "eip155:1",
       arbitrum: "eip155:42161",
     };
-    return map[name] ?? `eip155:1`;
+    return map[name] ?? "eip155:1";
   }),
 }));
+
+// Set env vars for OKX auth
+process.env.WOOO_OKX_API_KEY = "test-key";
+process.env.WOOO_OKX_API_SECRET = "test-secret";
+process.env.WOOO_OKX_PASSPHRASE = "test-pass";
+process.env.WOOO_OKX_PROJECT_ID = "test-project";
+
+// Mock fetch for OKX API
+globalThis.fetch = mock(
+  async () =>
+    new Response(
+      JSON.stringify({
+        code: "0",
+        msg: "",
+        data: [
+          {
+            fromChainId: "1",
+            toChainId: "42161",
+            fromToken: {
+              tokenSymbol: "USDC",
+              tokenContractAddress: "0xA0b8",
+              decimal: "6",
+            },
+            toToken: {
+              tokenSymbol: "USDC",
+              tokenContractAddress: "0xaf88",
+              decimal: "6",
+            },
+            fromTokenAmount: "100000000",
+            toTokenAmount: "99800000",
+            bridgeName: "across",
+            estimatedGas: "200000",
+            tx: { to: "0x1234", data: "0x5678", value: "0" },
+            needApprove: "false",
+          },
+        ],
+      }),
+      { status: 200 },
+    ),
+) as any;
 
 import { createOkxBridgeOperation } from "../../../src/protocols/okx-bridge/operations";
 

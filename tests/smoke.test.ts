@@ -18,7 +18,7 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("stake");
     expect(result).toContain("chain");
     expect(result).toContain("swap");
-    expect(result).not.toContain("bridge");
+    expect(result).toContain("bridge");
     expect(result).not.toContain("defi");
     expect(result).not.toContain("capabilities");
   });
