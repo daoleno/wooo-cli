@@ -1,10 +1,10 @@
 import bs58 from "bs58";
 import {
   deserializeSignerPayload,
-  serializeSignerPayload,
   type HttpSignerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
+  serializeSignerPayload,
 } from "../../src/core/signer-protocol";
 
 interface SolanaSignerHarnessOptions {
@@ -31,7 +31,7 @@ export class SolanaSignerHarness {
   private readonly metadata: HttpSignerMetadata;
   private server?: Bun.Server;
 
-  constructor(private readonly options: SolanaSignerHarnessOptions) {
+  constructor(readonly options: SolanaSignerHarnessOptions) {
     this.address = options.address;
     this.authToken = options.authToken;
     this.txHash = options.txHash ?? bs58.encode(Buffer.alloc(64, 1));

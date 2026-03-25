@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { SolanaGateway } from "../../src/core/solana-gateway";
 import type { WalletPort } from "../../src/core/signers";
+import { SolanaGateway } from "../../src/core/solana-gateway";
 
 const ORIGINAL_CONFIRM_TIMEOUT = process.env.WOOO_SOLANA_CONFIRM_TIMEOUT_MS;
 const ORIGINAL_CONFIRM_POLL_INTERVAL =
   process.env.WOOO_SOLANA_CONFIRM_POLL_INTERVAL_MS;
-const TX_HASH = "3x6tv1Jgv7N83YgGh3K7H3ULicWHf66A1VpzwuNFuGqmoeZaZX6mE6oPD58x35H5TADaBrZEcD3MpKhsR4H2Uvep";
+const TX_HASH =
+  "3x6tv1Jgv7N83YgGh3K7H3ULicWHf66A1VpzwuNFuGqmoeZaZX6mE6oPD58x35H5TADaBrZEcD3MpKhsR4H2Uvep";
 
 function createWalletPort(): WalletPort {
   return {

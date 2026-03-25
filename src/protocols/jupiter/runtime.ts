@@ -1,9 +1,6 @@
 import type { WalletPort } from "../../core/signers";
 import { getSolanaConnection } from "../../core/solana";
-import {
-  JupiterClient,
-  type JupiterClientDeps,
-} from "./client";
+import { JupiterClient, type JupiterClientDeps } from "./client";
 
 const INTERNAL_JUPITER_API_URL_ENV = "WOOO_INTERNAL_JUPITER_API_URL";
 

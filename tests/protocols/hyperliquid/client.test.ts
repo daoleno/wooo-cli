@@ -69,8 +69,9 @@ describe("HyperliquidClient", () => {
         if (request.protocol === "hyperliquid") {
           captured.signedRequests.push({
             action: request.payload.action,
-            context:
-              request.payload.context as Record<string, unknown> | undefined,
+            context: request.payload.context as
+              | Record<string, unknown>
+              | undefined,
             nonce: request.payload.nonce,
           });
           return {

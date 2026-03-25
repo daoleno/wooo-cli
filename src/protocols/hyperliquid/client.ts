@@ -64,31 +64,29 @@ function createExchange(
   address?: string,
   deps?: HyperliquidClientDeps,
 ): HyperliquidExchangeInternal {
-  return new ccxt.hyperliquid(
-    {
-      fetchImplementation: fetch,
-      options: {
-        builderFee: false,
-        refSet: true,
-      },
-      ...(address
-        ? {
-            privateKey: DUMMY_PRIVATE_KEY,
-            walletAddress: address,
-          }
-        : {}),
-      ...(deps?.apiUrl
-        ? {
-            urls: {
-              api: {
-                public: deps.apiUrl,
-                private: deps.apiUrl,
-              },
-            },
-          }
-        : {}),
+  return new ccxt.hyperliquid({
+    fetchImplementation: fetch,
+    options: {
+      builderFee: false,
+      refSet: true,
     },
-  ) as HyperliquidExchangeInternal;
+    ...(address
+      ? {
+          privateKey: DUMMY_PRIVATE_KEY,
+          walletAddress: address,
+        }
+      : {}),
+    ...(deps?.apiUrl
+      ? {
+          urls: {
+            api: {
+              public: deps.apiUrl,
+              private: deps.apiUrl,
+            },
+          },
+        }
+      : {}),
+  }) as HyperliquidExchangeInternal;
 }
 
 function normalizeOrderStatus(raw: unknown): string {

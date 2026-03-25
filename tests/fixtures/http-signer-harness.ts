@@ -1,20 +1,20 @@
 import {
-  createPublicClient,
-  createWalletClient,
-  http,
   type Address,
   type Chain,
+  createPublicClient,
+  createWalletClient,
   type Hex,
+  http,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, polygon } from "viem/chains";
 import { signHyperliquidL1Action } from "../../src/core/hyperliquid-signing";
 import {
   deserializeSignerPayload,
-  serializeSignerPayload,
   type HttpSignerMetadata,
   type SignerCommandRequest,
   type SignerCommandResponse,
+  serializeSignerPayload,
   type WalletTransportOperation,
 } from "../../src/core/signer-protocol";
 
@@ -26,10 +26,7 @@ interface HttpSignerHarnessOptions {
   rpcUrl?: string;
 }
 
-function createJsonResponse(
-  payload: unknown,
-  status = 200,
-): Response {
+function createJsonResponse(payload: unknown, status = 200): Response {
   return new Response(serializeSignerPayload(payload), {
     status,
     headers: {

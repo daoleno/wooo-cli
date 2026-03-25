@@ -46,7 +46,10 @@ interface HyperliquidSigningExchange {
 }
 
 function createLocalAccount(
-  account: Omit<Extract<ResolvedAccount, { custody: "local" }>, "chainFamily" | "custody">,
+  account: Omit<
+    Extract<ResolvedAccount, { custody: "local" }>,
+    "chainFamily" | "custody"
+  >,
 ): ResolvedAccount {
   return {
     ...account,
@@ -56,7 +59,10 @@ function createLocalAccount(
 }
 
 function createRemoteAccount(
-  account: Omit<Extract<ResolvedAccount, { custody: "remote" }>, "chainFamily" | "custody">,
+  account: Omit<
+    Extract<ResolvedAccount, { custody: "remote" }>,
+    "chainFamily" | "custody"
+  >,
 ): ResolvedAccount {
   return {
     ...account,

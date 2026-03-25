@@ -1,5 +1,5 @@
-import type { ChainFamily } from "./chain-ids";
 import type { Address, Hash, Hex } from "viem";
+import type { ChainFamily } from "./chain-ids";
 
 export interface TransportAccountRef {
   address: string;
@@ -117,7 +117,8 @@ interface WalletTransportRequestBase {
   version: 1;
 }
 
-export interface SignTypedDataCommandRequest extends WalletTransportRequestBase {
+export interface SignTypedDataCommandRequest
+  extends WalletTransportRequestBase {
   chainId: string;
   operation: "sign-typed-data";
   prompt?: ApprovalPrompt;
@@ -174,7 +175,8 @@ export interface SignerCommandHexSignatureResponse
   signatureHex: Hex | string;
 }
 
-export interface SignerCommandErrorResponse extends WalletTransportResponseBase {
+export interface SignerCommandErrorResponse
+  extends WalletTransportResponseBase {
   error: string;
   ok: false;
 }

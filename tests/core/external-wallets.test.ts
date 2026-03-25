@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  RemoteAccountRegistry,
   type RemoteAccountRecord,
+  RemoteAccountRegistry,
 } from "../../src/core/external-wallets";
 
 const EVM_ADDRESS = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";

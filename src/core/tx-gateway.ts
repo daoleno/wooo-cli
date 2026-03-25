@@ -6,12 +6,12 @@ import type {
   TransactionReceipt,
 } from "viem";
 import { encodeFunctionData } from "viem";
+import { resolveChainId } from "./chain-ids";
 import type {
   ApprovalPrompt,
   TokenApprovalIntent,
   WalletOperationContext,
 } from "./signer-protocol";
-import { resolveChainId } from "./chain-ids";
 import type { WalletPort } from "./signers";
 
 export interface ContractWriteOptions {
@@ -126,7 +126,9 @@ export class TxGateway {
           token,
           spender,
           amount: amount.toString(),
-          ...(this.context?.protocol ? { protocol: this.context.protocol } : {}),
+          ...(this.context?.protocol
+            ? { protocol: this.context.protocol }
+            : {}),
           ...(this.context?.command ? { command: this.context.command } : {}),
         },
       },

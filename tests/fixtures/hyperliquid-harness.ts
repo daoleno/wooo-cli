@@ -170,8 +170,7 @@ export class HyperliquidHarness {
         ? (action.orders as Array<Record<string, unknown>>)
         : [];
       const firstOrder = orders[0] ?? {};
-      const size =
-        typeof firstOrder.s === "string" ? firstOrder.s : "0.001000";
+      const size = typeof firstOrder.s === "string" ? firstOrder.s : "0.001000";
 
       return createJsonResponse({
         status: "ok",

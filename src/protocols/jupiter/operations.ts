@@ -5,12 +5,12 @@ import {
 } from "../../core/execution-plan";
 import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
+import { createDefaultJupiterClient } from "./runtime";
 import type {
   JupiterQuote,
   JupiterQuoteResponseData,
   JupiterSwapResult,
 } from "./types";
-import { createDefaultJupiterClient } from "./runtime";
 
 export interface JupiterSwapParams {
   amount: number;

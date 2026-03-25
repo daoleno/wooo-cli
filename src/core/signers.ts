@@ -3,7 +3,7 @@ import {
   signAndSend as owsSignAndSend,
   signTypedData as owsSignTypedData,
 } from "@open-wallet-standard/core";
-import { serializeTransaction, type Address, type Hash, type Hex } from "viem";
+import { type Address, type Hash, type Hex, serializeTransaction } from "viem";
 import { getChainFamily, getChainName } from "./chain-ids";
 import { getPublicClient, getRpcUrlForChain } from "./evm";
 import { signHyperliquidL1Action } from "./hyperliquid-signing";
@@ -785,20 +785,16 @@ export class ExternalSigner implements WalletPort {
     context?: WalletOperationContext,
     prompt?: ApprovalPrompt,
   ): Promise<Hex> {
-    const response = await invokeHttpSigner(
-      this.signerUrl,
-      this.authEnv,
-      {
-        clientRequestId: randomUUID(),
-        version: 1,
-        operation: "sign-typed-data",
-        account: this.toAccountRef(),
-        context,
-        chainId,
-        typedData: request,
-        prompt,
-      },
-    );
+    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+      clientRequestId: randomUUID(),
+      version: 1,
+      operation: "sign-typed-data",
+      account: this.toAccountRef(),
+      context,
+      chainId,
+      typedData: request,
+      prompt,
+    });
 
     if (!response.ok || !("signatureHex" in response)) {
       throw new Error(
@@ -817,21 +813,17 @@ export class ExternalSigner implements WalletPort {
     prompt?: ApprovalPrompt,
     intent?: TransactionIntent,
   ): Promise<Hash | string> {
-    const response = await invokeHttpSigner(
-      this.signerUrl,
-      this.authEnv,
-      {
-        clientRequestId: randomUUID(),
-        version: 1,
-        operation: "sign-and-send-transaction",
-        account: this.toAccountRef(),
-        context,
-        chainId,
-        transaction: request,
-        intent,
-        prompt,
-      },
-    );
+    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+      clientRequestId: randomUUID(),
+      version: 1,
+      operation: "sign-and-send-transaction",
+      account: this.toAccountRef(),
+      context,
+      chainId,
+      transaction: request,
+      intent,
+      prompt,
+    });
 
     if (!response.ok || !("txHash" in response)) {
       throw new Error(
@@ -845,18 +837,14 @@ export class ExternalSigner implements WalletPort {
     request: ProtocolPayloadRequest,
     context?: WalletOperationContext,
   ): Promise<ProtocolPayloadSignature> {
-    const response = await invokeHttpSigner(
-      this.signerUrl,
-      this.authEnv,
-      {
-        clientRequestId: randomUUID(),
-        version: 1,
-        operation: "sign-protocol-payload",
-        account: this.toAccountRef(),
-        context,
-        payload: request,
-      },
-    );
+    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+      clientRequestId: randomUUID(),
+      version: 1,
+      operation: "sign-protocol-payload",
+      account: this.toAccountRef(),
+      context,
+      payload: request,
+    });
 
     if (!response.ok || !("signature" in response)) {
       throw new Error(

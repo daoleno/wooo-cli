@@ -1,16 +1,16 @@
 import { defineCommand } from "citty";
 import {
-  encodeFunctionData,
   type Address,
-  type Hash,
+  encodeFunctionData,
   erc20Abi,
+  type Hash,
   isAddress,
   maxUint256,
   parseAbi,
 } from "viem";
+import { resolveChainId } from "../../core/chain-ids";
 import { confirmTransaction } from "../../core/confirm";
 import { getActiveWalletPort } from "../../core/context";
-import { resolveChainId } from "../../core/chain-ids";
 import { getPublicClient } from "../../core/evm";
 import {
   createApprovalStep,
