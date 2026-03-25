@@ -55,6 +55,7 @@
     "@clack/prompts": "^1.1.0",
     "@curvefi/api": "^2.68.38",
     "@lidofinance/lido-ethereum-sdk": "^4.7.0",
+    "@lifi/sdk": "^3.16.3",
     "@morpho-org/blue-sdk": "^5.18.0",
     "@morpho-org/blue-sdk-viem": "^4.5.0",
     "@open-wallet-standard/core": "^1.0.0",
