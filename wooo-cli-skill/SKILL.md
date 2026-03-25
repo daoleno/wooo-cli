@@ -1,18 +1,23 @@
 ---
 name: wooo-cli
 description: >
-  Guide for using wooo-cli, the all-in-one crypto terminal CLI. Use this skill
-  whenever the user wants to trade crypto, swap tokens, check prices or balances,
-  manage wallets, lend/borrow on DeFi protocols, stake ETH, trade perpetual
-  futures, check prediction markets, bridge tokens cross-chain, view portfolio
-  PnL, or do anything involving on-chain or exchange operations from the terminal.
-  Also trigger when the user mentions CEX trading (OKX, Binance, Bybit), DEX
-  swaps (Uniswap, Curve, Jupiter), lending (Aave, Morpho), staking (Lido),
-  perps (Hyperliquid), prediction markets (Polymarket), cross-chain bridges
-  (LI.FI, OKX Bridge), or on-chain data queries — even if they don't say "wooo"
-  explicitly. If they're asking about crypto operations from the terminal and
-  have wooo-cli available, this skill applies. Make sure to use this skill
-  proactively — don't wait for the user to ask for it by name.
+  Guide for using wooo-cli, the all-in-one crypto terminal CLI for trading,
+  DeFi, and on-chain execution. Use this skill whenever the user wants to:
+  trade or buy/sell crypto on exchanges (OKX, Binance, Bybit spot or futures),
+  swap tokens on DEXes (Uniswap, Curve, Jupiter), lend/borrow/supply on DeFi
+  (Aave, Morpho), stake ETH (Lido), open leveraged long/short positions
+  (Hyperliquid perps), check prediction markets (Polymarket), bridge tokens
+  cross-chain (LI.FI, OKX Bridge), check token prices or market rankings,
+  view on-chain token volume/candles/holders/trades, query wallet balances or
+  portfolio PnL across chains, resolve ENS names, inspect transactions, read
+  smart contracts, manage wallets (create/import/switch/connect hardware),
+  or configure exchange API keys. Trigger on any crypto CLI operation — even
+  when the user doesn't say "wooo" explicitly. If they mention buying BTC,
+  swapping tokens, checking DeFi positions, staking rewards, funding rates,
+  bridging USDC, token rankings, or portfolio overview from the terminal,
+  this skill applies. Do NOT trigger for: writing smart contracts or dApps,
+  using ethers.js/web3.js/viem in code, deploying contracts with Hardhat/Foundry,
+  building trading bots in Python, or general blockchain education questions.
 ---
 
 # wooo-cli Usage Guide
