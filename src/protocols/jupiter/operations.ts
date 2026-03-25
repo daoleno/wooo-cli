@@ -5,8 +5,12 @@ import {
 } from "../../core/execution-plan";
 import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
-import { JupiterClient } from "./client";
-import type { JupiterQuote, JupiterSwapResult } from "./types";
+import type {
+  JupiterQuote,
+  JupiterQuoteResponseData,
+  JupiterSwapResult,
+} from "./types";
+import { createDefaultJupiterClient } from "./runtime";
 
 export interface JupiterSwapParams {
   amount: number;
@@ -16,6 +20,7 @@ export interface JupiterSwapParams {
 
 export interface PreparedJupiterSwap extends JupiterSwapParams {
   quote: JupiterQuote;
+  quoteResponse: JupiterQuoteResponseData;
 }
 
 export function createJupiterSwapOperation(
@@ -24,13 +29,17 @@ export function createJupiterSwapOperation(
   return {
     protocol: "jupiter",
     prepare: async () => {
-      const client = new JupiterClient();
-      const quote = await client.quote(
+      const client = createDefaultJupiterClient();
+      const preparedQuote = await client.prepareQuote(
         params.tokenIn,
         params.tokenOut,
         params.amount,
       );
-      return { ...params, quote };
+      return {
+        ...params,
+        quote: preparedQuote.quote,
+        quoteResponse: preparedQuote.response,
+      };
     },
     createPreview: (prepared) => ({
       action: `Swap ${prepared.amount} ${prepared.tokenIn} -> ${prepared.quote.outAmount} ${prepared.tokenOut} via Jupiter (Solana)`,
@@ -68,11 +77,12 @@ export function createJupiterSwapOperation(
       }),
     resolveAuth: async () => await getActiveWalletPort("solana"),
     execute: async (prepared, signer) => {
-      const client = new JupiterClient(signer);
+      const client = createDefaultJupiterClient(signer);
       return await client.swap(
         prepared.tokenIn,
         prepared.tokenOut,
         prepared.amount,
+        prepared.quoteResponse,
       );
     },
   };

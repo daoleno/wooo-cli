@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { HyperliquidClient } from "./client";
+import { createDefaultHyperliquidClient } from "./runtime";
 
 export default defineCommand({
   meta: { name: "positions", description: "View open positions" },
@@ -11,7 +11,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const wallet = await getActiveWallet("evm");
-    const client = new HyperliquidClient(wallet.address);
+    const client = createDefaultHyperliquidClient(wallet.address);
     const positions = await client.fetchPositions();
     const out = createOutput(resolveOutputOptions(args));
 

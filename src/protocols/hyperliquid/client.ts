@@ -21,6 +21,10 @@ const PLACEHOLDER_SIGNATURE = {
 
 type HyperliquidOrderSide = "buy" | "sell";
 
+export interface HyperliquidClientDeps {
+  apiUrl?: string;
+}
+
 interface HyperliquidMarketLike {
   baseId?: string;
   symbol?: string;
@@ -56,14 +60,34 @@ interface HyperliquidExchangeInternal extends hyperliquid {
   ): HyperliquidActionSignature;
 }
 
-function createExchange(address?: string): HyperliquidExchangeInternal {
+function createExchange(
+  address?: string,
+  deps?: HyperliquidClientDeps,
+): HyperliquidExchangeInternal {
   return new ccxt.hyperliquid(
-    address
-      ? {
-          privateKey: DUMMY_PRIVATE_KEY,
-          walletAddress: address,
-        }
-      : {},
+    {
+      fetchImplementation: fetch,
+      options: {
+        builderFee: false,
+        refSet: true,
+      },
+      ...(address
+        ? {
+            privateKey: DUMMY_PRIVATE_KEY,
+            walletAddress: address,
+          }
+        : {}),
+      ...(deps?.apiUrl
+        ? {
+            urls: {
+              api: {
+                public: deps.apiUrl,
+                private: deps.apiUrl,
+              },
+            },
+          }
+        : {}),
+    },
   ) as HyperliquidExchangeInternal;
 }
 
@@ -85,10 +109,15 @@ export class HyperliquidClient {
   private exchange: HyperliquidExchangeInternal;
   private signer?: WalletPort;
 
-  constructor(address?: string, signer?: WalletPort, command?: string) {
+  constructor(
+    address?: string,
+    signer?: WalletPort,
+    command?: string,
+    deps?: HyperliquidClientDeps,
+  ) {
     this.address = address;
     this.command = command;
-    this.exchange = createExchange(address);
+    this.exchange = createExchange(address, deps);
     this.signer = signer;
   }
 

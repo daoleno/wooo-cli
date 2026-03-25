@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { HyperliquidClient } from "./client";
+import { createDefaultHyperliquidClient } from "./runtime";
 
 export default defineCommand({
   meta: { name: "funding", description: "View funding rates" },
@@ -14,7 +14,7 @@ export default defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const client = new HyperliquidClient();
+    const client = createDefaultHyperliquidClient();
     const out = createOutput(resolveOutputOptions(args));
 
     if (args.symbol) {

@@ -2,34 +2,41 @@ import type { WalletPort } from "../../core/signers";
 import { getSolanaConnection } from "../../core/solana";
 import { SolanaGateway } from "../../core/solana-gateway";
 import { JUPITER_API, resolveTokenMint } from "./constants";
-import type { JupiterQuote, JupiterSwapResult } from "./types";
-
-interface JupiterRoutePlanStep {
-  swapInfo?: {
-    label?: string;
-  };
-}
-
-interface JupiterQuoteResponse {
-  outAmount: string;
-  priceImpactPct?: string;
-  routePlan?: JupiterRoutePlanStep[];
-}
+import type {
+  JupiterQuote,
+  JupiterQuoteResponseData,
+  JupiterSwapResult,
+} from "./types";
 
 interface JupiterSwapResponse {
   swapTransaction: string;
 }
 
+export interface JupiterClientDeps {
+  apiUrl?: string;
+  connection?: ReturnType<typeof getSolanaConnection>;
+}
+
 export class JupiterClient {
-  private connection = getSolanaConnection();
+  private readonly connection;
+  private readonly apiUrl;
 
-  constructor(private signer?: WalletPort) {}
+  constructor(
+    private signer?: WalletPort,
+    deps: JupiterClientDeps = {},
+  ) {
+    this.connection = deps.connection ?? getSolanaConnection();
+    this.apiUrl = deps.apiUrl ?? JUPITER_API;
+  }
 
-  async quote(
+  async prepareQuote(
     tokenInSymbol: string,
     tokenOutSymbol: string,
     amountIn: number,
-  ): Promise<JupiterQuote> {
+  ): Promise<{
+    quote: JupiterQuote;
+    response: JupiterQuoteResponseData;
+  }> {
     const tokenIn = resolveTokenMint(tokenInSymbol);
     const tokenOut = resolveTokenMint(tokenOutSymbol);
     if (!tokenIn) throw new Error(`Unknown Solana token: ${tokenInSymbol}`);
@@ -44,33 +51,50 @@ export class JupiterClient {
       slippageBps: "50", // 0.5%
     });
 
-    const response = await fetch(`${JUPITER_API}/quote?${params}`);
+    const response = await fetch(`${this.apiUrl}/quote?${params}`);
     if (!response.ok) {
       throw new Error(`Jupiter quote failed: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as JupiterQuoteResponse;
+    const data = (await response.json()) as JupiterQuoteResponseData;
     const outAmount = Number(data.outAmount) / 10 ** tokenOut.decimals;
 
     return {
-      inputMint: tokenIn.mint,
-      outputMint: tokenOut.mint,
-      inAmount: amountIn.toString(),
-      outAmount: outAmount.toFixed(
-        tokenOut.decimals > 8 ? 8 : tokenOut.decimals,
-      ),
-      priceImpact: `${(Number(data.priceImpactPct) * 100).toFixed(4)}%`,
-      routePlan:
-        data.routePlan
-          ?.map((route) => route.swapInfo?.label || "unknown")
-          .join(" → ") || "direct",
+      quote: {
+        inputMint: tokenIn.mint,
+        outputMint: tokenOut.mint,
+        inAmount: amountIn.toString(),
+        outAmount: outAmount.toFixed(
+          tokenOut.decimals > 8 ? 8 : tokenOut.decimals,
+        ),
+        priceImpact: `${(Number(data.priceImpactPct) * 100).toFixed(4)}%`,
+        routePlan:
+          data.routePlan
+            ?.map((route) => route.swapInfo?.label || "unknown")
+            .join(" → ") || "direct",
+      },
+      response: data,
     };
+  }
+
+  async quote(
+    tokenInSymbol: string,
+    tokenOutSymbol: string,
+    amountIn: number,
+  ): Promise<JupiterQuote> {
+    const { quote } = await this.prepareQuote(
+      tokenInSymbol,
+      tokenOutSymbol,
+      amountIn,
+    );
+    return quote;
   }
 
   async swap(
     tokenInSymbol: string,
     tokenOutSymbol: string,
     amountIn: number,
+    quoteResponse?: JupiterQuoteResponseData,
   ): Promise<JupiterSwapResult> {
     if (!this.signer) throw new Error("Signer required for swap");
 
@@ -79,23 +103,13 @@ export class JupiterClient {
     if (!tokenIn) throw new Error(`Unknown Solana token: ${tokenInSymbol}`);
     if (!tokenOut) throw new Error(`Unknown Solana token: ${tokenOutSymbol}`);
 
-    const amountLamports = Math.round(amountIn * 10 ** tokenIn.decimals);
-
-    // 1. Get quote
-    const quoteParams = new URLSearchParams({
-      inputMint: tokenIn.mint,
-      outputMint: tokenOut.mint,
-      amount: amountLamports.toString(),
-      slippageBps: "50",
-    });
-
-    const quoteResponse = await fetch(`${JUPITER_API}/quote?${quoteParams}`);
-    if (!quoteResponse.ok)
-      throw new Error(`Quote failed: ${quoteResponse.statusText}`);
-    const quoteData = (await quoteResponse.json()) as JupiterQuoteResponse;
+    const quoteData =
+      quoteResponse ??
+      (await this.prepareQuote(tokenInSymbol, tokenOutSymbol, amountIn))
+        .response;
 
     // 2. Get swap transaction
-    const swapResponse = await fetch(`${JUPITER_API}/swap`, {
+    const swapResponse = await fetch(`${this.apiUrl}/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

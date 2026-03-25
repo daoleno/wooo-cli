@@ -3,8 +3,8 @@ import { createOutput, resolveOutputOptions } from "../../core/output";
 import { validateAmount, validateTokenSymbol } from "../../core/validation";
 import { runWriteOperation } from "../../core/write-operation";
 import type { ProtocolDefinition } from "../types";
-import { JupiterClient } from "./client";
 import { createJupiterSwapOperation } from "./operations";
+import { createDefaultJupiterClient } from "./runtime";
 
 const swap = defineCommand({
   meta: { name: "swap", description: "Swap tokens on Solana via Jupiter" },
@@ -71,7 +71,7 @@ const quote = defineCommand({
     const tokenOut = validateTokenSymbol(args.tokenOut);
     const amount = validateAmount(args.amount, "Quote amount");
 
-    const client = new JupiterClient();
+    const client = createDefaultJupiterClient();
     const result = await client.quote(tokenIn, tokenOut, amount);
     out.data({
       tokenIn,
@@ -90,7 +90,7 @@ const tokens = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const client = new JupiterClient();
+    const client = createDefaultJupiterClient();
     out.data({ chain: "solana", tokens: client.tokens() });
   },
 });

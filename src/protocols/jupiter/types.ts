@@ -1,3 +1,15 @@
+export interface JupiterQuoteRouteStep {
+  swapInfo?: {
+    label?: string;
+  };
+}
+
+export interface JupiterQuoteResponseData {
+  outAmount: string;
+  priceImpactPct?: string;
+  routePlan?: JupiterQuoteRouteStep[];
+}
+
 export interface JupiterQuote {
   inputMint: string;
   outputMint: string;

@@ -1,8 +1,8 @@
 import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
-import { HyperliquidClient } from "./client";
 import { createHyperliquidExecutionPlan } from "./plan";
+import { createDefaultHyperliquidClient } from "./runtime";
 import type { HyperliquidOrderResult, HyperliquidTicker } from "./types";
 
 export interface HyperliquidOrderParams {
@@ -33,7 +33,7 @@ export function createHyperliquidOrderOperation(
     protocol: "hyperliquid",
     prepare: async () => {
       const symbol = `${params.asset}/USDC:USDC`;
-      const client = new HyperliquidClient();
+      const client = createDefaultHyperliquidClient();
       const ticker = await client.fetchTicker(symbol);
       const amount = (params.sizeUsd / ticker.last).toFixed(6);
 
@@ -66,7 +66,7 @@ export function createHyperliquidOrderOperation(
     resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
       const wallet = await getActiveWallet("evm");
-      const client = new HyperliquidClient(
+      const client = createDefaultHyperliquidClient(
         wallet.address,
         signer,
         prepared.side,
