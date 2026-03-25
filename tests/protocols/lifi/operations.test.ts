@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 // Mock @lifi/sdk (what the client calls internally) — include all functions
 // to avoid breaking other tests that import from the same module
@@ -8,8 +8,16 @@ mock.module("@lifi/sdk", () => ({
     action: {
       fromChainId: 1,
       toChainId: 42161,
-      fromToken: { symbol: "USDC", address: "0xA0b8" },
-      toToken: { symbol: "USDC", address: "0xaf88" },
+      fromToken: {
+        symbol: "USDC",
+        address: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        decimals: 6,
+      },
+      toToken: {
+        symbol: "USDC",
+        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        decimals: 6,
+      },
       fromAmount: "100000000",
     },
     estimate: {
@@ -17,7 +25,7 @@ mock.module("@lifi/sdk", () => ({
       executionDuration: 120,
       gasCosts: [{ amountUSD: "0.15" }],
       feeCosts: [{ amountUSD: "0.05" }],
-      approvalAddress: "0xapprove",
+      approvalAddress: "0x1111111111111111111111111111111111111111",
     },
     tool: "stargate",
     transactionRequest: {
@@ -42,16 +50,24 @@ mock.module("@lifi/sdk", () => ({
   getTokens: mock(async () => ({
     tokens: {
       1: [{ symbol: "USDC", address: "0xA0b8", decimals: 6 }],
-      42161: [{ symbol: "USDC", address: "0xaf88", decimals: 6 }],
+      42161: [
+        {
+          symbol: "USDC",
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          decimals: 6,
+        },
+      ],
     },
   })),
   ChainId: { ETH: 1, ARB: 42161 },
 }));
 
 // Mock context
+const signAndSendTransaction = mock(async () => "0xtx");
+
 mock.module("../../../src/core/context", () => ({
   getActiveWalletPort: mock(async () => ({
-    signAndSendTransaction: mock(),
+    signAndSendTransaction,
   })),
   getActiveWallet: mock(async () => ({ address: "0xuser" })),
 }));
@@ -70,6 +86,10 @@ mock.module("../../../src/core/chain-ids", () => ({
 import { createLifiBridgeOperation } from "../../../src/protocols/lifi/operations";
 
 describe("createLifiBridgeOperation", () => {
+  beforeEach(() => {
+    signAndSendTransaction.mockClear();
+  });
+
   const op = createLifiBridgeOperation({
     fromChain: "ethereum",
     toChain: "arbitrum",
@@ -105,5 +125,18 @@ describe("createLifiBridgeOperation", () => {
     expect(plan.chain).toBe("ethereum");
     expect(plan.metadata?.destinationChain).toBe("arbitrum");
     expect(plan.steps.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("execute sends approval before bridge tx when approval is required", async () => {
+    const prepared = await op.prepare();
+    const signer = { signAndSendTransaction } as any;
+    const result = await op.execute(prepared, signer);
+
+    expect(signAndSendTransaction).toHaveBeenCalledTimes(2);
+    expect(signAndSendTransaction.mock.calls[0][1].to).toBe(
+      "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    );
+    expect(signAndSendTransaction.mock.calls[1][1].to).toBe("0x1234");
+    expect(result.approvalTxHash).toBe("0xtx");
   });
 });

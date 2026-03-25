@@ -8,6 +8,7 @@ import {
 } from "../../core/execution-plan";
 import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
+import { toBaseUnits } from "../bridge/token-resolution";
 import { OkxBridgeClient } from "./client";
 import type { OkxBridgeQuote, OkxBridgeResult } from "./types";
 
@@ -43,13 +44,23 @@ export function createOkxBridgeOperation(
       const fromChainOkxId = getOkxChainId(params.fromChain);
       const toChainOkxId = getOkxChainId(params.toChain);
       const fromChainId = resolveChainId(params.fromChain);
+      const fromToken = await client.resolveToken(
+        params.fromChain,
+        fromChainOkxId,
+        params.fromToken,
+      );
+      const toToken = await client.resolveToken(
+        params.toChain,
+        toChainOkxId,
+        params.toToken,
+      );
 
       const quote = await client.getQuote({
         fromChainId: fromChainOkxId,
         toChainId: toChainOkxId,
-        fromTokenAddress: params.fromToken,
-        toTokenAddress: params.toToken,
-        amount: String(params.amount),
+        fromTokenAddress: fromToken.address,
+        toTokenAddress: toToken.address,
+        amount: toBaseUnits(params.amount, fromToken.decimals),
         userWalletAddress: wallet.address,
       });
 
@@ -119,6 +130,18 @@ export function createOkxBridgeOperation(
     },
     resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
+      let approvalTxHash: string | undefined;
+      if (prepared.approveData) {
+        approvalTxHash = String(
+          await signer.signAndSendTransaction(prepared.fromChainId, {
+            format: "evm-transaction",
+            to: prepared.approveData.to as `0x${string}`,
+            data: prepared.approveData.data as `0x${string}`,
+            value: 0n,
+          }),
+        );
+      }
+
       const txHash = await signer.signAndSendTransaction(prepared.fromChainId, {
         format: "evm-transaction",
         to: prepared.quote.tx.to as `0x${string}`,
@@ -128,6 +151,7 @@ export function createOkxBridgeOperation(
           : undefined,
       });
       return {
+        approvalTxHash,
         txHash: String(txHash),
         fromChainId: prepared.quote.fromChainId,
         toChainId: prepared.quote.toChainId,

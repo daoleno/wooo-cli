@@ -158,6 +158,30 @@ describe("OkxBridgeClient", () => {
     expect(chains[0].chainName).toBe("Ethereum");
   });
 
+  test("resolveToken resolves symbol to address and decimals", async () => {
+    const mockResponse = {
+      code: "0",
+      msg: "",
+      data: [
+        {
+          tokenSymbol: "USDC",
+          tokenContractAddress: "0xA0b8",
+          decimal: "6",
+          chainId: "1",
+        },
+      ],
+    };
+
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify(mockResponse), { status: 200 }),
+    ) as any;
+
+    const client = new OkxBridgeClient(auth);
+    const token = await client.resolveToken("ethereum", "1", "USDC");
+    expect(token.address).toBe("0xA0b8");
+    expect(token.decimals).toBe(6);
+  });
+
   test("throws on missing credentials", () => {
     const saved = {
       key: process.env.WOOO_OKX_API_KEY,

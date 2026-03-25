@@ -6,8 +6,12 @@ import {
 } from "../../core/chain-ids";
 import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { validateAmount, validateTokenSymbol } from "../../core/validation";
+import { validateAmount } from "../../core/validation";
 import { runWriteOperation } from "../../core/write-operation";
+import {
+  normalizeBridgeTokenInput,
+  toBaseUnits,
+} from "../bridge/token-resolution";
 import type { ProtocolDefinition } from "../types";
 import { LifiClient } from "./client";
 import { createLifiBridgeOperation, getEvmChainNumber } from "./operations";
@@ -53,8 +57,8 @@ const bridge = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const fromToken = validateTokenSymbol(args.token);
-    const toToken = args.to ? validateTokenSymbol(args.to) : fromToken;
+    const fromToken = normalizeBridgeTokenInput(args.token);
+    const toToken = args.to ? normalizeBridgeTokenInput(args.to) : fromToken;
     const amount = validateAmount(args.amount, "Bridge amount");
     const fromChain = validateEvmBridgeChain(
       args["from-chain"],
@@ -116,8 +120,8 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const fromToken = validateTokenSymbol(args.token);
-    const toToken = args.to ? validateTokenSymbol(args.to) : fromToken;
+    const fromToken = normalizeBridgeTokenInput(args.token);
+    const toToken = args.to ? normalizeBridgeTokenInput(args.to) : fromToken;
     const amount = validateAmount(args.amount, "Quote amount");
     const fromChain = validateEvmBridgeChain(
       args["from-chain"],
@@ -131,12 +135,22 @@ const quote = defineCommand({
     const wallet = await getActiveWallet("evm");
     const client = new LifiClient();
 
+    const fromTokenMeta = await client.resolveToken(
+      fromChain,
+      getEvmChainNumber(fromChain),
+      fromToken,
+    );
+    const toTokenMeta = await client.resolveToken(
+      toChain,
+      getEvmChainNumber(toChain),
+      toToken,
+    );
     const result = await client.getQuote({
       fromChain: getEvmChainNumber(fromChain),
       toChain: getEvmChainNumber(toChain),
-      fromToken,
-      toToken,
-      fromAmount: String(amount),
+      fromToken: fromTokenMeta.address,
+      toToken: toTokenMeta.address,
+      fromAmount: toBaseUnits(amount, fromTokenMeta.decimals),
       fromAddress: wallet.address,
     });
     out.data(result);

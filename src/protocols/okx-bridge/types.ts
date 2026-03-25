@@ -39,6 +39,7 @@ export interface OkxBridgeStatus {
 }
 
 export interface OkxBridgeResult {
+  approvalTxHash?: string;
   txHash: string;
   fromChainId: string;
   toChainId: string;

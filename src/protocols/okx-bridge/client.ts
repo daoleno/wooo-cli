@@ -1,4 +1,9 @@
 import { createHmac } from "node:crypto";
+import {
+  type BridgeTokenMetadata,
+  findTokenMatch,
+  getNativeTokenMetadata,
+} from "../bridge/token-resolution";
 import type { OkxBridgeQuote, OkxBridgeStatus } from "./types";
 
 const BASE_URL = "https://web3.okx.com";
@@ -186,14 +191,9 @@ export class OkxBridgeClient {
     }));
   }
 
-  async getSupportedTokens(chainId?: string): Promise<
-    Array<{
-      symbol: string;
-      address: string;
-      decimals: number;
-      chainId: string;
-    }>
-  > {
+  async getSupportedTokens(
+    chainId?: string,
+  ): Promise<Array<BridgeTokenMetadata & { chainId: string }>> {
     const params: Record<string, string> = {};
     if (chainId) params.chainId = chainId;
     const data = await this.request<any[]>(
@@ -207,5 +207,26 @@ export class OkxBridgeClient {
       decimals: Number(t.decimal),
       chainId: t.chainId,
     }));
+  }
+
+  async resolveToken(
+    chain: string,
+    chainId: string,
+    token: string,
+  ): Promise<BridgeTokenMetadata> {
+    const nativeToken = getNativeTokenMetadata(chain, token);
+    if (nativeToken) return nativeToken;
+
+    const supportedTokens = await this.getSupportedTokens(chainId);
+    const resolved = findTokenMatch(
+      supportedTokens.filter(
+        (supportedToken) => supportedToken.chainId === chainId,
+      ),
+      token,
+    );
+    if (!resolved) {
+      throw new Error(`Unsupported token ${token} on ${chain}`);
+    }
+    return resolved;
   }
 }

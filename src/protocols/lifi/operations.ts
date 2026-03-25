@@ -1,3 +1,4 @@
+import { encodeFunctionData } from "viem";
 import { resolveChainId } from "../../core/chain-ids";
 import { getActiveWallet, getActiveWalletPort } from "../../core/context";
 import {
@@ -8,6 +9,7 @@ import {
 } from "../../core/execution-plan";
 import type { WalletPort } from "../../core/signers";
 import type { WriteOperation } from "../../core/write-operation";
+import { toBaseUnits } from "../bridge/token-resolution";
 import { LifiClient } from "./client";
 import type { LifiBridgeResult, LifiQuote } from "./types";
 
@@ -24,6 +26,19 @@ export interface PreparedLifiBridge extends LifiBridgeParams {
   fromAddress: string;
   fromChainId: string; // CAIP-2
 }
+
+const ERC20_APPROVE_ABI = [
+  {
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
 
 /** Extract numeric EVM chain ID from CAIP-2 string (e.g. "eip155:1" → 1) */
 export function getEvmChainNumber(chainName: string): number {
@@ -42,12 +57,22 @@ export function createLifiBridgeOperation(
       const fromChainNum = getEvmChainNumber(params.fromChain);
       const toChainNum = getEvmChainNumber(params.toChain);
       const fromChainId = resolveChainId(params.fromChain);
+      const fromToken = await client.resolveToken(
+        params.fromChain,
+        fromChainNum,
+        params.fromToken,
+      );
+      const toToken = await client.resolveToken(
+        params.toChain,
+        toChainNum,
+        params.toToken,
+      );
       const quote = await client.getQuote({
         fromChain: fromChainNum,
         toChain: toChainNum,
-        fromToken: params.fromToken,
-        toToken: params.toToken,
-        fromAmount: String(params.amount),
+        fromToken: fromToken.address,
+        toToken: toToken.address,
+        fromAmount: toBaseUnits(params.amount, fromToken.decimals),
         fromAddress: wallet.address,
       });
       return { ...params, quote, fromAddress: wallet.address, fromChainId };
@@ -102,6 +127,25 @@ export function createLifiBridgeOperation(
     },
     resolveAuth: async () => await getActiveWalletPort("evm"),
     execute: async (prepared, signer) => {
+      let approvalTxHash: string | undefined;
+      if (prepared.quote.approvalAddress) {
+        approvalTxHash = String(
+          await signer.signAndSendTransaction(prepared.fromChainId, {
+            format: "evm-transaction",
+            to: prepared.quote.fromTokenAddress as `0x${string}`,
+            data: encodeFunctionData({
+              abi: ERC20_APPROVE_ABI,
+              functionName: "approve",
+              args: [
+                prepared.quote.approvalAddress as `0x${string}`,
+                BigInt(prepared.quote.fromAmount),
+              ],
+            }),
+            value: 0n,
+          }),
+        );
+      }
+
       const txHash = await signer.signAndSendTransaction(prepared.fromChainId, {
         format: "evm-transaction",
         to: prepared.quote.transactionRequest.to as `0x${string}`,
@@ -111,6 +155,7 @@ export function createLifiBridgeOperation(
           : undefined,
       });
       return {
+        approvalTxHash,
         txHash: String(txHash),
         fromChain: prepared.fromChain,
         toChain: prepared.toChain,

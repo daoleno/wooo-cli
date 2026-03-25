@@ -7,8 +7,16 @@ mock.module("@lifi/sdk", () => ({
     action: {
       fromChainId: 1,
       toChainId: 42161,
-      fromToken: { symbol: "USDC", address: "0xA0b8" },
-      toToken: { symbol: "USDC", address: "0xaf88" },
+      fromToken: {
+        symbol: "USDC",
+        address: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        decimals: 6,
+      },
+      toToken: {
+        symbol: "USDC",
+        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        decimals: 6,
+      },
       fromAmount: "100000000",
     },
     estimate: {
@@ -16,7 +24,7 @@ mock.module("@lifi/sdk", () => ({
       executionDuration: 120,
       gasCosts: [{ amountUSD: "0.15" }],
       feeCosts: [{ amountUSD: "0.05" }],
-      approvalAddress: "0xapprove",
+      approvalAddress: "0x1111111111111111111111111111111111111111",
     },
     tool: "stargate",
     transactionRequest: {
@@ -41,7 +49,13 @@ mock.module("@lifi/sdk", () => ({
   getTokens: mock(async () => ({
     tokens: {
       1: [{ symbol: "USDC", address: "0xA0b8", decimals: 6 }],
-      42161: [{ symbol: "USDC", address: "0xaf88", decimals: 6 }],
+      42161: [
+        {
+          symbol: "USDC",
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          decimals: 6,
+        },
+      ],
     },
   })),
   ChainId: { ETH: 1, ARB: 42161 },
@@ -56,13 +70,16 @@ describe("LifiClient", () => {
     const quote = await client.getQuote({
       fromChain: 1,
       toChain: 42161,
-      fromToken: "0xA0b8",
-      toToken: "0xaf88",
+      fromToken: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      toToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
       fromAmount: "100000000",
       fromAddress: "0xuser",
     });
     expect(quote.fromChain).toBe("1");
     expect(quote.toChain).toBe("42161");
+    expect(quote.fromTokenAddress).toBe(
+      "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    );
     expect(quote.toAmount).toBe("99800000");
     expect(quote.transactionRequest.to).toBe("0x1234");
     expect(quote.bridgeName).toBe("stargate");
@@ -87,5 +104,11 @@ describe("LifiClient", () => {
     const tokens = await client.getTokens([1, 42161]);
     expect(tokens[1]).toBeDefined();
     expect(tokens[1][0].symbol).toBe("USDC");
+  });
+
+  test("resolveToken resolves symbol to address and decimals", async () => {
+    const token = await client.resolveToken("ethereum", 1, "USDC");
+    expect(token.address).toBe("0xA0b8");
+    expect(token.decimals).toBe(6);
   });
 });

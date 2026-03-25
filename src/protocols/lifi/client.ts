@@ -1,3 +1,8 @@
+import {
+  type BridgeTokenMetadata,
+  findTokenMatch,
+  getNativeTokenMetadata,
+} from "../bridge/token-resolution";
 import type { LifiQuote, LifiStatus } from "./types";
 
 let sdkInitialized = false;
@@ -23,6 +28,23 @@ export interface LifiQuoteParams {
 }
 
 export class LifiClient {
+  async resolveToken(
+    chain: string,
+    chainId: number,
+    token: string,
+  ): Promise<BridgeTokenMetadata> {
+    const nativeToken = getNativeTokenMetadata(chain, token);
+    if (nativeToken) return nativeToken;
+
+    const tokensByChain = await this.getTokens([chainId]);
+    const tokens = tokensByChain[chainId] ?? [];
+    const resolved = findTokenMatch(tokens, token);
+    if (!resolved) {
+      throw new Error(`Unsupported token ${token} on ${chain}`);
+    }
+    return resolved;
+  }
+
   async getQuote(params: LifiQuoteParams): Promise<LifiQuote> {
     await ensureSdkInitialized();
     const { getQuote: sdkGetQuote } = await import("@lifi/sdk");
@@ -35,6 +57,10 @@ export class LifiClient {
       fromAddress: params.fromAddress,
       slippage: params.slippage ?? 0.005,
     });
+    if (!result.transactionRequest) {
+      throw new Error("LI.FI quote did not include a transaction request");
+    }
+    const transactionRequest = result.transactionRequest;
 
     const gasCost =
       result.estimate?.gasCosts
@@ -57,20 +83,24 @@ export class LifiClient {
     return {
       fromChain: String(result.action.fromChainId),
       toChain: String(result.action.toChainId),
+      fromTokenAddress: result.action.fromToken.address,
+      toTokenAddress: result.action.toToken.address,
       fromToken: result.action.fromToken.symbol,
       toToken: result.action.toToken.symbol,
+      fromTokenDecimals: result.action.fromToken.decimals,
+      toTokenDecimals: result.action.toToken.decimals,
       fromAmount: result.action.fromAmount,
       toAmount: result.estimate.toAmount,
       bridgeName: result.tool,
       fees: { total: totalFee, gas: gasCost, bridge: bridgeFee },
       estimatedTime: result.estimate.executionDuration,
       transactionRequest: {
-        to: result.transactionRequest!.to as string,
-        data: result.transactionRequest!.data as string,
-        value: String(result.transactionRequest!.value ?? "0"),
-        gasLimit: String(result.transactionRequest!.gasLimit ?? "0"),
-        gasPrice: result.transactionRequest!.gasPrice
-          ? String(result.transactionRequest!.gasPrice)
+        to: transactionRequest.to as string,
+        data: transactionRequest.data as string,
+        value: String(transactionRequest.value ?? "0"),
+        gasLimit: String(transactionRequest.gasLimit ?? "0"),
+        gasPrice: transactionRequest.gasPrice
+          ? String(transactionRequest.gasPrice)
           : undefined,
       },
       approvalAddress: result.estimate?.approvalAddress,
@@ -121,16 +151,11 @@ export class LifiClient {
 
   async getTokens(
     chains?: number[],
-  ): Promise<
-    Record<number, Array<{ symbol: string; address: string; decimals: number }>>
-  > {
+  ): Promise<Record<number, BridgeTokenMetadata[]>> {
     await ensureSdkInitialized();
     const { getTokens: sdkGetTokens } = await import("@lifi/sdk");
     const result = await sdkGetTokens(chains ? { chains } : undefined);
-    const mapped: Record<
-      number,
-      Array<{ symbol: string; address: string; decimals: number }>
-    > = {};
+    const mapped: Record<number, BridgeTokenMetadata[]> = {};
     const tokens = (result as any).tokens ?? result;
     for (const [chainId, tokenList] of Object.entries(tokens)) {
       mapped[Number(chainId)] = (tokenList as any[]).map((t) => ({

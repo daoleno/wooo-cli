@@ -9,8 +9,12 @@ export interface LifiTransactionRequest {
 export interface LifiQuote {
   fromChain: string;
   toChain: string;
+  fromTokenAddress: string;
+  toTokenAddress: string;
   fromToken: string;
   toToken: string;
+  fromTokenDecimals: number;
+  toTokenDecimals: number;
   fromAmount: string;
   toAmount: string;
   bridgeName: string;
@@ -38,6 +42,7 @@ export interface LifiStatus {
 }
 
 export interface LifiBridgeResult {
+  approvalTxHash?: string;
   txHash: string;
   fromChain: string;
   toChain: string;

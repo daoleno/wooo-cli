@@ -6,8 +6,12 @@ import {
 } from "../../core/chain-ids";
 import { getActiveWallet } from "../../core/context";
 import { createOutput, resolveOutputOptions } from "../../core/output";
-import { validateAmount, validateTokenSymbol } from "../../core/validation";
+import { validateAmount } from "../../core/validation";
 import { runWriteOperation } from "../../core/write-operation";
+import {
+  normalizeBridgeTokenInput,
+  toBaseUnits,
+} from "../bridge/token-resolution";
 import type { ProtocolDefinition } from "../types";
 import { OkxBridgeClient } from "./client";
 import { createOkxBridgeOperation, getOkxChainId } from "./operations";
@@ -56,8 +60,8 @@ const bridge = defineCommand({
     format: { type: "string", default: "table" },
   },
   async run({ args }) {
-    const fromToken = validateTokenSymbol(args.token);
-    const toToken = args.to ? validateTokenSymbol(args.to) : fromToken;
+    const fromToken = normalizeBridgeTokenInput(args.token);
+    const toToken = args.to ? normalizeBridgeTokenInput(args.to) : fromToken;
     const amount = validateAmount(args.amount, "Bridge amount");
     const fromChain = validateEvmBridgeChain(args["from-chain"]);
     const toChain = validateEvmBridgeChain(args["to-chain"]);
@@ -113,8 +117,8 @@ const quote = defineCommand({
   },
   async run({ args }) {
     const out = createOutput(resolveOutputOptions(args));
-    const fromToken = validateTokenSymbol(args.token);
-    const toToken = args.to ? validateTokenSymbol(args.to) : fromToken;
+    const fromToken = normalizeBridgeTokenInput(args.token);
+    const toToken = args.to ? normalizeBridgeTokenInput(args.to) : fromToken;
     const amount = validateAmount(args.amount, "Quote amount");
     const fromChain = validateEvmBridgeChain(args["from-chain"]);
     const toChain = validateEvmBridgeChain(args["to-chain"]);
@@ -122,12 +126,22 @@ const quote = defineCommand({
     const wallet = await getActiveWallet("evm");
 
     const client = new OkxBridgeClient();
+    const fromTokenMeta = await client.resolveToken(
+      fromChain,
+      getOkxChainId(fromChain),
+      fromToken,
+    );
+    const toTokenMeta = await client.resolveToken(
+      toChain,
+      getOkxChainId(toChain),
+      toToken,
+    );
     const result = await client.getQuote({
       fromChainId: getOkxChainId(fromChain),
       toChainId: getOkxChainId(toChain),
-      fromTokenAddress: fromToken,
-      toTokenAddress: toToken,
-      amount: String(amount),
+      fromTokenAddress: fromTokenMeta.address,
+      toTokenAddress: toTokenMeta.address,
+      amount: toBaseUnits(amount, fromTokenMeta.decimals),
       userWalletAddress: wallet.address,
     });
     out.data(result);
