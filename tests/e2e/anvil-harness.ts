@@ -7,6 +7,10 @@ import { CONFIG_DEFAULTS } from "../../src/core/config";
 
 const MASTER_PASSWORD = "wooo-anvil-e2e-password";
 const DEFAULT_ETHEREUM_FORK_URL = "https://ethereum.publicnode.com";
+const DEFAULT_ETHEREUM_FORK_URLS = [
+  DEFAULT_ETHEREUM_FORK_URL,
+  "https://rpc.flashbots.net",
+];
 const DEFAULT_POLYGON_FORK_URL = "https://polygon-bor-rpc.publicnode.com";
 const DEFAULT_READY_TIMEOUT_MS = 90_000;
 const READY_POLL_INTERVAL_MS = 250;
@@ -423,6 +427,7 @@ export class EthereumAnvilHarness extends EvmAnvilHarness {
       chainId: 1,
       configDirPrefix: "wooo-anvil-e2e-",
       defaultForkUrl: DEFAULT_ETHEREUM_FORK_URL,
+      defaultForkUrls: DEFAULT_ETHEREUM_FORK_URLS,
       forkBlockNumberEnvKey: "ANVIL_FORK_BLOCK_NUMBER",
       forkUrlsEnvKey: "ANVIL_FORK_URLS_ETHEREUM",
       forkUrlEnvKey: "ANVIL_FORK_URL_ETHEREUM",

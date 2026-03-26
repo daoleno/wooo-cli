@@ -6,6 +6,10 @@ import {
 } from "./anvil-harness";
 
 const AAVE_ETHEREUM_MARKET = "AaveV3Ethereum";
+const ANVIL_RECIPIENT = "0x1111111111111111111111111111111111111111";
+const MORPHO_ETHEREUM_WSTETH_USDC_MARKET =
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc";
+const UNISWAP_ROUTER_ETHEREUM = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45";
 
 interface ChainBalanceOutput {
   address: string;
@@ -40,6 +44,16 @@ interface UniswapSwapOutput {
   txHash: string;
 }
 
+interface AggregatedSwapOutput {
+  amountIn: string;
+  amountOut: string;
+  bestRoute: string;
+  status: string;
+  tokenIn: string;
+  tokenOut: string;
+  txHash: string;
+}
+
 interface CurveQuoteOutput {
   amountIn: number;
   amountOut: string;
@@ -67,6 +81,7 @@ interface AaveRateOutput {
 }
 
 interface AaveTransactionOutput {
+  all?: boolean;
   amount: string;
   interestRateMode?: string;
   status: string;
@@ -80,6 +95,40 @@ interface AavePositionsOutput {
   ltv: string;
   totalCollateralUSD: string;
   totalDebtUSD: string;
+}
+
+interface ChainTransferOutput {
+  amount: string;
+  chain: string;
+  from: string;
+  status: string;
+  to: string;
+  token: string;
+  tokenAddress?: string;
+  txHash: string;
+}
+
+interface ChainApproveOutput {
+  amount: string;
+  chain: string;
+  owner: string;
+  spender: string;
+  status: string;
+  token: string;
+  tokenAddress: string;
+  txHash: string;
+}
+
+interface MorphoSupplyOutput {
+  all?: boolean;
+  amount: string;
+  chain: string;
+  command: string;
+  marketId: string;
+  mode?: string;
+  status: string;
+  token: string;
+  txHash: string;
 }
 
 describe("anvil fork e2e", () => {
@@ -101,6 +150,44 @@ describe("anvil fork e2e", () => {
         expect(nativeBalance.chain).toBe("ethereum");
         expect(nativeBalance.token).toBe("ETH");
         expect(Number(nativeBalance.balance)).toBeGreaterThan(1000);
+
+        const recipientNativeBalanceBefore =
+          await harness.runJson<ChainBalanceOutput>([
+            "chain",
+            "balance",
+            ANVIL_RECIPIENT,
+            "--chain",
+            "ethereum",
+          ]);
+
+        const nativeTransfer = await harness.runJson<ChainTransferOutput>([
+          "chain",
+          "transfer",
+          ANVIL_RECIPIENT,
+          "0.5",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(nativeTransfer.token).toBe("ETH");
+        expect(nativeTransfer.amount).toBe("0.5");
+        expect(nativeTransfer.to).toBe(ANVIL_RECIPIENT);
+        expect(nativeTransfer.status).toBe("confirmed");
+        expect(nativeTransfer.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const recipientNativeBalance = await harness.runJson<ChainBalanceOutput>(
+          [
+            "chain",
+            "balance",
+            ANVIL_RECIPIENT,
+            "--chain",
+            "ethereum",
+          ],
+        );
+        expect(recipientNativeBalance.token).toBe("ETH");
+        expect(Number(recipientNativeBalance.balance)).toBeGreaterThan(
+          Number(recipientNativeBalanceBefore.balance),
+        );
 
         const quote = await harness.runJson<UniswapQuoteOutput>([
           "dex",
@@ -143,6 +230,76 @@ describe("anvil fork e2e", () => {
         ]);
         expect(usdcBalance.token).toBe("USDC");
         expect(Number(usdcBalance.balance)).toBeGreaterThan(1000);
+
+        const recipientUsdcBalanceBefore =
+          await harness.runJson<ChainBalanceOutput>([
+            "chain",
+            "balance",
+            ANVIL_RECIPIENT,
+            "--chain",
+            "ethereum",
+            "--token",
+            ETHEREUM_USDC_ADDRESS,
+          ]);
+
+        const tokenTransfer = await harness.runJson<ChainTransferOutput>([
+          "chain",
+          "transfer",
+          ANVIL_RECIPIENT,
+          "10",
+          "--chain",
+          "ethereum",
+          "--token",
+          "USDC",
+          "--yes",
+        ]);
+        expect(tokenTransfer.token).toBe("USDC");
+        expect(tokenTransfer.amount).toBe("10");
+        expect(tokenTransfer.to).toBe(ANVIL_RECIPIENT);
+        expect(tokenTransfer.status).toBe("confirmed");
+        expect(tokenTransfer.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const recipientUsdcBalance = await harness.runJson<ChainBalanceOutput>([
+          "chain",
+          "balance",
+          ANVIL_RECIPIENT,
+          "--chain",
+          "ethereum",
+          "--token",
+          ETHEREUM_USDC_ADDRESS,
+        ]);
+        expect(recipientUsdcBalance.token).toBe("USDC");
+        expect(Number(recipientUsdcBalance.balance)).toBeGreaterThan(
+          Number(recipientUsdcBalanceBefore.balance),
+        );
+
+        const explicitApprove = await harness.runJson<ChainApproveOutput>([
+          "chain",
+          "approve",
+          "USDC",
+          UNISWAP_ROUTER_ETHEREUM,
+          "25",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(explicitApprove.token).toBe("USDC");
+        expect(explicitApprove.amount).toBe("25");
+        expect(explicitApprove.spender).toBe(UNISWAP_ROUTER_ETHEREUM);
+        expect(explicitApprove.status).toBe("confirmed");
+        expect(explicitApprove.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const allowance = await harness.runJson<ChainCallOutput>([
+          "chain",
+          "call",
+          ETHEREUM_USDC_ADDRESS,
+          "allowance(address,address)(uint256)",
+          `${harness.address},${UNISWAP_ROUTER_ETHEREUM}`,
+          "--chain",
+          "ethereum",
+        ]);
+        expect(allowance.function).toBe("allowance");
+        expect(BigInt(allowance.result)).toBe(25_000_000n);
 
         const balanceOf = await harness.runJson<ChainCallOutput>([
           "chain",
@@ -198,6 +355,21 @@ describe("anvil fork e2e", () => {
         ]);
         expect(usdtBalance.token).toBe("USDT");
         expect(Number(usdtBalance.balance)).toBeGreaterThan(95);
+
+        const aggregatedSwap = await harness.runJson<AggregatedSwapOutput>([
+          "swap",
+          "USDC",
+          "USDT",
+          "50",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(aggregatedSwap.tokenIn).toBe("USDC");
+        expect(aggregatedSwap.tokenOut).toBe("USDT");
+        expect(aggregatedSwap.status).toBe("confirmed");
+        expect(["curve", "uniswap"]).toContain(aggregatedSwap.bestRoute);
+        expect(aggregatedSwap.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
         const rates = await harness.runJson<AaveRateOutput>([
           "lend",
@@ -281,6 +453,102 @@ describe("anvil fork e2e", () => {
         );
         expect(Number(positionsAfterBorrow.totalDebtUSD)).toBeGreaterThan(1);
         expect(Number(positionsAfterBorrow.healthFactor)).toBeGreaterThan(1);
+
+        const repay = await harness.runJson<AaveTransactionOutput>([
+          "lend",
+          "aave",
+          "repay",
+          "WETH",
+          "0.005",
+          "--chain",
+          "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
+          "--yes",
+        ]);
+        expect(repay.token).toBe("WETH");
+        expect(repay.amount).toBe("0.005");
+        expect(repay.interestRateMode).toBe("variable");
+        expect(repay.status).toBe("confirmed");
+        expect(repay.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const positionsAfterRepay = await harness.runJson<AavePositionsOutput>([
+          "lend",
+          "aave",
+          "positions",
+          "--chain",
+          "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
+        ]);
+        expect(Number(positionsAfterRepay.totalDebtUSD)).toBeLessThan(
+          Number(positionsAfterBorrow.totalDebtUSD),
+        );
+
+        const withdraw = await harness.runJson<AaveTransactionOutput>([
+          "lend",
+          "aave",
+          "withdraw",
+          "USDC",
+          "100",
+          "--chain",
+          "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
+          "--yes",
+        ]);
+        expect(withdraw.token).toBe("USDC");
+        expect(withdraw.amount).toBe("100");
+        expect(withdraw.status).toBe("confirmed");
+        expect(withdraw.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const positionsAfterWithdraw =
+          await harness.runJson<AavePositionsOutput>([
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ]);
+        expect(
+          Number(positionsAfterWithdraw.totalCollateralUSD),
+        ).toBeLessThan(Number(positionsAfterRepay.totalCollateralUSD));
+
+        const morphoSupply = await harness.runJson<MorphoSupplyOutput>([
+          "lend",
+          "morpho",
+          "supply",
+          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+          "100",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(morphoSupply.command).toBe("supply");
+        expect(morphoSupply.marketId).toBe(MORPHO_ETHEREUM_WSTETH_USDC_MARKET);
+        expect(morphoSupply.token).toBe("USDC");
+        expect(morphoSupply.status).toBe("confirmed");
+        expect(morphoSupply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const morphoWithdraw = await harness.runJson<MorphoSupplyOutput>([
+          "lend",
+          "morpho",
+          "withdraw",
+          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+          "50",
+          "--chain",
+          "ethereum",
+          "--yes",
+        ]);
+        expect(morphoWithdraw.command).toBe("withdraw");
+        expect(morphoWithdraw.marketId).toBe(
+          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+        );
+        expect(morphoWithdraw.token).toBe("USDC");
+        expect(morphoWithdraw.status).toBe("confirmed");
+        expect(morphoWithdraw.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
       } finally {
         await harness.stop();
       }

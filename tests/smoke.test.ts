@@ -125,7 +125,9 @@ describe("wooo-cli smoke tests", () => {
 
   test("chain help shows subcommands", async () => {
     const result = await $`bun run src/index.ts chain --help`.text();
+    expect(result).toContain("approve");
     expect(result).toContain("tx");
+    expect(result).toContain("transfer");
     expect(result).toContain("balance");
     expect(result).toContain("ens");
     expect(result).toContain("call");

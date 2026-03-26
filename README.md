@@ -147,6 +147,10 @@ wooo-cli prediction polymarket approve check
 ### On-Chain Utilities
 
 ```bash
+wooo-cli chain approve USDC 0xspender... 100 --chain ethereum
+wooo-cli chain approve USDC 0xspender... --chain ethereum --max
+wooo-cli chain transfer 0xabc... 0.1 --chain ethereum      # Native transfer
+wooo-cli chain transfer 0xabc... 25 --chain ethereum --token USDC
 wooo-cli chain tx 0xabc123...                          # View transaction
 wooo-cli chain balance 0xabc... --chain ethereum        # Native balance
 wooo-cli chain balance 0xabc... --token 0xerc20...      # Token balance
@@ -186,7 +190,7 @@ wooo-cli
 ├── wallet       — create, import, export, list, info, delete, switch, balance, connect, disconnect, discover, policy, key
 ├── market       — price, search, okx
 ├── portfolio    — overview, okx
-├── chain        — tx, balance, ens, call, okx
+├── chain        — approve, transfer, tx, balance, ens, call, okx
 ├── swap         — aggregated DEX swap (auto-routes)
 ├── cex
 │   ├── okx      — buy, sell, long, short, balance, positions
@@ -350,6 +354,8 @@ real EVM write paths for `chain`, `dex uniswap`, and `lend aave` without using r
 It supports fork RPC fallback lists through `ANVIL_FORK_URLS_ETHEREUM` and
 `ANVIL_FORK_URLS_POLYGON`, and still accepts the single-URL overrides
 `ANVIL_FORK_URL_ETHEREUM` and `ANVIL_FORK_URL_POLYGON`.
+The E2E suite is run with `--max-concurrency=1` to avoid flaky upstream RPC/API failures
+when multiple fork-backed integration tests hit public endpoints at the same time.
 
 ## Release
 

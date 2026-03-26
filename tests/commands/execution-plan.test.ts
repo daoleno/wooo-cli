@@ -176,6 +176,62 @@ describe("execution plan dry-run output", () => {
     { timeout: 60000 },
   );
 
+  test("chain transfer returns an execution plan", async () => {
+    const result =
+      await $`bun run src/index.ts chain transfer 0x1111111111111111111111111111111111111111 0.1 --chain ethereum --dry-run --json`.text();
+    const parsed = JSON.parse(result) as {
+      kind: string;
+      operation: { group: string; protocol: string; command: string };
+      chain: string;
+      steps: Array<{ kind: string }>;
+      metadata?: { assetType?: string; recipient?: string; token?: string };
+    };
+
+    expect(parsed.kind).toBe("execution-plan");
+    expect(parsed.operation.group).toBe("chain");
+    expect(parsed.operation.protocol).toBe("chain");
+    expect(parsed.operation.command).toBe("transfer");
+    expect(parsed.chain).toBe("ethereum");
+    expect(parsed.steps).toHaveLength(1);
+    expect(parsed.steps[0]?.kind).toBe("transaction");
+    expect(parsed.metadata?.assetType).toBe("native");
+    expect(parsed.metadata?.token).toBe("ETH");
+    expect(parsed.metadata?.recipient).toBe(
+      "0x1111111111111111111111111111111111111111",
+    );
+  });
+
+  test("chain approve returns an execution plan", async () => {
+    const result =
+      await $`bun run src/index.ts chain approve USDC 0x1111111111111111111111111111111111111111 25 --chain ethereum --dry-run --json`.text();
+    const parsed = JSON.parse(result) as {
+      kind: string;
+      operation: { group: string; protocol: string; command: string };
+      chain: string;
+      steps: Array<{ kind: string }>;
+      metadata?: {
+        spender?: string;
+        token?: string;
+        amount?: string;
+        isMaxApproval?: boolean;
+      };
+    };
+
+    expect(parsed.kind).toBe("execution-plan");
+    expect(parsed.operation.group).toBe("chain");
+    expect(parsed.operation.protocol).toBe("chain");
+    expect(parsed.operation.command).toBe("approve");
+    expect(parsed.chain).toBe("ethereum");
+    expect(parsed.steps).toHaveLength(1);
+    expect(parsed.steps[0]?.kind).toBe("approval");
+    expect(parsed.metadata?.token).toBe("USDC");
+    expect(parsed.metadata?.amount).toBe("25");
+    expect(parsed.metadata?.spender).toBe(
+      "0x1111111111111111111111111111111111111111",
+    );
+    expect(parsed.metadata?.isMaxApproval).toBe(false);
+  });
+
   test("lido stake returns an execution plan", async () => {
     const result =
       await $`bun run src/index.ts stake lido stake 1 --dry-run --json`.text();
