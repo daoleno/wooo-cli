@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import type { HttpSignerMetadata } from "../../src/core/signer-protocol";
 import { HttpSignerHarness } from "../fixtures/http-signer-harness";
-import { EthereumAnvilHarness, PolygonAnvilHarness } from "./anvil-harness";
+import {
+  ETHEREUM_USDC_ADDRESS,
+  EthereumAnvilHarness,
+  PolygonAnvilHarness,
+} from "./anvil-harness";
 
+const AAVE_ETHEREUM_MARKET = "AaveV3Ethereum";
 const AUTH_ENV = "WOOO_SIGNER_AUTH_TOKEN";
 const AUTH_TOKEN = "anvil-remote-signer-token";
+const MORPHO_ETHEREUM_WSTETH_USDC_MARKET =
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc";
 
 interface WalletDiscoverOutput extends HttpSignerMetadata {
   authEnv?: string;
@@ -36,6 +43,42 @@ interface UniswapSwapOutput {
   txHash: string;
 }
 
+interface ChainBalanceOutput {
+  address: string;
+  balance: string;
+  chain: string;
+  token: string;
+}
+
+interface AaveTransactionOutput {
+  all?: boolean;
+  amount: string;
+  interestRateMode?: string;
+  status: string;
+  token: string;
+  txHash: string;
+}
+
+interface AavePositionsOutput {
+  availableBorrowsUSD: string;
+  healthFactor: string;
+  ltv: string;
+  totalCollateralUSD: string;
+  totalDebtUSD: string;
+}
+
+interface MorphoTransactionOutput {
+  all?: boolean;
+  amount: string;
+  chain: string;
+  command: string;
+  marketId: string;
+  mode?: string;
+  status: string;
+  token: string;
+  txHash: string;
+}
+
 interface ApprovalSetOutput {
   chain: string;
   results: Array<{
@@ -47,7 +90,7 @@ interface ApprovalSetOutput {
 
 describe("remote signer anvil e2e", () => {
   test(
-    "connects a remote signer and executes a Uniswap swap on an Ethereum fork",
+    "connects a remote signer and executes Uniswap, Aave, and Morpho flows on an Ethereum fork",
     async () => {
       const anvil = new EthereumAnvilHarness();
       await anvil.start();
@@ -150,6 +193,174 @@ describe("remote signer anvil e2e", () => {
         expect(swap.status).toBe("confirmed");
         expect(swap.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
+        const usdcBalance = await anvil.runJson<ChainBalanceOutput>(
+          [
+            "chain",
+            "balance",
+            anvil.address,
+            "--chain",
+            "ethereum",
+            "--token",
+            ETHEREUM_USDC_ADDRESS,
+          ],
+          { env },
+        );
+        expect(usdcBalance.token).toBe("USDC");
+        expect(Number(usdcBalance.balance)).toBeGreaterThan(100);
+
+        const supply = await anvil.runJson<AaveTransactionOutput>(
+          [
+            "lend",
+            "aave",
+            "supply",
+            "USDC",
+            "100",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+            "--yes",
+          ],
+          { env },
+        );
+        expect(supply.token).toBe("USDC");
+        expect(supply.amount).toBe("100");
+        expect(supply.status).toBe("confirmed");
+        expect(supply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const positionsAfterSupply = await anvil.runJson<AavePositionsOutput>(
+          [
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
+          { env },
+        );
+        expect(Number(positionsAfterSupply.totalCollateralUSD)).toBeGreaterThan(
+          50,
+        );
+        expect(positionsAfterSupply.totalDebtUSD).toBe("0");
+        expect(positionsAfterSupply.healthFactor).toBe("∞");
+
+        const borrow = await anvil.runJson<AaveTransactionOutput>(
+          [
+            "lend",
+            "aave",
+            "borrow",
+            "WETH",
+            "0.001",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+            "--yes",
+          ],
+          { env },
+        );
+        expect(borrow.token).toBe("WETH");
+        expect(borrow.amount).toBe("0.001");
+        expect(borrow.interestRateMode).toBe("variable");
+        expect(borrow.status).toBe("confirmed");
+        expect(borrow.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const positionsAfterBorrow = await anvil.runJson<AavePositionsOutput>(
+          [
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
+          { env },
+        );
+        expect(Number(positionsAfterBorrow.totalDebtUSD)).toBeGreaterThan(0);
+        expect(Number(positionsAfterBorrow.healthFactor)).toBeGreaterThan(1);
+
+        const repay = await anvil.runJson<AaveTransactionOutput>(
+          [
+            "lend",
+            "aave",
+            "repay",
+            "WETH",
+            "0.001",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+            "--yes",
+          ],
+          { env },
+        );
+        expect(repay.token).toBe("WETH");
+        expect(repay.amount).toBe("0.001");
+        expect(repay.interestRateMode).toBe("variable");
+        expect(repay.status).toBe("confirmed");
+        expect(repay.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const positionsAfterRepay = await anvil.runJson<AavePositionsOutput>(
+          [
+            "lend",
+            "aave",
+            "positions",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
+          { env },
+        );
+        expect(Number(positionsAfterRepay.totalDebtUSD)).toBeLessThanOrEqual(
+          Number(positionsAfterBorrow.totalDebtUSD),
+        );
+
+        const morphoSupply = await anvil.runJson<MorphoTransactionOutput>(
+          [
+            "lend",
+            "morpho",
+            "supply",
+            MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+            "50",
+            "--chain",
+            "ethereum",
+            "--yes",
+          ],
+          { env },
+        );
+        expect(morphoSupply.command).toBe("supply");
+        expect(morphoSupply.marketId).toBe(
+          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+        );
+        expect(morphoSupply.token).toBe("USDC");
+        expect(morphoSupply.status).toBe("confirmed");
+        expect(morphoSupply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+        const morphoWithdraw = await anvil.runJson<MorphoTransactionOutput>(
+          [
+            "lend",
+            "morpho",
+            "withdraw",
+            MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+            "25",
+            "--chain",
+            "ethereum",
+            "--yes",
+          ],
+          { env },
+        );
+        expect(morphoWithdraw.command).toBe("withdraw");
+        expect(morphoWithdraw.marketId).toBe(
+          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
+        );
+        expect(morphoWithdraw.token).toBe("USDC");
+        expect(morphoWithdraw.status).toBe("confirmed");
+        expect(morphoWithdraw.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
         const signerOperations = signer.requests.map(
           (request) => request.operation,
         );
@@ -157,7 +368,7 @@ describe("remote signer anvil e2e", () => {
           signerOperations.filter(
             (operation) => operation === "sign-and-send-transaction",
           ).length,
-        ).toBeGreaterThanOrEqual(3);
+        ).toBeGreaterThanOrEqual(9);
       } finally {
         await signer.stop();
         await anvil.stop();
