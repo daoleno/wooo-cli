@@ -67,6 +67,12 @@ All commands support: `--json`, `--format`, `--chain`, `--wallet`, `--yes`, `--d
 - **Solana**: via @solana/web3.js in `src/core/solana.ts`
 - Token addresses and ABIs live in each protocol's `constants.ts`
 
+### External Validation Policy
+- The canonical external validation path is the Anvil mainnet-fork E2E suite in `tests/e2e/*anvil*.e2e.ts`
+- Prefer validating real mainnet addresses and execution paths on a fork over adding testnet support
+- If a change touches protocol constants, token manifests, routing, or signer wiring, extend fork-backed E2E coverage in the same change
+- Testnets may be used for ad hoc debugging, but they are not the release gate for this repo
+
 ### Environment Variables
 - `OWS_PASSPHRASE` - Optional wallet passphrase for OWS vault
 - `OWS_API_KEY` - OWS API key for agent/automated access (replaces interactive passphrase)

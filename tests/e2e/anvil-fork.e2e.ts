@@ -74,9 +74,28 @@ interface CurveSwapOutput {
 }
 
 interface AaveRateOutput {
+  market: string;
+  marketAddress: string;
   stableBorrowAPY: string;
   supplyAPY: string;
   token: string;
+  variableBorrowAPY: string;
+}
+
+interface AaveMarketOutput {
+  active: boolean;
+  borrowingEnabled: boolean;
+  collateralEnabled: boolean;
+  decimals: number;
+  frozen: boolean;
+  ltv: string;
+  market: string;
+  marketAddress: string;
+  stableBorrowAPY: string;
+  stableBorrowEnabled: boolean;
+  supplyAPY: string;
+  token: string;
+  tokenAddress: string;
   variableBorrowAPY: string;
 }
 
@@ -381,9 +400,37 @@ describe("anvil fork e2e", () => {
           "--market",
           AAVE_ETHEREUM_MARKET,
         ]);
+        expect(rates.market).toBe(AAVE_ETHEREUM_MARKET);
+        expect(rates.marketAddress.toLowerCase()).toBe(
+          "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2",
+        );
         expect(rates.token).toBe("USDC");
         expect(rates.supplyAPY).toContain("%");
         expect(rates.variableBorrowAPY).toContain("%");
+
+        const markets = await harness.runJson<{
+          chain: string;
+          markets: AaveMarketOutput[];
+        }>([
+          "lend",
+          "aave",
+          "markets",
+          "--chain",
+          "ethereum",
+          "--market",
+          AAVE_ETHEREUM_MARKET,
+          "--json",
+        ]);
+        expect(markets.chain).toBe("ethereum");
+        const usdcMarket = markets.markets.find((item) => item.token === "USDC");
+        expect(usdcMarket).toBeDefined();
+        expect(usdcMarket?.market).toBe(AAVE_ETHEREUM_MARKET);
+        expect(usdcMarket?.marketAddress.toLowerCase()).toBe(
+          "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2",
+        );
+        expect(usdcMarket?.tokenAddress.toLowerCase()).toBe(
+          ETHEREUM_USDC_ADDRESS.toLowerCase(),
+        );
 
         const supply = await harness.runJson<AaveTransactionOutput>([
           "lend",

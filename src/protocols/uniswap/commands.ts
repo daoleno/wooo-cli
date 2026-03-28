@@ -115,7 +115,7 @@ export const uniswapProtocol: ProtocolDefinition = {
   name: "uniswap",
   displayName: "Uniswap V3",
   type: "dex",
-  chains: ["ethereum", "arbitrum", "optimism", "polygon", "base"],
+  chains: SUPPORTED_CHAINS,
   writeAccountType: "evm",
   setup: () =>
     defineCommand({

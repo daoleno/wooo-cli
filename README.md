@@ -356,6 +356,9 @@ It supports fork RPC fallback lists through `ANVIL_FORK_URLS_ETHEREUM` and
 `ANVIL_FORK_URL_ETHEREUM` and `ANVIL_FORK_URL_POLYGON`.
 The E2E suite is run with `--max-concurrency=1` to avoid flaky upstream RPC/API failures
 when multiple fork-backed integration tests hit public endpoints at the same time.
+For external validation, treat the Anvil fork suite as the source of truth:
+it checks the real mainnet contract addresses and execution paths the CLI ships with.
+Testnets are not the canonical release gate for this repo.
 
 ## Release
 

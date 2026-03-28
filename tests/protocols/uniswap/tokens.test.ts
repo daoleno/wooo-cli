@@ -86,4 +86,5 @@ describe("Uniswap token resolution", () => {
     // Different chains should have different contract addresses
     expect(ethUSDC?.address).not.toBe(arbUSDC?.address);
   });
+
 });

@@ -99,6 +99,19 @@ Available on every command:
 **Jupiter** is Solana-only (no `--chain` flag needed).
 **Aggregated swap** (`wooo-cli swap`) auto-routes to the right DEX based on chain — uses Jupiter for Solana, Uniswap/Curve for EVM.
 
+### Validation Policy
+
+For external testing, default to the mainnet-fork Anvil E2E flow rather than testnets.
+This repo treats fork-backed validation as the authoritative way to verify protocol
+addresses, token manifests, and execution paths without risking real funds.
+
+If you are acting as an agent:
+
+1. Prefer `bun run test:e2e:anvil` when validating on-chain changes.
+2. Assume mainnet addresses are the source of truth unless the repo explicitly says otherwise.
+3. Do not present testnet support as a guarantee unless the CLI docs say so.
+4. If a change touches protocol constants or routing, make sure fork-backed E2E coverage exists.
+
 ---
 
 ## Setup & Configuration
@@ -436,6 +449,27 @@ wooo-cli config list
 | "Market not found" (Aave) | Missing `--market` flag | `wooo-cli lend aave markets --chain <chain>` to find name |
 | Transaction fails | Insufficient balance/gas | Check balance first, use `--dry-run` to preview |
 | "Unknown chain" | Typo or unsupported | Use canonical names or aliases: eth, arb, op, matic, base, sol |
+
+## External Testing
+
+Use the fork-backed suite when you need confidence that the CLI will work against
+real protocol deployments:
+
+```bash
+bun run test:e2e:anvil
+```
+
+Useful overrides:
+
+```bash
+ANVIL_FORK_URLS_ETHEREUM="https://ethereum.publicnode.com https://rpc.flashbots.net" \
+ANVIL_FORK_BLOCK_NUMBER=24652791 \
+bun run test:e2e:anvil
+```
+
+This is the preferred path for agent verification because it exercises the same
+mainnet contract addresses used by `chain`, `dex uniswap`, `swap`, `lend aave`,
+and `lend morpho`.
 
 ---
 
