@@ -26,7 +26,9 @@ describe("chain command DX", () => {
     expect(result.stderr.toString()).toContain(
       'Token "ETH" is the native asset on ethereum.',
     );
-    expect(result.stderr.toString()).toContain("Omit --token to send native ETH");
+    expect(result.stderr.toString()).toContain(
+      "Omit --token to send native ETH",
+    );
     expect(result.stderr.toString()).toContain("use WETH explicitly");
   });
 

@@ -194,15 +194,14 @@ describe("anvil fork e2e", () => {
         expect(nativeTransfer.status).toBe("confirmed");
         expect(nativeTransfer.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
-        const recipientNativeBalance = await harness.runJson<ChainBalanceOutput>(
-          [
+        const recipientNativeBalance =
+          await harness.runJson<ChainBalanceOutput>([
             "chain",
             "balance",
             ANVIL_RECIPIENT,
             "--chain",
             "ethereum",
-          ],
-        );
+          ]);
         expect(recipientNativeBalance.token).toBe("ETH");
         expect(Number(recipientNativeBalance.balance)).toBeGreaterThan(
           Number(recipientNativeBalanceBefore.balance),
@@ -422,7 +421,9 @@ describe("anvil fork e2e", () => {
           "--json",
         ]);
         expect(markets.chain).toBe("ethereum");
-        const usdcMarket = markets.markets.find((item) => item.token === "USDC");
+        const usdcMarket = markets.markets.find(
+          (item) => item.token === "USDC",
+        );
         expect(usdcMarket).toBeDefined();
         expect(usdcMarket?.market).toBe(AAVE_ETHEREUM_MARKET);
         expect(usdcMarket?.marketAddress.toLowerCase()).toBe(
@@ -559,9 +560,9 @@ describe("anvil fork e2e", () => {
             "--market",
             AAVE_ETHEREUM_MARKET,
           ]);
-        expect(
-          Number(positionsAfterWithdraw.totalCollateralUSD),
-        ).toBeLessThan(Number(positionsAfterRepay.totalCollateralUSD));
+        expect(Number(positionsAfterWithdraw.totalCollateralUSD)).toBeLessThan(
+          Number(positionsAfterRepay.totalCollateralUSD),
+        );
 
         const morphoSupply = await harness.runJson<MorphoSupplyOutput>([
           "lend",

@@ -1,18 +1,18 @@
 import { defineCommand } from "citty";
 import { type Address, isAddress, parseUnits } from "viem";
 import { evmChainArg, resolveChainId } from "../../core/chain-ids";
+import { getActiveWalletPort } from "../../core/context";
+import { getChain, getPublicClient } from "../../core/evm";
 import {
   createExecutionPlan,
   createTransactionStep,
 } from "../../core/execution-plan";
-import { getActiveWalletPort } from "../../core/context";
-import { getChain, getPublicClient } from "../../core/evm";
 import { TxGateway } from "../../core/tx-gateway";
+import { validateAmount, validateChain } from "../../core/validation";
 import {
   runWriteOperation,
   type WriteOperation,
 } from "../../core/write-operation";
-import { validateAmount, validateChain } from "../../core/validation";
 import {
   ERC20_ABI,
   NATIVE_WRAPS,
@@ -297,7 +297,8 @@ export default defineCommand({
     },
     token: {
       type: "string",
-      description: "ERC-20 symbol or contract address (omit for native transfer)",
+      description:
+        "ERC-20 symbol or contract address (omit for native transfer)",
     },
     chain: evmChainArg(),
     yes: { type: "boolean", default: false },

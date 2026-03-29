@@ -1,18 +1,18 @@
 import { defineCommand } from "citty";
 import { type Address, isAddress, maxUint256, parseUnits } from "viem";
 import { evmChainArg } from "../../core/chain-ids";
+import { getActiveWalletPort } from "../../core/context";
+import { getChain, getPublicClient } from "../../core/evm";
 import {
   createApprovalStep,
   createExecutionPlan,
 } from "../../core/execution-plan";
-import { getActiveWalletPort } from "../../core/context";
-import { getChain, getPublicClient } from "../../core/evm";
 import { TxGateway } from "../../core/tx-gateway";
+import { validateAmount, validateChain } from "../../core/validation";
 import {
   runWriteOperation,
   type WriteOperation,
 } from "../../core/write-operation";
-import { validateAmount, validateChain } from "../../core/validation";
 import {
   ERC20_ABI,
   NATIVE_WRAPS,

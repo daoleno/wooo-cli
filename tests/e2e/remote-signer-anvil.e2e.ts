@@ -333,9 +333,7 @@ describe("remote signer anvil e2e", () => {
           { env },
         );
         expect(morphoSupply.command).toBe("supply");
-        expect(morphoSupply.marketId).toBe(
-          MORPHO_ETHEREUM_WSTETH_USDC_MARKET,
-        );
+        expect(morphoSupply.marketId).toBe(MORPHO_ETHEREUM_WSTETH_USDC_MARKET);
         expect(morphoSupply.token).toBe("USDC");
         expect(morphoSupply.status).toBe("confirmed");
         expect(morphoSupply.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
