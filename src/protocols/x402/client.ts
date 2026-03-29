@@ -90,7 +90,7 @@ export class X402Client {
 
     // Create signed payment header using viem LocalAccount (compatible with x402 EvmSigner)
     const paymentSignature = await createPaymentHeader(
-      account,
+      account as Parameters<typeof createPaymentHeader>[0],
       version,
       selected,
     );
