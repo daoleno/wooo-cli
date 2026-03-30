@@ -7,6 +7,7 @@ describe("wooo-cli smoke tests", () => {
     const result = await $`bun run src/index.ts --help`.text();
     expect(result).toContain("wooo-cli");
     expect(result).toContain("config");
+    expect(result).toContain("upgrade");
     expect(result).toContain("wallet");
     expect(result).toContain("market");
     expect(result).toContain("portfolio");
@@ -197,6 +198,14 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("price");
     expect(result).toContain("search");
     expect(result).toContain("okx");
+  });
+
+  test("upgrade help shows upgrade flags", async () => {
+    const result = await $`bun run src/index.ts upgrade --help`.text();
+    expect(result).toContain("manager");
+    expect(result).toContain("target");
+    expect(result).toContain("check");
+    expect(result).toContain("dry-run");
   });
 
   test("portfolio help shows subcommands", async () => {

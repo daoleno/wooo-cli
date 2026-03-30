@@ -14,6 +14,9 @@ External wallet integration: [docs/external-wallet.md](./docs/external-wallet.md
 # Install
 npm install -g wooo-cli
 
+# Upgrade later
+wooo-cli upgrade
+
 # Set up a local wallet
 wooo-cli config init
 wooo-cli wallet create my-wallet   # prompts for passphrase unless OWS_PASSPHRASE is set

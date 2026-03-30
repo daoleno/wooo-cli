@@ -1,6 +1,7 @@
 import type { SubCommandsDef } from "citty";
 import { defineCommand, runMain } from "citty";
 import { globalArgs } from "./core/globals";
+import { loadPackageMeta } from "./core/package-meta";
 import { listProtocolsByGroup } from "./protocols/registry";
 import {
   PROTOCOL_GROUP_DESCRIPTIONS,
@@ -29,11 +30,13 @@ for (const [group, protocols] of Object.entries(groups)) {
     });
 }
 
+const packageMeta = loadPackageMeta();
+
 const main = defineCommand({
   meta: {
-    name: "wooo-cli",
-    version: "0.1.1",
-    description: "Crypto All-in-One CLI",
+    name: packageMeta.name,
+    version: packageMeta.version,
+    description: packageMeta.description,
   },
   args: globalArgs,
   subCommands: {
@@ -44,12 +47,15 @@ const main = defineCommand({
       import("./commands/portfolio/index").then((m) => m.default),
     chain: () => import("./commands/chain/index").then((m) => m.default),
     swap: () => import("./commands/swap/index").then((m) => m.default),
+    upgrade: () => import("./commands/upgrade").then((m) => m.default),
     ...groupCommands,
   },
   run({ rawArgs }) {
     const hasSubcommand = rawArgs.some((arg) => !arg.startsWith("-"));
     if (!hasSubcommand) {
-      console.log("wooo-cli v0.1.1 — run `wooo-cli --help` for commands");
+      console.log(
+        `${packageMeta.name} v${packageMeta.version} - run \`${packageMeta.name} --help\` for commands`,
+      );
     }
   },
 });
