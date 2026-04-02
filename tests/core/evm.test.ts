@@ -112,9 +112,7 @@ describe("EVM chain resolution", () => {
   });
 
   test("ships defaults for every supported EVM chain", () => {
-    expect(getRpcUrlForChain("ethereum")).toBe(
-      "https://ethereum.publicnode.com",
-    );
+    expect(getRpcUrlForChain("ethereum")).toBe("https://1rpc.io/eth");
     expect(getRpcUrlForChain("arbitrum")).toBe("https://arb1.arbitrum.io/rpc");
     expect(getRpcUrlForChain("optimism")).toBe("https://mainnet.optimism.io");
     expect(getRpcUrlForChain("polygon")).toBe(
