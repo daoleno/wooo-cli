@@ -50,7 +50,7 @@
     "@lifi/sdk": "^3.16.3",
     "@morpho-org/blue-sdk": "^5.18.0",
     "@morpho-org/blue-sdk-viem": "^4.5.0",
-    "@polymarket/clob-client": "^5.8.0",
+    "@polymarket/clob-client-v2": "^1.0.0",
     "@solana/web3.js": "1",
     "@types/bun": "latest",
     "@types/node": "^25.4.0",

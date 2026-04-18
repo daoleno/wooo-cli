@@ -261,8 +261,8 @@ function readListParams(args: {
 function getApprovalTargets(): ApprovalTarget[] {
   const resolved = getPolymarketContractConfig();
   return [
-    { name: "CTF Exchange", address: resolved.exchange },
-    { name: "Neg Risk Exchange", address: resolved.negRiskExchange },
+    { name: "CTF Exchange V2", address: resolved.exchange },
+    { name: "Neg Risk Exchange V2", address: resolved.negRiskExchange },
     ...(resolved.negRiskAdapter
       ? [{ name: "Neg Risk Adapter", address: resolved.negRiskAdapter }]
       : []),
@@ -282,15 +282,15 @@ async function resolveAuth(args: {
 async function readApprovalStatus(address: Address) {
   const publicClient = getPublicClient("polygon");
   const contractConfig = getPolymarketContractConfig();
-  const usdcAddress = contractConfig.collateral;
+  const collateralAddress = contractConfig.collateral;
   const conditionalTokens = contractConfig.conditionalTokens;
   const targets = getApprovalTargets();
 
   return await Promise.all(
     targets.map(async (target) => {
-      const [usdcAllowance, ctfApproved] = await Promise.all([
+      const [collateralAllowance, ctfApproved] = await Promise.all([
         publicClient.readContract({
-          address: usdcAddress,
+          address: collateralAddress,
           abi: erc20Abi,
           functionName: "allowance",
           args: [address, target.address],
@@ -306,7 +306,8 @@ async function readApprovalStatus(address: Address) {
       return {
         contract: target.name,
         address: target.address,
-        usdcAllowance: usdcAllowance.toString(),
+        collateralAllowance: collateralAllowance.toString(),
+        usdcAllowance: collateralAllowance.toString(),
         ctfApproved,
       };
     }),
@@ -2020,7 +2021,7 @@ const approve = defineCommand({
                 chain: "polygon",
                 accountType: "evm",
                 steps: targets.flatMap((target) => [
-                  createApprovalStep(`Approve USDC for ${target.name}`, {
+                  createApprovalStep(`Approve pUSD for ${target.name}`, {
                     token: contractConfig.collateral,
                     spender: target.address,
                     amount: maxUint256.toString(),
@@ -2066,7 +2067,7 @@ const approve = defineCommand({
                 command: "approve",
               },
               {
-                action: `Approve collateral spend for ${target.name}`,
+                action: `Approve pUSD spend for ${target.name}`,
                 details: {
                   contract: target.name,
                   token: contractConfig.collateral,

@@ -2,13 +2,12 @@ import {
   AssetType,
   Chain,
   ClobClient,
-  type ClobSigner,
   getContractConfig,
   OrderType,
   Side,
-  SignatureType,
+  SignatureTypeV2,
   type TickSize,
-} from "@polymarket/clob-client";
+} from "@polymarket/clob-client-v2";
 import { type Address, isAddress } from "viem";
 import { resolveChainId } from "../../core/chain-ids";
 import { getActiveWallet, getActiveWalletPort } from "../../core/context";
@@ -30,7 +29,7 @@ export type PolymarketSignatureMode = "eoa" | "proxy" | "gnosis-safe";
 
 export interface PolymarketAuthOptions {
   funderAddress?: string;
-  signatureType: SignatureType;
+  signatureType: SignatureTypeV2;
 }
 
 export interface PolymarketListParams {
@@ -70,6 +69,15 @@ export interface PolymarketContractConfig {
   negRiskExchange: Address;
   collateral: Address;
   conditionalTokens: Address;
+}
+
+interface PolymarketClobSigner {
+  _signTypedData(
+    domain: Record<string, unknown>,
+    types: Record<string, EvmTypedDataField[]>,
+    value: Record<string, unknown>,
+  ): Promise<string>;
+  getAddress(): Promise<string>;
 }
 
 function cleanParams(
@@ -164,53 +172,57 @@ function inferPolymarketPrompt(
   };
 }
 
-function createClobSignerAdapter(signer: WalletPort): ClobSigner {
+function inferTypedDataPrimaryType(
+  types: Record<string, EvmTypedDataField[]>,
+): string {
+  const primaryType = Object.keys(types).find((key) => key !== "EIP712Domain");
+  if (!primaryType) {
+    throw new Error("Polymarket typed data is missing a primary type.");
+  }
+  return primaryType;
+}
+
+function createClobSignerAdapter(signer: WalletPort): PolymarketClobSigner {
   return {
-    account: {
-      address: signer.address,
-    },
-    async signTypedData({
+    async _signTypedData(
       domain,
       types,
-      primaryType,
-      message,
-    }: {
-      account?: unknown;
-      domain: Record<string, unknown>;
-      message: Record<string, unknown>;
-      primaryType: string;
-      types: Record<string, EvmTypedDataField[]>;
-    }) {
+      value,
+    ) {
+      const primaryType = inferTypedDataPrimaryType(types);
       return await signer.signTypedData(
         resolveChainId("polygon"),
         {
           domain,
           types,
           primaryType,
-          message,
+          message: value,
         },
         {
           group: "prediction",
           protocol: "polymarket",
           command: primaryType === "ClobAuth" ? "auth" : "order",
         },
-        inferPolymarketPrompt(primaryType, domain, message),
+        inferPolymarketPrompt(primaryType, domain, value),
       );
     },
-  } as unknown as ClobSigner;
+    async getAddress() {
+      return signer.address;
+    },
+  };
 }
 
 export function parsePolymarketSignatureType(
   value: string | undefined,
-): SignatureType {
+): SignatureTypeV2 {
   const normalized = (value ?? "eoa").trim().toLowerCase();
   switch (normalized) {
     case "eoa":
-      return SignatureType.EOA;
+      return SignatureTypeV2.EOA;
     case "proxy":
-      return SignatureType.POLY_PROXY;
+      return SignatureTypeV2.POLY_PROXY;
     case "gnosis-safe":
-      return SignatureType.POLY_GNOSIS_SAFE;
+      return SignatureTypeV2.POLY_GNOSIS_SAFE;
     default:
       throw new Error(
         `Unsupported Polymarket signature type: ${value}. Use eoa, proxy, or gnosis-safe.`,
@@ -223,7 +235,7 @@ export function resolvePolymarketAuthOptions(
   funderAddress: string | undefined,
 ): PolymarketAuthOptions {
   const resolvedType = parsePolymarketSignatureType(signatureType);
-  if (resolvedType !== SignatureType.EOA && !funderAddress) {
+  if (resolvedType !== SignatureTypeV2.EOA && !funderAddress) {
     throw new Error(
       "Polymarket proxy and gnosis-safe modes require --funder-address.",
     );
@@ -249,9 +261,12 @@ export async function resolvePolymarketAddress(
 export function getPolymarketContractConfig() {
   const config = getContractConfig(Chain.POLYGON);
   return {
-    exchange: requireAddress(config.exchange, "exchange"),
+    exchange: requireAddress(config.exchangeV2, "exchange"),
     negRiskAdapter: requireAddress(config.negRiskAdapter, "negRiskAdapter"),
-    negRiskExchange: requireAddress(config.negRiskExchange, "negRiskExchange"),
+    negRiskExchange: requireAddress(
+      config.negRiskExchangeV2,
+      "negRiskExchange",
+    ),
     collateral: requireAddress(config.collateral, "collateral"),
     conditionalTokens: requireAddress(
       config.conditionalTokens,
@@ -285,21 +300,13 @@ export class PolymarketClient {
   }
 
   createPublicClobClient(): ClobClient {
-    return new ClobClient(
-      this.clobHost,
-      Chain.POLYGON,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      true,
-    );
+    return new ClobClient({
+      host: this.clobHost,
+      chain: Chain.POLYGON,
+      useServerTime: true,
+      retryOnError: true,
+      throwOnError: true,
+    });
   }
 
   async createAuthenticatedClobClient(
@@ -307,38 +314,29 @@ export class PolymarketClient {
   ): Promise<ClobClient> {
     const signer = await getActiveWalletPort("evm");
     const clobSigner = createClobSignerAdapter(signer);
-    const initialClient = new ClobClient(
-      this.clobHost,
-      Chain.POLYGON,
-      clobSigner,
-      undefined,
-      authOptions.signatureType,
-      authOptions.funderAddress,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      true,
-    );
+    const initialClient = new ClobClient({
+      host: this.clobHost,
+      chain: Chain.POLYGON,
+      signer: clobSigner,
+      signatureType: authOptions.signatureType,
+      funderAddress: authOptions.funderAddress,
+      useServerTime: true,
+      retryOnError: true,
+      throwOnError: true,
+    });
     const creds = await initialClient.createOrDeriveApiKey();
 
-    return new ClobClient(
-      this.clobHost,
-      Chain.POLYGON,
-      clobSigner,
+    return new ClobClient({
+      host: this.clobHost,
+      chain: Chain.POLYGON,
+      signer: clobSigner,
       creds,
-      authOptions.signatureType,
-      authOptions.funderAddress,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      true,
-    );
+      signatureType: authOptions.signatureType,
+      funderAddress: authOptions.funderAddress,
+      useServerTime: true,
+      retryOnError: true,
+      throwOnError: true,
+    });
   }
 
   async listMarkets(params: PolymarketMarketListParams = {}) {
@@ -536,4 +534,11 @@ export class PolymarketClient {
   }
 }
 
-export { AssetType, Chain, OrderType, Side, SignatureType, type TickSize };
+export {
+  AssetType,
+  Chain,
+  OrderType,
+  Side,
+  SignatureTypeV2 as SignatureType,
+  type TickSize,
+};

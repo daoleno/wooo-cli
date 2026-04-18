@@ -7,7 +7,7 @@ interface ApprovalStatusOutput {
     address: string;
     contract: string;
     ctfApproved: boolean;
-    usdcAllowance: string;
+    collateralAllowance: string;
   }>;
 }
 
@@ -43,7 +43,7 @@ describe("polymarket polygon anvil e2e", () => {
               approval.address.startsWith("0x") &&
               approval.contract.length > 0 &&
               approval.ctfApproved === false &&
-              BigInt(approval.usdcAllowance) >= 0n,
+              BigInt(approval.collateralAllowance) >= 0n,
           ),
         ).toBe(true);
 
@@ -85,14 +85,14 @@ describe("polymarket polygon anvil e2e", () => {
         const allowancesBefore = new Map(
           approvalsBefore.approvals.map((approval) => [
             approval.contract,
-            BigInt(approval.usdcAllowance),
+            BigInt(approval.collateralAllowance),
           ]),
         );
         expect(
           approvalsAfter.approvals.every(
             (approval) =>
               approval.ctfApproved === true &&
-              BigInt(approval.usdcAllowance) >=
+              BigInt(approval.collateralAllowance) >=
                 (allowancesBefore.get(approval.contract) ?? 0n),
           ),
         ).toBe(true);
