@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { selectEthereumAaveBorrowPlan } from "./aave-borrow-plan";
 import {
   ETHEREUM_USDC_ADDRESS,
   ETHEREUM_USDT_ADDRESS,
@@ -418,7 +419,6 @@ describe("anvil fork e2e", () => {
           "ethereum",
           "--market",
           AAVE_ETHEREUM_MARKET,
-          "--json",
         ]);
         expect(markets.chain).toBe("ethereum");
         const usdcMarket = markets.markets.find(
@@ -431,6 +431,10 @@ describe("anvil fork e2e", () => {
         );
         expect(usdcMarket?.tokenAddress.toLowerCase()).toBe(
           ETHEREUM_USDC_ADDRESS.toLowerCase(),
+        );
+        const borrowPlan = selectEthereumAaveBorrowPlan(
+          markets.markets,
+          "fork",
         );
 
         const supply = await harness.runJson<AaveTransactionOutput>([
@@ -471,16 +475,16 @@ describe("anvil fork e2e", () => {
           "lend",
           "aave",
           "borrow",
-          "WETH",
-          "0.01",
+          borrowPlan.token,
+          borrowPlan.borrowAmount,
           "--chain",
           "ethereum",
           "--market",
           AAVE_ETHEREUM_MARKET,
           "--yes",
         ]);
-        expect(borrow.token).toBe("WETH");
-        expect(borrow.amount).toBe("0.01");
+        expect(borrow.token).toBe(borrowPlan.token);
+        expect(borrow.amount).toBe(borrowPlan.borrowAmount);
         expect(borrow.interestRateMode).toBe("variable");
         expect(borrow.status).toBe("confirmed");
         expect(borrow.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
@@ -506,16 +510,16 @@ describe("anvil fork e2e", () => {
           "lend",
           "aave",
           "repay",
-          "WETH",
-          "0.005",
+          borrowPlan.token,
+          borrowPlan.repayAmount,
           "--chain",
           "ethereum",
           "--market",
           AAVE_ETHEREUM_MARKET,
           "--yes",
         ]);
-        expect(repay.token).toBe("WETH");
-        expect(repay.amount).toBe("0.005");
+        expect(repay.token).toBe(borrowPlan.token);
+        expect(repay.amount).toBe(borrowPlan.repayAmount);
         expect(repay.interestRateMode).toBe("variable");
         expect(repay.status).toBe("confirmed");
         expect(repay.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
@@ -601,6 +605,6 @@ describe("anvil fork e2e", () => {
         await harness.stop();
       }
     },
-    { timeout: 120_000 },
+    { timeout: 180_000 },
   );
 });

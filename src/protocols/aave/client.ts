@@ -218,6 +218,15 @@ export class AaveClient {
       tokenSymbol,
       marketSelector,
     );
+    return this.createWriteContextFromSelection(selection, command);
+  }
+
+  private createWriteContextFromSelection(
+    selection: AaveReserveSelection,
+    command: "borrow" | "repay" | "supply" | "withdraw",
+  ): AaveWriteContext {
+    if (!this.signer) throw new Error("Signer required");
+
     const publicClient = getPublicClient(this.chain);
     const account = this.signer.address as Address;
     const txGateway = new TxGateway(this.chain, publicClient, this.signer, {
@@ -236,6 +245,26 @@ export class AaveClient {
       },
       txGateway,
     };
+  }
+
+  private assertBorrowableReserve(selection: AaveReserveSelection): void {
+    if (selection.reserve.isPaused) {
+      throw new Error(
+        `Aave reserve ${selection.token} in ${selection.market} on ${this.chain} is paused and cannot be borrowed`,
+      );
+    }
+
+    if (selection.reserve.isFrozen) {
+      throw new Error(
+        `Aave reserve ${selection.token} in ${selection.market} on ${this.chain} is currently frozen and cannot be borrowed`,
+      );
+    }
+
+    if (selection.reserve.borrowInfo?.borrowingState !== "ENABLED") {
+      throw new Error(
+        `Aave reserve ${selection.token} in ${selection.market} on ${this.chain} does not currently allow borrowing`,
+      );
+    }
   }
 
   async supply(
@@ -309,11 +338,13 @@ export class AaveClient {
     amount: number,
     marketSelector?: string,
   ): Promise<AaveBorrowResult> {
-    const { account, pool, token, txGateway } = await this.createWriteContext(
+    const selection = await this.findReserveSelection(
       tokenSymbol,
-      "borrow",
       marketSelector,
     );
+    this.assertBorrowableReserve(selection);
+    const { account, pool, token, txGateway } =
+      this.createWriteContextFromSelection(selection, "borrow");
     const amountWei = parseUnits(String(amount), token.decimals);
 
     const { receipt, txHash } = await txGateway.simulateAndWriteContract({

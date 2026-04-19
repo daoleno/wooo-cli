@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { HttpSignerMetadata } from "../../src/core/signer-protocol";
 import { HttpSignerHarness } from "../fixtures/http-signer-harness";
+import { selectEthereumAaveBorrowPlan } from "./aave-borrow-plan";
 import {
   ETHEREUM_USDC_ADDRESS,
   EthereumAnvilHarness,
@@ -65,6 +66,13 @@ interface AavePositionsOutput {
   ltv: string;
   totalCollateralUSD: string;
   totalDebtUSD: string;
+}
+
+interface AaveMarketOutput {
+  active: boolean;
+  borrowingEnabled: boolean;
+  frozen: boolean;
+  token: string;
 }
 
 interface MorphoTransactionOutput {
@@ -173,6 +181,25 @@ describe("remote signer anvil e2e", () => {
               wallet.active === true,
           ),
         ).toBe(true);
+        const markets = await anvil.runJson<{
+          chain: string;
+          markets: AaveMarketOutput[];
+        }>(
+          [
+            "lend",
+            "aave",
+            "markets",
+            "--chain",
+            "ethereum",
+            "--market",
+            AAVE_ETHEREUM_MARKET,
+          ],
+          { env },
+        );
+        const borrowPlan = selectEthereumAaveBorrowPlan(
+          markets.markets,
+          "remote-signer",
+        );
 
         const swap = await anvil.runJson<UniswapSwapOutput>(
           [
@@ -251,8 +278,8 @@ describe("remote signer anvil e2e", () => {
             "lend",
             "aave",
             "borrow",
-            "WETH",
-            "0.001",
+            borrowPlan.token,
+            borrowPlan.borrowAmount,
             "--chain",
             "ethereum",
             "--market",
@@ -261,8 +288,8 @@ describe("remote signer anvil e2e", () => {
           ],
           { env },
         );
-        expect(borrow.token).toBe("WETH");
-        expect(borrow.amount).toBe("0.001");
+        expect(borrow.token).toBe(borrowPlan.token);
+        expect(borrow.amount).toBe(borrowPlan.borrowAmount);
         expect(borrow.interestRateMode).toBe("variable");
         expect(borrow.status).toBe("confirmed");
         expect(borrow.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
@@ -287,8 +314,8 @@ describe("remote signer anvil e2e", () => {
             "lend",
             "aave",
             "repay",
-            "WETH",
-            "0.001",
+            borrowPlan.token,
+            borrowPlan.repayAmount,
             "--chain",
             "ethereum",
             "--market",
@@ -297,8 +324,8 @@ describe("remote signer anvil e2e", () => {
           ],
           { env },
         );
-        expect(repay.token).toBe("WETH");
-        expect(repay.amount).toBe("0.001");
+        expect(repay.token).toBe(borrowPlan.token);
+        expect(repay.amount).toBe(borrowPlan.repayAmount);
         expect(repay.interestRateMode).toBe("variable");
         expect(repay.status).toBe("confirmed");
         expect(repay.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
