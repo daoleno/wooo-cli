@@ -225,6 +225,23 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("candles");
     expect(result).toContain("holders");
     expect(result).toContain("ranking");
+    expect(result).toContain("filter");
+    expect(result).toContain("oi-history");
+    expect(result).toContain("oi-change");
+  });
+
+  test("news help shows okx subcommand", async () => {
+    const result = await $`bun run src/index.ts news --help`.text();
+    expect(result).toContain("okx");
+  });
+
+  test("news okx help shows subcommands", async () => {
+    const result = await $`bun run src/index.ts news okx --help`.text();
+    expect(result).toContain("latest");
+    expect(result).toContain("by-coin");
+    expect(result).toContain("search");
+    expect(result).toContain("coin-sentiment");
+    expect(result).toContain("sentiment-rank");
   });
 
   test("portfolio okx help shows subcommands", async () => {

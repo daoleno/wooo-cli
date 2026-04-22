@@ -9,6 +9,12 @@ export interface WoooConfig {
     format?: "table" | "csv" | "json";
   };
   chains?: Record<string, { rpc?: string }>;
+  okx?: {
+    apiKey?: string;
+    apiSecret?: string;
+    passphrase?: string;
+    baseUrl?: string;
+  };
   okxOnchain?: {
     apiKey?: string;
     secret?: string;

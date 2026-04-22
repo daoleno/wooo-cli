@@ -39,6 +39,7 @@ wooo-cli lend morpho markets --chain ethereum
 | **Perps** | Hyperliquid | Long/short with leverage, funding rates |
 | **Prediction Markets** | Polymarket | Gamma discovery, positions, CLOB market data, approvals, and signer-backed trading |
 | **Onchain Data** | OKX Onchain OS | Token search, market metrics, portfolio balances and PnL analysis, tx history |
+| **Market Intelligence** | OKX Agent Trade Kit | Multi-factor screener, OI history/change scans, crypto news, sentiment radar |
 | **Aggregated Swap** | Auto-routed | Compares DEXes, picks best quote |
 
 **Chains:** Ethereum, Arbitrum, Optimism, Polygon, Base, Solana
@@ -79,6 +80,9 @@ wooo-cli market okx trades ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 -
 wooo-cli market okx candles ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2 --bar 15m
 wooo-cli market okx holders solana EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 wooo-cli market okx ranking --chains solana,base --sort volume --window 24h
+wooo-cli market okx filter --instType SWAP --minOiUsd 100000000 --sortBy oiUsd
+wooo-cli market okx oi-history BTC-USDT-SWAP --bar 1H --limit 24
+wooo-cli market okx oi-change --instType SWAP --bar 4H --minAbsOiDeltaPct 2
 wooo-cli portfolio okx chains
 wooo-cli portfolio okx overview 0xabc... ethereum --window 7d
 wooo-cli portfolio okx recent-pnl 0xabc... ethereum --limit 20
@@ -185,6 +189,25 @@ wooo-cli chain okx history 0xabc... --chains ethereum,base --limit 20
 wooo-cli chain okx tx ethereum 0xabc123...
 ```
 
+### OKX Agent Market & News
+
+```bash
+# Market screening / OI analysis
+wooo-cli market okx filter --instType SPOT --quoteCcy USDT --sortBy volUsd24h --limit 20
+wooo-cli market okx filter --instType SWAP --minOiUsd 100000000 --minFundingRate 0.0001
+wooo-cli market okx oi-history BTC-USDT-SWAP --bar 1H --limit 48
+wooo-cli market okx oi-change --instType SWAP --bar 4H --sortBy oiDeltaPct --limit 20
+
+# News / sentiment radar (requires OKX API credentials)
+wooo-cli news okx latest --lang zh-CN --limit 10
+wooo-cli news okx by-coin --coins BTC,ETH --importance high
+wooo-cli news okx by-sentiment --sentiment bullish --platform blockbeats
+wooo-cli news okx coin-sentiment --coins BTC,SOL
+wooo-cli news okx coin-trend BTC --period 1h --points 24
+wooo-cli news okx sentiment-rank --sortBy bullish --limit 20
+wooo-cli news okx platforms
+```
+
 ## Command Structure
 
 ```
@@ -192,6 +215,7 @@ wooo-cli
 ├── config       — init, set, get, list
 ├── wallet       — create, import, export, list, info, delete, switch, balance, connect, disconnect, discover, policy, key
 ├── market       — price, search, okx
+├── news         — okx
 ├── portfolio    — overview, okx
 ├── chain        — approve, transfer, tx, balance, ens, call, okx
 ├── swap         — aggregated DEX swap (auto-routes)
@@ -244,6 +268,10 @@ export WOOO_BINANCE_API_SECRET=...
 export WOOO_BYBIT_API_KEY=...
 export WOOO_BYBIT_API_SECRET=...
 ```
+
+The same OKX credentials also power `wooo-cli news okx ...` commands. Public
+OKX Agent market scanner commands (`market okx filter`, `oi-history`,
+`oi-change`) do not require credentials.
 
 ### OKX Onchain Data API
 

@@ -232,6 +232,26 @@ wooo-cli market okx trades <chain> <address> [--limit 20]
 wooo-cli market okx candles <chain> <address> [--bar 1m|5m|15m|1H|4H|1D]
 wooo-cli market okx holders <chain> <address> [--tag whale]
 wooo-cli market okx ranking --chains ethereum,base [--sort volume|change|market-cap] [--window 5m|1h|4h|24h]
+
+# OKX Agent market intelligence (public)
+wooo-cli market okx filter --instType SPOT|SWAP|FUTURES [--sortBy volUsd24h|oiUsd|fundingRate|last|chg24hPct|marketCapUsd|listTime]
+wooo-cli market okx oi-history <instId> [--bar 5m|15m|1H|4H|1D] [--limit 50]
+wooo-cli market okx oi-change --instType SWAP|FUTURES [--bar 5m|15m|1H|4H|1D] [--sortBy oiDeltaPct|oiDeltaUsd|oiUsd|volUsd24h|last]
+```
+
+OKX news / sentiment radar (requires OKX API credentials):
+
+```bash
+wooo-cli news okx latest [--coins BTC,ETH] [--platform blockbeats] [--lang zh-CN|en-US] [--limit 10]
+wooo-cli news okx important [--coins BTC,ETH] [--lang zh-CN|en-US] [--limit 10]
+wooo-cli news okx by-coin --coins BTC,ETH [--importance high|low] [--platform blockbeats]
+wooo-cli news okx search <keyword> [--coins BTC] [--sentiment bullish|bearish|neutral]
+wooo-cli news okx by-sentiment --sentiment bullish|bearish|neutral [--coins BTC]
+wooo-cli news okx detail <id>
+wooo-cli news okx platforms
+wooo-cli news okx coin-sentiment --coins BTC,ETH [--period 1h|4h|24h]
+wooo-cli news okx coin-trend <coin> [--period 1h|4h|24h] [--points 24]
+wooo-cli news okx sentiment-rank [--period 1h|4h|24h] [--sortBy hot|bullish|bearish]
 ```
 
 ### Token Swaps

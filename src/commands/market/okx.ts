@@ -13,6 +13,11 @@ import {
   formatOkxOnchainTimestamp,
   formatOkxOnchainUsd,
 } from "../../services/okx-onchain/presentation";
+import {
+  okxAgentMarketFilterCommand,
+  okxAgentMarketOiChangeCommand,
+  okxAgentMarketOiHistoryCommand,
+} from "./okx-agent";
 
 const OKX_ONCHAIN_TAG_FILTERS = {
   bundle: "9",
@@ -808,7 +813,7 @@ function okxMarketRankingCommand() {
 }
 
 export default defineCommand({
-  meta: { name: "okx", description: "OKX Onchain market data" },
+  meta: { name: "okx", description: "OKX Onchain and Agent market data" },
   subCommands: {
     chains: okxMarketChainsCommand,
     search: okxMarketSearchCommand,
@@ -819,5 +824,8 @@ export default defineCommand({
     candles: okxMarketCandlesCommand,
     holders: okxMarketHoldersCommand,
     ranking: okxMarketRankingCommand,
+    filter: okxAgentMarketFilterCommand,
+    "oi-history": okxAgentMarketOiHistoryCommand,
+    "oi-change": okxAgentMarketOiChangeCommand,
   },
 });
