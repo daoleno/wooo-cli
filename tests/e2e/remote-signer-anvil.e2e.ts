@@ -87,13 +87,10 @@ interface MorphoTransactionOutput {
   txHash: string;
 }
 
-interface ApprovalSetOutput {
+interface DepositWalletAddressOutput {
   chain: string;
-  results: Array<{
-    contract: string;
-    txHash: string;
-    type: "erc20" | "erc1155";
-  }>;
+  depositWallet: string;
+  owner: string;
 }
 
 describe("remote signer anvil e2e", () => {
@@ -403,7 +400,7 @@ describe("remote signer anvil e2e", () => {
   );
 
   test(
-    "connects a remote signer and sets Polymarket approvals on a Polygon fork",
+    "connects a remote signer and derives its Polymarket deposit wallet",
     async () => {
       const anvil = new PolygonAnvilHarness();
       await anvil.start();
@@ -435,29 +432,18 @@ describe("remote signer anvil e2e", () => {
           env,
         });
 
-        const approvalSet = await anvil.runJson<ApprovalSetOutput>(
-          ["prediction", "polymarket", "approve", "set", "--yes"],
+        const depositWallet = await anvil.runJson<DepositWalletAddressOutput>(
+          ["prediction", "polymarket", "deposit-wallet", "address"],
           { env },
         );
-        expect(approvalSet.chain).toBe("polygon");
-        expect(approvalSet.results.length).toBeGreaterThanOrEqual(4);
-        expect(
-          approvalSet.results.every(
-            (result) =>
-              result.contract.length > 0 &&
-              /^0x[0-9a-fA-F]{64}$/.test(result.txHash),
-          ),
-        ).toBe(true);
+        expect(depositWallet.chain).toBe("polygon");
+        expect(depositWallet.owner).toBe(anvil.address);
+        expect(depositWallet.depositWallet).toMatch(/^0x[0-9a-fA-F]{40}$/);
 
         const signerOperations = signer.requests.map(
           (request) => request.operation,
         );
-        expect(
-          signerOperations.every(
-            (operation) => operation === "sign-and-send-transaction",
-          ),
-        ).toBe(true);
-        expect(signerOperations.length).toBeGreaterThanOrEqual(4);
+        expect(signerOperations).toEqual([]);
       } finally {
         await signer.stop();
         await anvil.stop();

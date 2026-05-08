@@ -11,18 +11,16 @@ interface ApprovalStatusOutput {
   }>;
 }
 
-interface ApprovalSetOutput {
+interface ApprovalPlanOutput {
   chain: string;
-  results: Array<{
-    contract: string;
-    txHash: string;
-    type: "erc20" | "erc1155";
-  }>;
+  kind: string;
+  operation: { command: string; protocol: string };
+  steps: Array<{ kind: string; title: string }>;
 }
 
 describe("polymarket polygon anvil e2e", () => {
   test(
-    "checks and sets Polymarket trading approvals on a Polygon fork",
+    "checks deposit wallet approvals and previews relayer approval batch",
     async () => {
       const harness = new PolygonAnvilHarness();
       await harness.start();
@@ -33,6 +31,8 @@ describe("polymarket polygon anvil e2e", () => {
           "polymarket",
           "approve",
           "check",
+          "--deposit-wallet",
+          harness.address,
         ]);
 
         expect(approvalsBefore.address).toBe(harness.address);
@@ -47,54 +47,21 @@ describe("polymarket polygon anvil e2e", () => {
           ),
         ).toBe(true);
 
-        const approvalSet = await harness.runJson<ApprovalSetOutput>([
+        const approvalPlan = await harness.runJson<ApprovalPlanOutput>([
           "prediction",
           "polymarket",
           "approve",
           "set",
-          "--yes",
+          "--dry-run",
         ]);
 
-        expect(approvalSet.chain).toBe("polygon");
-        expect(approvalSet.results.length).toBeGreaterThanOrEqual(4);
+        expect(approvalPlan.kind).toBe("execution-plan");
+        expect(approvalPlan.chain).toBe("polygon");
+        expect(approvalPlan.operation.protocol).toBe("polymarket");
+        expect(approvalPlan.operation.command).toBe("approve");
+        expect(approvalPlan.steps.length).toBeGreaterThanOrEqual(4);
         expect(
-          approvalSet.results.every(
-            (result) =>
-              result.contract.length > 0 &&
-              result.txHash.match(/^0x[0-9a-fA-F]{64}$/) !== null,
-          ),
-        ).toBe(true);
-
-        const approvalTypes = new Set(
-          approvalSet.results.map((result) => result.type),
-        );
-        expect(approvalTypes.has("erc20")).toBe(true);
-        expect(approvalTypes.has("erc1155")).toBe(true);
-
-        const approvalsAfter = await harness.runJson<ApprovalStatusOutput>([
-          "prediction",
-          "polymarket",
-          "approve",
-          "check",
-        ]);
-
-        expect(approvalsAfter.address).toBe(harness.address);
-        expect(approvalsAfter.approvals).toHaveLength(
-          approvalsBefore.approvals.length,
-        );
-        const allowancesBefore = new Map(
-          approvalsBefore.approvals.map((approval) => [
-            approval.contract,
-            BigInt(approval.collateralAllowance),
-          ]),
-        );
-        expect(
-          approvalsAfter.approvals.every(
-            (approval) =>
-              approval.ctfApproved === true &&
-              BigInt(approval.collateralAllowance) >=
-                (allowancesBefore.get(approval.contract) ?? 0n),
-          ),
+          approvalPlan.steps.every((step) => step.kind === "approval"),
         ).toBe(true);
       } finally {
         await harness.stop();

@@ -8,9 +8,19 @@ import {
   SignatureTypeV2,
   type TickSize,
 } from "@polymarket/clob-client-v2";
-import { type Address, isAddress } from "viem";
+import {
+  type Address,
+  concat,
+  encodeAbiParameters,
+  getCreate2Address,
+  type Hex,
+  isAddress,
+  keccak256,
+  pad,
+  toHex,
+} from "viem";
 import { resolveChainId } from "../../core/chain-ids";
-import { getActiveWallet, getActiveWalletPort } from "../../core/context";
+import { getActiveWalletPort } from "../../core/context";
 import type {
   ApprovalPrompt,
   EvmTypedDataField,
@@ -20,16 +30,112 @@ import type { WalletPort } from "../../core/signers";
 const DEFAULT_CLOB_HOST = "https://clob.polymarket.com";
 const DEFAULT_DATA_HOST = "https://data-api.polymarket.com";
 const DEFAULT_GAMMA_HOST = "https://gamma-api.polymarket.com";
+const DEFAULT_BRIDGE_HOST = "https://bridge.polymarket.com";
+const DEFAULT_RELAYER_HOST = "https://relayer-v2.polymarket.com";
 const DEFAULT_HEADERS = {
   accept: "application/json",
   "user-agent": "wooo-cli/0.1.1",
 } as const;
 
-export type PolymarketSignatureMode = "eoa" | "proxy" | "gnosis-safe";
+const POLYGON_CHAIN_ID = 137;
+const DEPOSIT_WALLET_FACTORY =
+  "0x00000000000Fb5C9ADea0298D729A0CB3823Cc07" as const;
+const DEPOSIT_WALLET_IMPLEMENTATION =
+  "0x58CA52ebe0DadfdF531Cde7062e76746de4Db1eB" as const;
+const DEPOSIT_WALLET_DOMAIN_NAME = "DepositWallet";
+const DEPOSIT_WALLET_DOMAIN_VERSION = "1";
+const RELAYER_FINAL_STATES = new Set(["STATE_MINED", "STATE_CONFIRMED"]);
+const RELAYER_FAILED_STATES = new Set(["STATE_FAILED", "STATE_INVALID"]);
+
+const DEPOSIT_WALLET_TYPES = {
+  Call: [
+    { name: "target", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "data", type: "bytes" },
+  ],
+  Batch: [
+    { name: "wallet", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+    { name: "calls", type: "Call[]" },
+  ],
+} satisfies Record<string, EvmTypedDataField[]>;
 
 export interface PolymarketAuthOptions {
-  funderAddress?: string;
-  signatureType: SignatureTypeV2;
+  depositWalletAddress: Address;
+}
+
+export interface PolymarketDepositWalletCall {
+  data: Hex;
+  target: Address;
+  value: string;
+}
+
+export interface PolymarketRelayerTransaction {
+  createdAt?: string;
+  data?: string;
+  from?: string;
+  metadata?: string;
+  nonce?: string;
+  proxyAddress?: string;
+  state: string;
+  to?: string;
+  transactionHash?: string;
+  transactionID: string;
+  type?: string;
+  updatedAt?: string;
+  value?: string;
+}
+
+export interface PolymarketRelayerSubmitResponse {
+  hash?: string;
+  state: string;
+  transactionHash?: string;
+  transactionID: string;
+}
+
+export interface PolymarketRelayerOptions {
+  relayerUrl?: string;
+}
+
+export interface PolymarketBridgeOptions {
+  bridgeHost?: string;
+}
+
+export interface PolymarketBridgeDepositAddressesResponse {
+  address: Record<string, string>;
+  note?: string;
+}
+
+export interface PolymarketBridgeSupportedAsset {
+  chainId: string;
+  chainName: string;
+  minCheckoutUsd: number;
+  token: {
+    address: string;
+    decimals: number;
+    name: string;
+    symbol: string;
+  };
+}
+
+export interface PolymarketBridgeSupportedAssetsResponse {
+  supportedAssets: PolymarketBridgeSupportedAsset[];
+}
+
+export interface PolymarketBridgeTransaction {
+  createdTimeMs?: number;
+  fromAmountBaseUnit?: string;
+  fromChainId?: string;
+  fromTokenAddress?: string;
+  status: string;
+  toChainId?: string;
+  toTokenAddress?: string;
+  txHash?: string;
+}
+
+export interface PolymarketBridgeStatusResponse {
+  transactions: PolymarketBridgeTransaction[];
 }
 
 export interface PolymarketListParams {
@@ -124,6 +230,163 @@ async function fetchJson<T>(
   }
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function requireOptionalAddress(value: string | undefined, field: string) {
+  if (!value) {
+    return undefined;
+  }
+  return requireAddress(value, field);
+}
+
+function readRelayerApiCreds() {
+  const key = process.env.RELAYER_API_KEY;
+  const address = process.env.RELAYER_API_KEY_ADDRESS;
+
+  if (!key || !address) {
+    throw new Error(
+      "Polymarket relayer auth is required. Set RELAYER_API_KEY and RELAYER_API_KEY_ADDRESS.",
+    );
+  }
+  return {
+    address: requireAddress(address, "RELAYER_API_KEY_ADDRESS"),
+    key,
+  };
+}
+
+function createRelayerAuthHeaders(): Record<string, string> {
+  const creds = readRelayerApiCreds();
+  return {
+    RELAYER_API_KEY: creds.key,
+    RELAYER_API_KEY_ADDRESS: creds.address,
+  };
+}
+
+async function fetchRelayerJson<T>(
+  baseUrl: string,
+  path: string,
+  options?: {
+    body?: unknown;
+    method?: "GET" | "POST";
+    params?: Record<string, string | undefined>;
+  },
+): Promise<T> {
+  const method = options?.method ?? "GET";
+  const url = new URL(path, `${normalizeBaseUrl(baseUrl)}/`);
+  if (options?.params) {
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+  const body =
+    options?.body === undefined ? undefined : JSON.stringify(options.body);
+  const headers: Record<string, string> = {
+    ...DEFAULT_HEADERS,
+    ...createRelayerAuthHeaders(),
+  };
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetch(url.toString(), {
+    body,
+    headers,
+    method,
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Polymarket relayer request failed with HTTP ${response.status}: ${text || "<empty>"}`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Polymarket relayer returned invalid JSON for ${path}: ${message}`,
+    );
+  }
+}
+
+async function fetchBridgeJson<T>(
+  baseUrl: string,
+  path: string,
+  options?: {
+    body?: unknown;
+    method?: "GET" | "POST";
+  },
+): Promise<T> {
+  const method = options?.method ?? "GET";
+  const url = new URL(path, `${normalizeBaseUrl(baseUrl)}/`);
+  const body =
+    options?.body === undefined ? undefined : JSON.stringify(options.body);
+  const headers: Record<string, string> = { ...DEFAULT_HEADERS };
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetch(url.toString(), {
+    body,
+    headers,
+    method,
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Polymarket bridge request failed with HTTP ${response.status}: ${text || "<empty>"}`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Polymarket bridge returned invalid JSON for ${path}: ${message}`,
+    );
+  }
+}
+
+function deriveDepositWalletAddress(owner: Address): Address {
+  const walletId = pad(owner, { dir: "left", size: 32 });
+  const args = encodeAbiParameters(
+    [{ type: "address" }, { type: "bytes32" }],
+    [DEPOSIT_WALLET_FACTORY, walletId],
+  );
+  const salt = keccak256(args);
+  const bytecodeHash = initCodeHashERC1967(DEPOSIT_WALLET_IMPLEMENTATION, args);
+  return getCreate2Address({
+    bytecodeHash,
+    from: DEPOSIT_WALLET_FACTORY,
+    salt,
+  });
+}
+
+const ERC1967_CONST1 =
+  "0xcc3735a920a3ca505d382bbc545af43d6000803e6038573d6000fd5b3d6000f3";
+const ERC1967_CONST2 =
+  "0x5155f3363d3d373d3d363d7f360894a13ba1a3210667c828492db98dca3e2076";
+const ERC1967_PREFIX = 0x61003d3d8160233d3973n;
+
+function initCodeHashERC1967(implementation: Hex, args: Hex): Hex {
+  const argBytes = BigInt((args.length - 2) / 2);
+  const combined = ERC1967_PREFIX + (argBytes << 56n);
+  return keccak256(
+    concat([
+      toHex(combined, { size: 10 }),
+      implementation,
+      "0x6009",
+      ERC1967_CONST2,
+      ERC1967_CONST1,
+      args,
+    ]),
+  );
+}
+
 function isNumericId(value: string): boolean {
   return /^\d+$/.test(value.trim());
 }
@@ -184,11 +447,7 @@ function inferTypedDataPrimaryType(
 
 function createClobSignerAdapter(signer: WalletPort): PolymarketClobSigner {
   return {
-    async _signTypedData(
-      domain,
-      types,
-      value,
-    ) {
+    async _signTypedData(domain, types, value) {
       const primaryType = inferTypedDataPrimaryType(types);
       return await signer.signTypedData(
         resolveChainId("polygon"),
@@ -212,50 +471,32 @@ function createClobSignerAdapter(signer: WalletPort): PolymarketClobSigner {
   };
 }
 
-export function parsePolymarketSignatureType(
-  value: string | undefined,
-): SignatureTypeV2 {
-  const normalized = (value ?? "eoa").trim().toLowerCase();
-  switch (normalized) {
-    case "eoa":
-      return SignatureTypeV2.EOA;
-    case "proxy":
-      return SignatureTypeV2.POLY_PROXY;
-    case "gnosis-safe":
-      return SignatureTypeV2.POLY_GNOSIS_SAFE;
-    default:
-      throw new Error(
-        `Unsupported Polymarket signature type: ${value}. Use eoa, proxy, or gnosis-safe.`,
-      );
-  }
+export function getPolymarketDepositWalletAddress(owner: Address): Address {
+  return deriveDepositWalletAddress(owner);
 }
 
-export function resolvePolymarketAuthOptions(
-  signatureType: string | undefined,
-  funderAddress: string | undefined,
-): PolymarketAuthOptions {
-  const resolvedType = parsePolymarketSignatureType(signatureType);
-  if (resolvedType !== SignatureTypeV2.EOA && !funderAddress) {
-    throw new Error(
-      "Polymarket proxy and gnosis-safe modes require --funder-address.",
-    );
+export async function resolvePolymarketDepositWalletAddress(
+  depositWalletAddress?: string,
+): Promise<Address> {
+  const explicit = requireOptionalAddress(
+    depositWalletAddress,
+    "deposit wallet",
+  );
+  if (explicit) {
+    return explicit;
   }
 
+  const signer = await getActiveWalletPort("evm");
+  return deriveDepositWalletAddress(requireAddress(signer.address, "owner"));
+}
+
+export async function resolvePolymarketAuthOptions(
+  depositWalletAddress?: string,
+): Promise<PolymarketAuthOptions> {
   return {
-    signatureType: resolvedType,
-    funderAddress,
+    depositWalletAddress:
+      await resolvePolymarketDepositWalletAddress(depositWalletAddress),
   };
-}
-
-export async function resolvePolymarketAddress(
-  address?: string,
-): Promise<string> {
-  if (address) {
-    return address;
-  }
-
-  const wallet = await getActiveWallet("evm");
-  return wallet.address;
 }
 
 export function getPolymarketContractConfig() {
@@ -273,6 +514,189 @@ export function getPolymarketContractConfig() {
       "conditionalTokens",
     ),
   } satisfies PolymarketContractConfig;
+}
+
+export class PolymarketBridgeClient {
+  readonly bridgeHost: string;
+
+  constructor(options?: PolymarketBridgeOptions) {
+    this.bridgeHost = options?.bridgeHost ?? DEFAULT_BRIDGE_HOST;
+  }
+
+  async getSupportedAssets() {
+    return await fetchBridgeJson<PolymarketBridgeSupportedAssetsResponse>(
+      this.bridgeHost,
+      "/supported-assets",
+    );
+  }
+
+  async createDepositAddresses(address: Address) {
+    return await fetchBridgeJson<PolymarketBridgeDepositAddressesResponse>(
+      this.bridgeHost,
+      "/deposit",
+      {
+        body: { address },
+        method: "POST",
+      },
+    );
+  }
+
+  async getStatus(address: string) {
+    const normalized = address.trim();
+    if (!normalized) {
+      throw new Error("Polymarket bridge deposit address is required.");
+    }
+    return await fetchBridgeJson<PolymarketBridgeStatusResponse>(
+      this.bridgeHost,
+      `/status/${encodeURIComponent(normalized)}`,
+    );
+  }
+}
+
+export class PolymarketRelayerClient {
+  readonly relayerUrl: string;
+
+  constructor(options?: PolymarketRelayerOptions) {
+    this.relayerUrl = options?.relayerUrl ?? DEFAULT_RELAYER_HOST;
+  }
+
+  async getNonce(owner: Address, type: "WALLET" | "WALLET-CREATE") {
+    return await fetchRelayerJson<{ nonce: string }>(
+      this.relayerUrl,
+      "/nonce",
+      {
+        params: { address: owner, type },
+      },
+    );
+  }
+
+  async getDeployed(address: Address, type = "WALLET") {
+    const result = await fetchRelayerJson<{ deployed: boolean }>(
+      this.relayerUrl,
+      "/deployed",
+      {
+        params: { address, type },
+      },
+    );
+    return result.deployed;
+  }
+
+  async getTransaction(transactionId: string) {
+    return await fetchRelayerJson<PolymarketRelayerTransaction[]>(
+      this.relayerUrl,
+      "/transaction",
+      {
+        params: { id: transactionId },
+      },
+    );
+  }
+
+  async waitForTransaction(
+    transactionId: string,
+    options?: { intervalMs?: number; maxPolls?: number },
+  ): Promise<PolymarketRelayerTransaction | undefined> {
+    const intervalMs = options?.intervalMs ?? 2000;
+    const maxPolls = options?.maxPolls ?? 100;
+    for (let poll = 0; poll < maxPolls; poll++) {
+      const [transaction] = await this.getTransaction(transactionId);
+      if (transaction) {
+        if (RELAYER_FINAL_STATES.has(transaction.state)) {
+          return transaction;
+        }
+        if (RELAYER_FAILED_STATES.has(transaction.state)) {
+          throw new Error(
+            `Polymarket relayer transaction ${transactionId} failed with state ${transaction.state}.`,
+          );
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return undefined;
+  }
+
+  async deployDepositWallet(owner: Address) {
+    return await fetchRelayerJson<PolymarketRelayerSubmitResponse>(
+      this.relayerUrl,
+      "/submit",
+      {
+        body: {
+          from: owner,
+          to: DEPOSIT_WALLET_FACTORY,
+          type: "WALLET-CREATE",
+        },
+        method: "POST",
+      },
+    );
+  }
+
+  async executeDepositWalletBatch(params: {
+    calls: PolymarketDepositWalletCall[];
+    deadline: string;
+    owner: Address;
+    signer: WalletPort;
+    walletAddress: Address;
+  }) {
+    if (params.calls.length === 0) {
+      throw new Error("At least one deposit wallet call is required.");
+    }
+    const { nonce } = await this.getNonce(params.owner, "WALLET");
+    const signature = await params.signer.signTypedData(
+      resolveChainId("polygon"),
+      {
+        domain: {
+          name: DEPOSIT_WALLET_DOMAIN_NAME,
+          version: DEPOSIT_WALLET_DOMAIN_VERSION,
+          chainId: POLYGON_CHAIN_ID,
+          verifyingContract: params.walletAddress,
+        },
+        message: {
+          calls: params.calls.map((call) => ({
+            data: call.data,
+            target: call.target,
+            value: BigInt(call.value),
+          })),
+          deadline: BigInt(params.deadline),
+          nonce: BigInt(nonce),
+          wallet: params.walletAddress,
+        },
+        primaryType: "Batch",
+        types: DEPOSIT_WALLET_TYPES,
+      },
+      {
+        group: "prediction",
+        protocol: "polymarket",
+        command: "deposit-wallet-batch",
+      },
+      {
+        action: "Authorize Polymarket deposit wallet batch",
+        details: {
+          calls: params.calls.length,
+          deadline: params.deadline,
+          wallet: params.walletAddress,
+        },
+      },
+    );
+
+    return await fetchRelayerJson<PolymarketRelayerSubmitResponse>(
+      this.relayerUrl,
+      "/submit",
+      {
+        body: {
+          depositWalletParams: {
+            calls: params.calls,
+            deadline: params.deadline,
+            depositWallet: params.walletAddress,
+          },
+          from: params.owner,
+          nonce,
+          signature,
+          to: DEPOSIT_WALLET_FACTORY,
+          type: "WALLET",
+        },
+        method: "POST",
+      },
+    );
+  }
 }
 
 export class PolymarketClient {
@@ -318,8 +742,8 @@ export class PolymarketClient {
       host: this.clobHost,
       chain: Chain.POLYGON,
       signer: clobSigner,
-      signatureType: authOptions.signatureType,
-      funderAddress: authOptions.funderAddress,
+      signatureType: SignatureTypeV2.POLY_1271,
+      funderAddress: authOptions.depositWalletAddress,
       useServerTime: true,
       retryOnError: true,
       throwOnError: true,
@@ -331,8 +755,8 @@ export class PolymarketClient {
       chain: Chain.POLYGON,
       signer: clobSigner,
       creds,
-      signatureType: authOptions.signatureType,
-      funderAddress: authOptions.funderAddress,
+      signatureType: SignatureTypeV2.POLY_1271,
+      funderAddress: authOptions.depositWalletAddress,
       useServerTime: true,
       retryOnError: true,
       throwOnError: true,

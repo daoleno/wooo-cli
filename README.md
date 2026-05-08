@@ -148,8 +148,23 @@ wooo-cli perps hyperliquid positions
 wooo-cli prediction polymarket markets list --limit 10
 wooo-cli prediction polymarket events get 2890
 wooo-cli prediction polymarket clob ok
+wooo-cli prediction polymarket deposit supported-assets
+wooo-cli prediction polymarket deposit addresses
+wooo-cli prediction polymarket deposit status <depositAddress>
+wooo-cli prediction polymarket deposit-wallet address
+wooo-cli prediction polymarket deposit-wallet deploy --dry-run
 wooo-cli prediction polymarket approve check
+wooo-cli prediction polymarket approve set --dry-run
+wooo-cli prediction polymarket clob create-order --token <tokenId> --side buy --price 0.42 --size 10 --dry-run
 ```
+
+Polymarket trading uses the current deposit wallet flow. The CLI derives the
+deposit wallet for the active EVM signer by default, creates official Bridge
+deposit addresses for that wallet, submits approval batches through the
+Polymarket relayer, and posts CLOB orders with `POLY_1271`. Set
+`RELAYER_API_KEY` and `RELAYER_API_KEY_ADDRESS` for relayer authentication.
+Use `--deposit-wallet <address>` only when your signer controls a specific
+existing deposit wallet.
 
 ### On-Chain Utilities
 

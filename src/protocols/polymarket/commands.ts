@@ -3,12 +3,10 @@ import {
   type Address,
   encodeFunctionData,
   erc20Abi,
-  type Hash,
   isAddress,
   maxUint256,
   parseAbi,
 } from "viem";
-import { resolveChainId } from "../../core/chain-ids";
 import { confirmTransaction } from "../../core/confirm";
 import { getActiveWalletPort } from "../../core/context";
 import { getPublicClient } from "../../core/evm";
@@ -22,16 +20,20 @@ import type { ProtocolDefinition } from "../types";
 import {
   AssetType,
   getPolymarketContractConfig,
+  getPolymarketDepositWalletAddress,
   OrderType,
   type PolymarketAuthOptions,
+  PolymarketBridgeClient,
   PolymarketClient,
+  type PolymarketDepositWalletCall,
   type PolymarketEventListParams,
   type PolymarketListParams,
   type PolymarketMarketListParams,
+  PolymarketRelayerClient,
   type PolymarketSeriesListParams,
   type PolymarketTeamListParams,
-  resolvePolymarketAddress,
   resolvePolymarketAuthOptions,
+  resolvePolymarketDepositWalletAddress,
   Side,
 } from "./client";
 
@@ -52,16 +54,25 @@ const WRITE_ARGS = {
 };
 
 const POLYMARKET_AUTH_ARGS = {
-  "signature-type": {
-    type: "string" as const,
-    description: "Polymarket signer mode: eoa, proxy, gnosis-safe",
-    default: "eoa",
-  },
-  "funder-address": {
+  "deposit-wallet": {
     type: "string" as const,
     description:
-      "Polymarket profile or proxy address to fund orders from when using proxy or gnosis-safe mode",
+      "Deposit wallet address to use as CLOB funder (default: deterministic wallet for active EVM signer)",
     required: false,
+  },
+};
+
+const RELAYER_ARGS = {
+  ...POLYMARKET_AUTH_ARGS,
+  "relayer-url": {
+    type: "string" as const,
+    description: "Polymarket relayer URL (default: official relayer)",
+    required: false,
+  },
+  "deadline-seconds": {
+    type: "string" as const,
+    description: "Deposit wallet batch signature lifetime in seconds",
+    default: "240",
   },
 };
 
@@ -263,20 +274,65 @@ function getApprovalTargets(): ApprovalTarget[] {
   return [
     { name: "CTF Exchange V2", address: resolved.exchange },
     { name: "Neg Risk Exchange V2", address: resolved.negRiskExchange },
-    ...(resolved.negRiskAdapter
-      ? [{ name: "Neg Risk Adapter", address: resolved.negRiskAdapter }]
-      : []),
+    { name: "Neg Risk Adapter", address: resolved.negRiskAdapter },
   ];
 }
 
 async function resolveAuth(args: {
-  "signature-type"?: string;
-  "funder-address"?: string;
+  "deposit-wallet"?: string;
 }): Promise<PolymarketAuthOptions> {
   return resolvePolymarketAuthOptions(
-    args["signature-type"],
-    validateAddress(args["funder-address"], "funder address"),
+    validateAddress(args["deposit-wallet"], "deposit wallet"),
   );
+}
+
+async function resolveDepositWalletArg(args: {
+  "deposit-wallet"?: string;
+}): Promise<Address> {
+  return await resolvePolymarketDepositWalletAddress(
+    validateAddress(args["deposit-wallet"], "deposit wallet"),
+  );
+}
+
+async function resolveDataAddress(address?: string): Promise<Address> {
+  if (address) {
+    return validateRequiredAddress(address, "address");
+  }
+  return await resolveDepositWalletArg({});
+}
+
+function createRelayer(args: { "relayer-url"?: string }) {
+  return new PolymarketRelayerClient({
+    relayerUrl: args["relayer-url"],
+  });
+}
+
+function createBridge() {
+  return new PolymarketBridgeClient();
+}
+
+function createApprovalCalls(): PolymarketDepositWalletCall[] {
+  const contractConfig = getPolymarketContractConfig();
+  return getApprovalTargets().flatMap((target) => [
+    {
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [target.address, maxUint256],
+      }),
+      target: contractConfig.collateral,
+      value: "0",
+    },
+    {
+      data: encodeFunctionData({
+        abi: ERC1155_ABI,
+        functionName: "setApprovalForAll",
+        args: [target.address, true],
+      }),
+      target: contractConfig.conditionalTokens,
+      value: "0",
+    },
+  ]);
 }
 
 async function readApprovalStatus(address: Address) {
@@ -307,7 +363,6 @@ async function readApprovalStatus(address: Address) {
         contract: target.name,
         address: target.address,
         collateralAllowance: collateralAllowance.toString(),
-        usdcAllowance: collateralAllowance.toString(),
         ctfApproved,
       };
     }),
@@ -616,7 +671,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, {
             address,
             positions: await client.getPositions(address, {
@@ -640,7 +695,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, {
             address,
             positions: await client.getClosedPositions(address, {
@@ -659,7 +714,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, await client.getValue(address));
         },
       }),
@@ -675,7 +730,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, await client.getTraded(address));
         },
       }),
@@ -690,7 +745,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, {
             address,
             trades: await client.getTrades(address, {
@@ -711,7 +766,7 @@ const data = defineCommand({
         },
         async run({ args }) {
           const client = new PolymarketClient();
-          const address = await resolvePolymarketAddress(args.address);
+          const address = await resolveDataAddress(args.address);
           emitData(args, {
             address,
             activity: await client.getActivity(address, {
@@ -1956,35 +2011,210 @@ const clob = defineCommand({
   },
 });
 
+const deposit = defineCommand({
+  meta: {
+    name: "deposit",
+    description: "Use official Polymarket Bridge deposit endpoints",
+  },
+  subCommands: {
+    "supported-assets": () =>
+      defineCommand({
+        meta: {
+          name: "supported-assets",
+          description: "List chains and tokens supported by official deposits",
+        },
+        args: JSON_OUTPUT_ARGS,
+        async run({ args }) {
+          emitData(args, await createBridge().getSupportedAssets());
+        },
+      }),
+    addresses: () =>
+      defineCommand({
+        meta: {
+          name: "addresses",
+          description:
+            "Create official deposit addresses for the active signer's deposit wallet",
+        },
+        args: JSON_OUTPUT_ARGS,
+        async run({ args }) {
+          const signer = await getActiveWalletPort("evm");
+          const owner = validateRequiredAddress(signer.address, "owner");
+          const depositWallet = getPolymarketDepositWalletAddress(owner);
+          const response =
+            await createBridge().createDepositAddresses(depositWallet);
+
+          emitData(args, {
+            chain: "polygon",
+            owner,
+            depositWallet,
+            depositAddresses: response.address,
+            note: response.note ?? null,
+          });
+        },
+      }),
+    status: () =>
+      defineCommand({
+        meta: {
+          name: "status",
+          description:
+            "Get official deposit status for an address returned by deposit addresses",
+        },
+        args: {
+          address: {
+            type: "positional",
+            required: true,
+            description: "Official bridge deposit address",
+          },
+          ...JSON_OUTPUT_ARGS,
+        },
+        async run({ args }) {
+          emitData(args, {
+            depositAddress: args.address,
+            status: await createBridge().getStatus(args.address),
+          });
+        },
+      }),
+  },
+});
+
+const depositWallet = defineCommand({
+  meta: {
+    name: "deposit-wallet",
+    description: "Manage the active signer's Polymarket deposit wallet",
+  },
+  subCommands: {
+    address: () =>
+      defineCommand({
+        meta: {
+          name: "address",
+          description: "Derive the active signer's deposit wallet address",
+        },
+        args: JSON_OUTPUT_ARGS,
+        async run({ args }) {
+          const signer = await getActiveWalletPort("evm");
+          const owner = validateRequiredAddress(signer.address, "owner");
+          emitData(args, {
+            chain: "polygon",
+            depositWallet: getPolymarketDepositWalletAddress(owner),
+            owner,
+          });
+        },
+      }),
+    deployed: () =>
+      defineCommand({
+        meta: {
+          name: "deployed",
+          description: "Check whether a deposit wallet is deployed",
+        },
+        args: {
+          ...POLYMARKET_AUTH_ARGS,
+          "relayer-url": RELAYER_ARGS["relayer-url"],
+          ...JSON_OUTPUT_ARGS,
+        },
+        async run({ args }) {
+          const address = await resolveDepositWalletArg(args);
+          const relayer = createRelayer(args);
+          emitData(args, {
+            chain: "polygon",
+            depositWallet: address,
+            deployed: await relayer.getDeployed(address),
+          });
+        },
+      }),
+    deploy: () =>
+      defineCommand({
+        meta: {
+          name: "deploy",
+          description: "Deploy the active signer's deposit wallet via relayer",
+        },
+        args: {
+          "relayer-url": RELAYER_ARGS["relayer-url"],
+          ...WRITE_ARGS,
+        },
+        async run({ args }) {
+          const signer = await getActiveWalletPort("evm");
+          const owner = validateRequiredAddress(signer.address, "owner");
+          const address = getPolymarketDepositWalletAddress(owner);
+          const preview = {
+            action: "Deploy Polymarket deposit wallet",
+            details: {
+              chain: "polygon",
+              depositWallet: address,
+              owner,
+            },
+          };
+          const confirmed = await confirmTransaction(preview, args);
+          if (!confirmed) {
+            emitData(
+              args,
+              createExecutionPlan({
+                summary: "Deploy Polymarket deposit wallet via relayer",
+                group: "prediction",
+                protocol: "polymarket",
+                command: "deposit-wallet",
+                chain: "polygon",
+                accountType: "evm",
+                steps: [
+                  createTransactionStep("Submit WALLET-CREATE to relayer", {
+                    depositWallet: address,
+                    owner,
+                  }),
+                ],
+              }),
+            );
+            return;
+          }
+
+          const relayer = createRelayer(args);
+          const deployed = await relayer.getDeployed(address);
+          if (deployed) {
+            emitData(args, {
+              chain: "polygon",
+              depositWallet: address,
+              deployed: true,
+              owner,
+              status: "already-deployed",
+            });
+            return;
+          }
+
+          const submitted = await relayer.deployDepositWallet(owner);
+          const transaction = await relayer.waitForTransaction(
+            submitted.transactionID,
+          );
+          emitData(args, {
+            chain: "polygon",
+            depositWallet: address,
+            deployed: true,
+            owner,
+            relayerTransaction: transaction ?? submitted,
+          });
+        },
+      }),
+  },
+});
+
 const approve = defineCommand({
   meta: {
     name: "approve",
-    description: "Check or set Polymarket trading approvals",
+    description: "Check or set Polymarket deposit wallet trading approvals",
   },
   subCommands: {
     check: () =>
       defineCommand({
         meta: {
           name: "check",
-          description: "Check Polygon approvals required for Polymarket",
+          description: "Check deposit wallet approvals required for Polymarket",
         },
         args: {
-          address: {
-            type: "string",
-            required: false,
-            description: "Wallet address",
-          },
+          ...POLYMARKET_AUTH_ARGS,
           ...JSON_OUTPUT_ARGS,
         },
         async run({ args }) {
-          const address = args.address
-            ? validateRequiredAddress(args.address, "address")
-            : validateRequiredAddress(
-                await resolvePolymarketAddress(),
-                "address",
-              );
+          const address = await resolveDepositWalletArg(args);
           emitData(args, {
             address,
+            mode: "deposit-wallet",
             approvals: await readApprovalStatus(address),
           });
         },
@@ -1993,17 +2223,24 @@ const approve = defineCommand({
       defineCommand({
         meta: {
           name: "set",
-          description: "Approve Polymarket exchange contracts on Polygon",
+          description:
+            "Approve Polymarket exchange contracts from a deposit wallet",
         },
-        args: WRITE_ARGS,
+        args: {
+          ...RELAYER_ARGS,
+          ...WRITE_ARGS,
+        },
         async run({ args }) {
           const contractConfig = getPolymarketContractConfig();
           const targets = getApprovalTargets();
+          const approvalCalls = createApprovalCalls();
           const preview = {
-            action: "Approve Polymarket exchange contracts",
+            action: "Approve Polymarket deposit wallet exchange contracts",
             details: {
               chain: "polygon",
+              mode: "deposit-wallet",
               targets: targets.length,
+              calls: approvalCalls.length,
               collateral: contractConfig.collateral,
               conditionalTokens: contractConfig.conditionalTokens,
             },
@@ -2014,7 +2251,8 @@ const approve = defineCommand({
             emitData(
               args,
               createExecutionPlan({
-                summary: "Approve Polymarket trading contracts on Polygon",
+                summary:
+                  "Approve Polymarket trading contracts through a deposit wallet WALLET batch",
                 group: "prediction",
                 protocol: "polymarket",
                 command: "approve",
@@ -2040,94 +2278,60 @@ const approve = defineCommand({
             return;
           }
 
-          const walletPort = await getActiveWalletPort("evm");
-          const publicClient = getPublicClient("polygon");
-          const polygonChainId = resolveChainId("polygon");
-          const results: Array<{
-            contract: string;
-            txHash: string;
-            type: "erc20" | "erc1155";
-          }> = [];
-
-          for (const target of targets) {
-            const approveHash = await walletPort.signAndSendTransaction(
-              polygonChainId,
-              {
-                format: "evm-transaction",
-                to: contractConfig.collateral,
-                data: encodeFunctionData({
-                  abi: erc20Abi,
-                  functionName: "approve",
-                  args: [target.address, maxUint256],
-                }),
-              },
-              {
-                group: "prediction",
-                protocol: "polymarket",
-                command: "approve",
-              },
-              {
-                action: `Approve pUSD spend for ${target.name}`,
-                details: {
-                  contract: target.name,
-                  token: contractConfig.collateral,
-                  spender: target.address,
-                },
-              },
-              {
-                kind: "token-approval",
-                token: contractConfig.collateral,
-                spender: target.address,
-                amount: maxUint256,
-              },
+          const signer = await getActiveWalletPort("evm");
+          const owner = validateRequiredAddress(signer.address, "owner");
+          const depositWallet = await resolveDepositWalletArg(args);
+          const relayer = createRelayer(args);
+          const deployed = await relayer.getDeployed(depositWallet);
+          if (!deployed) {
+            throw new Error(
+              `Deposit wallet ${depositWallet} is not deployed. Run \`wooo-cli prediction polymarket deposit-wallet deploy --yes\` first.`,
             );
-            await publicClient.waitForTransactionReceipt({
-              hash: approveHash as Hash,
-            });
-            results.push({
-              contract: target.name,
-              txHash: approveHash,
-              type: "erc20",
-            });
-
-            const approvalForAllHash = await walletPort.signAndSendTransaction(
-              polygonChainId,
-              {
-                format: "evm-transaction",
-                to: contractConfig.conditionalTokens,
-                data: encodeFunctionData({
-                  abi: ERC1155_ABI,
-                  functionName: "setApprovalForAll",
-                  args: [target.address, true],
-                }),
-              },
-              {
-                group: "prediction",
-                protocol: "polymarket",
-                command: "approve",
-              },
-              {
-                action: `Approve conditional tokens for ${target.name}`,
-                details: {
-                  contract: target.name,
-                  operator: target.address,
-                  approved: true,
-                },
-              },
-            );
-            await publicClient.waitForTransactionReceipt({
-              hash: approvalForAllHash as Hash,
-            });
-            results.push({
-              contract: target.name,
-              txHash: approvalForAllHash,
-              type: "erc1155",
-            });
           }
+
+          const deadlineSeconds = validatePositiveInteger(
+            args["deadline-seconds"],
+            "deadline-seconds",
+            240,
+          );
+          const deadline = Math.floor(
+            Date.now() / 1000 + deadlineSeconds,
+          ).toString();
+          const submitted = await relayer.executeDepositWalletBatch({
+            calls: approvalCalls,
+            deadline,
+            owner,
+            signer,
+            walletAddress: depositWallet,
+          });
+          const transaction = await relayer.waitForTransaction(
+            submitted.transactionID,
+          );
+
+          const authed =
+            await new PolymarketClient().createAuthenticatedClobClient(
+              await resolveAuth({ "deposit-wallet": depositWallet }),
+            );
+          await authed.updateBalanceAllowance({
+            asset_type: AssetType.COLLATERAL,
+          });
 
           emitData(args, {
             chain: "polygon",
-            results,
+            depositWallet,
+            mode: "deposit-wallet",
+            owner,
+            relayerTransaction: transaction ?? submitted,
+            results: targets.flatMap((target) => [
+              {
+                contract: target.name,
+                type: "erc20",
+              },
+              {
+                contract: target.name,
+                type: "erc1155",
+              },
+            ]),
           });
         },
       }),
@@ -2154,6 +2358,8 @@ export const polymarketProtocol: ProtocolDefinition = {
         sports: () => Promise.resolve(sports),
         data: () => Promise.resolve(data),
         clob: () => Promise.resolve(clob),
+        deposit: () => Promise.resolve(deposit),
+        "deposit-wallet": () => Promise.resolve(depositWallet),
         approve: () => Promise.resolve(approve),
       },
     }),
