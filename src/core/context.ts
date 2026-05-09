@@ -14,6 +14,8 @@ import {
   type WalletPort,
 } from "./signers";
 
+type WalletMode = "local" | "remote";
+
 // ---------------------------------------------------------------------------
 // Singleton remote account registry
 // ---------------------------------------------------------------------------
@@ -40,6 +42,17 @@ function walletExists(name: string): boolean {
   } catch {
     return Boolean(getRemoteAccountRegistry().get(name));
   }
+}
+
+function readWalletMode(): WalletMode | undefined {
+  const rawValue = process.env.WOOO_WALLET_MODE?.trim().toLowerCase();
+  if (!rawValue) {
+    return undefined;
+  }
+  if (rawValue === "local" || rawValue === "remote") {
+    return rawValue;
+  }
+  throw new Error('WOOO_WALLET_MODE must be "local" or "remote".');
 }
 
 export function bootstrapDefaultWallet(walletName: string): void {
@@ -71,59 +84,74 @@ export async function resolveAccount(
   const chainId = resolveChainId(chainAlias);
   const chainFamily = getChainFamily(chainId);
   const vaultPath = getVaultPath();
+  const configuredWalletMode = readWalletMode();
+  const walletMode = configuredWalletMode ?? "local";
 
   // Try OWS vault first
-  try {
-    const owsWallet = getWallet(accountLabel, vaultPath);
-    // Match by chain family: same EVM address across all eip155:* chains
-    const account = owsWallet.accounts.find((a) => {
-      try {
-        return getChainFamily(a.chainId) === chainFamily;
-      } catch {
-        return false;
+  if (walletMode !== "remote") {
+    try {
+      const owsWallet = getWallet(accountLabel, vaultPath);
+      // Match by chain family: same EVM address across all eip155:* chains
+      const account = owsWallet.accounts.find((a) => {
+        try {
+          return getChainFamily(a.chainId) === chainFamily;
+        } catch {
+          return false;
+        }
+      });
+      if (!account) {
+        throw new Error(
+          `Wallet "${accountLabel}" has no ${chainFamily} account`,
+        );
       }
-    });
-    if (!account) {
-      throw new Error(`Wallet "${accountLabel}" has no ${chainFamily} account`);
+      return {
+        address: account.address,
+        chainFamily,
+        chainId,
+        custody: "local",
+        label: accountLabel,
+        vaultPath,
+        walletId: owsWallet.id,
+      };
+    } catch (err) {
+      // If the error is the chain-family mismatch we surfaced ourselves, re-throw
+      if (err instanceof Error && err.message.includes("has no")) {
+        throw err;
+      }
+      if (configuredWalletMode === "local") {
+        throw new Error(
+          `Local wallet "${accountLabel}" not found, and WOOO_WALLET_MODE=local forbids remote accounts.`,
+        );
+      }
     }
-    return {
-      address: account.address,
-      chainFamily,
-      chainId,
-      custody: "local",
-      label: accountLabel,
-      vaultPath,
-      walletId: owsWallet.id,
-    };
-  } catch (err) {
-    // If the error is the chain-family mismatch we surfaced ourselves, re-throw
-    if (err instanceof Error && err.message.includes("has no")) {
-      throw err;
-    }
-    // Otherwise assume wallet isn't in OWS — fall through to external registry
   }
 
-  // Try external registry
-  const remoteAccount = getRemoteAccountRegistry().get(accountLabel);
-  if (remoteAccount) {
-    if (remoteAccount.chainFamily !== chainFamily) {
-      throw new Error(
-        `Account "${accountLabel}" is ${remoteAccount.chainFamily}, but chain ${chainAlias} requires ${chainFamily}`,
-      );
+  if (walletMode === "remote") {
+    const remoteAccount = getRemoteAccountRegistry().get(accountLabel);
+    if (remoteAccount) {
+      if (remoteAccount.chainFamily !== chainFamily) {
+        throw new Error(
+          `Account "${accountLabel}" is ${remoteAccount.chainFamily}, but chain ${chainAlias} requires ${chainFamily}`,
+        );
+      }
+      return {
+        address: remoteAccount.address,
+        authEnv: remoteAccount.authEnv,
+        chainFamily,
+        chainId,
+        custody: "remote",
+        label: accountLabel,
+        signerUrl: remoteAccount.signerUrl,
+      };
     }
-    return {
-      address: remoteAccount.address,
-      authEnv: remoteAccount.authEnv,
-      chainFamily,
-      chainId,
-      custody: "remote",
-      label: accountLabel,
-      signerUrl: remoteAccount.signerUrl,
-    };
+
+    throw new Error(
+      `Remote account "${accountLabel}" not found, and WOOO_WALLET_MODE=remote forbids local wallets.`,
+    );
   }
 
   throw new Error(
-    `Wallet "${accountLabel}" not found. Run \`wooo wallet create\` to create a new wallet or \`wooo wallet connect\` to add a remote account.`,
+    `Local wallet "${accountLabel}" not found. Run \`wooo wallet create\` to create a local wallet, or set WOOO_WALLET_MODE=remote to use a connected remote account.`,
   );
 }
 

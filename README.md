@@ -330,6 +330,17 @@ wooo-cli wallet connect my-signer --signer http://127.0.0.1:8787/
 wooo-cli wallet connect remote --signer https://signer.example.com --auth-env WOOO_SIGNER_AUTH_TOKEN
 ```
 
+Wallet custody mode is explicit and does not fall back between local and remote
+custody. The default is local-only. To use a connected remote account, set:
+
+```bash
+export WOOO_WALLET_MODE=remote
+```
+
+When `WOOO_WALLET_MODE=remote` is set, active wallet resolution only uses
+connected remote accounts and fails instead of using a local wallet. Use
+`WOOO_WALLET_MODE=local` or leave it unset for local-only custody.
+
 Reference signer implementations ship in `src/examples/`:
 
 ```bash

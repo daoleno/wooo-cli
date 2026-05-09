@@ -200,6 +200,11 @@ wooo-cli wallet connect <name> --signer <url> [--address <addr>] [--auth-env <va
 wooo-cli wallet disconnect <name>
 ```
 
+Wallet custody mode is explicit and does not fall back between local and remote
+custody. The default is local-only. Set `WOOO_WALLET_MODE=remote` to use
+connected remote accounts; resolution will fail instead of using a local wallet.
+Use `WOOO_WALLET_MODE=local` or leave it unset for local-only custody.
+
 Policy & API key management:
 
 ```bash
