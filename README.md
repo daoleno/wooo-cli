@@ -158,13 +158,14 @@ wooo-cli prediction polymarket approve set --dry-run
 wooo-cli prediction polymarket clob create-order --token <tokenId> --side buy --price 0.42 --size 10 --dry-run
 ```
 
-Polymarket trading uses the current deposit wallet flow. The CLI derives the
-deposit wallet for the active EVM signer by default, creates official Bridge
-deposit addresses for that wallet, submits approval batches through the
-Polymarket relayer, and posts CLOB orders with `POLY_1271`. Set
-`RELAYER_API_KEY` and `RELAYER_API_KEY_ADDRESS` for relayer authentication.
-Use `--deposit-wallet <address>` only when your signer controls a specific
-existing deposit wallet.
+Polymarket trading uses the current deposit wallet flow. The active EVM signer
+signs CLOB orders and deposit wallet batches; the target deposit wallet is
+resolved from `WOOO_POLYMARKET_OWNER`, `WOOO_POLYMARKET_DEPOSIT_WALLET`,
+`--deposit-wallet`, or, when no target is configured, the active signer as
+owner. If both owner and deposit wallet are provided, the wallet must equal the
+deterministic deposit wallet for that owner. Set
+`WOOO_POLYMARKET_RELAYER_API_KEY` and
+`WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS` for relayer authentication.
 
 ### On-Chain Utilities
 
@@ -340,6 +341,22 @@ export WOOO_WALLET_MODE=remote
 When `WOOO_WALLET_MODE=remote` is set, active wallet resolution only uses
 connected remote accounts and fails instead of using a local wallet. Use
 `WOOO_WALLET_MODE=local` or leave it unset for local-only custody.
+
+For unattended Polymarket agents, keep the signer custody and Polymarket target
+account explicit:
+
+```bash
+export WOOO_WALLET_MODE=remote
+export WOOO_POLYMARKET_OWNER=0xUserOwner...
+# or, when you intentionally bind directly to a deployed deposit wallet:
+export WOOO_POLYMARKET_DEPOSIT_WALLET=0xDepositWallet...
+export WOOO_POLYMARKET_RELAYER_API_KEY=...
+export WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS=...
+```
+
+The CLI does not have a session mode. A local or remote signer may be the owner
+or an authorized session signer; Polymarket commands bind that signer to a
+specific target deposit wallet and fail on owner/deposit wallet mismatches.
 
 Reference signer implementations ship in `src/examples/`:
 

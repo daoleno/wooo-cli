@@ -8,7 +8,6 @@ import {
   parseAbi,
 } from "viem";
 import { confirmTransaction } from "../../core/confirm";
-import { getActiveWalletPort } from "../../core/context";
 import { getPublicClient } from "../../core/evm";
 import {
   createApprovalStep,
@@ -20,7 +19,6 @@ import type { ProtocolDefinition } from "../types";
 import {
   AssetType,
   getPolymarketContractConfig,
-  getPolymarketDepositWalletAddress,
   OrderType,
   type PolymarketAuthOptions,
   PolymarketBridgeClient,
@@ -32,7 +30,9 @@ import {
   PolymarketRelayerClient,
   type PolymarketSeriesListParams,
   type PolymarketTeamListParams,
+  resolvePolymarketAccountBinding,
   resolvePolymarketAuthOptions,
+  resolvePolymarketDeploymentOwner,
   resolvePolymarketDepositWalletAddress,
   Side,
 } from "./client";
@@ -57,7 +57,7 @@ const POLYMARKET_AUTH_ARGS = {
   "deposit-wallet": {
     type: "string" as const,
     description:
-      "Deposit wallet address to use as CLOB funder (default: deterministic wallet for active EVM signer)",
+      "Deposit wallet address to use as CLOB funder. Must match WOOO_POLYMARKET_OWNER when that owner is configured.",
     required: false,
   },
 };
@@ -2033,22 +2033,30 @@ const deposit = defineCommand({
         meta: {
           name: "addresses",
           description:
-            "Create official deposit addresses for the active signer's deposit wallet",
+            "Create official deposit addresses for the configured deposit wallet",
         },
-        args: JSON_OUTPUT_ARGS,
+        args: {
+          ...POLYMARKET_AUTH_ARGS,
+          ...JSON_OUTPUT_ARGS,
+        },
         async run({ args }) {
-          const signer = await getActiveWalletPort("evm");
-          const owner = validateRequiredAddress(signer.address, "owner");
-          const depositWallet = getPolymarketDepositWalletAddress(owner);
+          const binding = await resolvePolymarketAccountBinding({
+            depositWalletAddress: validateAddress(
+              args["deposit-wallet"],
+              "deposit wallet",
+            ),
+          });
+          const depositWallet = binding.depositWalletAddress;
           const response =
             await createBridge().createDepositAddresses(depositWallet);
 
           emitData(args, {
             chain: "polygon",
-            owner,
             depositWallet,
             depositAddresses: response.address,
             note: response.note ?? null,
+            owner: binding.ownerAddress ?? null,
+            signer: binding.signerAddress,
           });
         },
       }),
@@ -2080,23 +2088,31 @@ const deposit = defineCommand({
 const depositWallet = defineCommand({
   meta: {
     name: "deposit-wallet",
-    description: "Manage the active signer's Polymarket deposit wallet",
+    description: "Manage a Polymarket deposit wallet",
   },
   subCommands: {
     address: () =>
       defineCommand({
         meta: {
           name: "address",
-          description: "Derive the active signer's deposit wallet address",
+          description: "Resolve the configured deposit wallet address",
         },
-        args: JSON_OUTPUT_ARGS,
+        args: {
+          ...POLYMARKET_AUTH_ARGS,
+          ...JSON_OUTPUT_ARGS,
+        },
         async run({ args }) {
-          const signer = await getActiveWalletPort("evm");
-          const owner = validateRequiredAddress(signer.address, "owner");
+          const binding = await resolvePolymarketAccountBinding({
+            depositWalletAddress: validateAddress(
+              args["deposit-wallet"],
+              "deposit wallet",
+            ),
+          });
           emitData(args, {
             chain: "polygon",
-            depositWallet: getPolymarketDepositWalletAddress(owner),
-            owner,
+            depositWallet: binding.depositWalletAddress,
+            owner: binding.ownerAddress ?? null,
+            signer: binding.signerAddress,
           });
         },
       }),
@@ -2125,16 +2141,22 @@ const depositWallet = defineCommand({
       defineCommand({
         meta: {
           name: "deploy",
-          description: "Deploy the active signer's deposit wallet via relayer",
+          description: "Deploy the configured deposit wallet via relayer",
         },
         args: {
+          ...POLYMARKET_AUTH_ARGS,
           "relayer-url": RELAYER_ARGS["relayer-url"],
           ...WRITE_ARGS,
         },
         async run({ args }) {
-          const signer = await getActiveWalletPort("evm");
-          const owner = validateRequiredAddress(signer.address, "owner");
-          const address = getPolymarketDepositWalletAddress(owner);
+          const binding = await resolvePolymarketAccountBinding({
+            depositWalletAddress: validateAddress(
+              args["deposit-wallet"],
+              "deposit wallet",
+            ),
+          });
+          const owner = resolvePolymarketDeploymentOwner(binding);
+          const address = binding.depositWalletAddress;
           const preview = {
             action: "Deploy Polymarket deposit wallet",
             details: {
@@ -2278,9 +2300,13 @@ const approve = defineCommand({
             return;
           }
 
-          const signer = await getActiveWalletPort("evm");
-          const owner = validateRequiredAddress(signer.address, "owner");
-          const depositWallet = await resolveDepositWalletArg(args);
+          const binding = await resolvePolymarketAccountBinding({
+            depositWalletAddress: validateAddress(
+              args["deposit-wallet"],
+              "deposit wallet",
+            ),
+          });
+          const depositWallet = binding.depositWalletAddress;
           const relayer = createRelayer(args);
           const deployed = await relayer.getDeployed(depositWallet);
           if (!deployed) {
@@ -2300,8 +2326,7 @@ const approve = defineCommand({
           const submitted = await relayer.executeDepositWalletBatch({
             calls: approvalCalls,
             deadline,
-            owner,
-            signer,
+            signer: binding.signer,
             walletAddress: depositWallet,
           });
           const transaction = await relayer.waitForTransaction(
@@ -2320,7 +2345,7 @@ const approve = defineCommand({
             chain: "polygon",
             depositWallet,
             mode: "deposit-wallet",
-            owner,
+            owner: binding.ownerAddress ?? null,
             relayerTransaction: transaction ?? submitted,
             results: targets.flatMap((target) => [
               {

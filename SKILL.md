@@ -376,9 +376,9 @@ wooo-cli prediction polymarket markets list [--limit 10]
 wooo-cli prediction polymarket events get <eventId>
 wooo-cli prediction polymarket clob ok                    # Check CLOB connectivity
 wooo-cli prediction polymarket deposit supported-assets   # Official Bridge supported chains/tokens
-wooo-cli prediction polymarket deposit addresses          # Official deposit addresses for active deposit wallet
+wooo-cli prediction polymarket deposit addresses          # Official deposit addresses for configured deposit wallet
 wooo-cli prediction polymarket deposit status <address>   # Official deposit status
-wooo-cli prediction polymarket deposit-wallet address     # Derive active signer's deposit wallet
+wooo-cli prediction polymarket deposit-wallet address     # Resolve configured deposit wallet
 wooo-cli prediction polymarket deposit-wallet deploy [--dry-run]
 wooo-cli prediction polymarket approve check              # Check deposit wallet approvals
 wooo-cli prediction polymarket approve set [--dry-run]    # Set approvals through relayer WALLET batch
@@ -387,12 +387,15 @@ wooo-cli prediction polymarket clob market-order --token <tokenId> --side buy --
 ```
 
 Polymarket trading uses deposit wallets and CLOB `POLY_1271` signatures. The
-CLI derives the active signer's deposit wallet by default. Use
-`--deposit-wallet <address>` only when an approved signer should trade from a
-specific existing deposit wallet. Official Bridge deposit addresses are created
-for the derived deposit wallet. Deposit wallet deployment and approval writes go
-through the Polymarket relayer; set `RELAYER_API_KEY` and
-`RELAYER_API_KEY_ADDRESS` for relayer authentication.
+active signer comes from `WOOO_WALLET_MODE`; the target deposit wallet resolves
+from `WOOO_POLYMARKET_OWNER`, `WOOO_POLYMARKET_DEPOSIT_WALLET`,
+`--deposit-wallet`, or, when no target is configured, the active signer as
+owner. If both owner and deposit wallet are provided, the deposit wallet must be
+the deterministic wallet for that owner. The CLI has no Polymarket session
+mode; owner/session authority belongs to the signer and Deposit Wallet
+contract. Deposit wallet deployment and approval writes go through the
+Polymarket relayer; set `WOOO_POLYMARKET_RELAYER_API_KEY` and
+`WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS` for relayer authentication.
 
 ### Cross-Chain Bridges
 

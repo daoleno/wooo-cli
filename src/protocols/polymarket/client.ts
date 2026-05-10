@@ -65,6 +65,18 @@ export interface PolymarketAuthOptions {
   depositWalletAddress: Address;
 }
 
+export interface PolymarketAccountBindingInput {
+  depositWalletAddress?: string;
+  ownerAddress?: string;
+}
+
+export interface PolymarketAccountBinding {
+  depositWalletAddress: Address;
+  ownerAddress?: Address;
+  signer: WalletPort;
+  signerAddress: Address;
+}
+
 export interface PolymarketDepositWalletCall {
   data: Hex;
   target: Address;
@@ -241,17 +253,46 @@ function requireOptionalAddress(value: string | undefined, field: string) {
   return requireAddress(value, field);
 }
 
+function readOptionalAddressEnv(
+  envKey: string,
+  field: string,
+): Address | undefined {
+  const value = process.env[envKey]?.trim();
+  if (!value) {
+    return undefined;
+  }
+  return requireAddress(value, field);
+}
+
+function addressesEqual(a: Address, b: Address): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function combineOptionalAddresses(
+  first: Address | undefined,
+  firstLabel: string,
+  second: Address | undefined,
+  secondLabel: string,
+): Address | undefined {
+  if (first && second && !addressesEqual(first, second)) {
+    throw new Error(
+      `Polymarket address mismatch: ${firstLabel} ${first} does not match ${secondLabel} ${second}.`,
+    );
+  }
+  return first ?? second;
+}
+
 function readRelayerApiCreds() {
-  const key = process.env.RELAYER_API_KEY;
-  const address = process.env.RELAYER_API_KEY_ADDRESS;
+  const key = process.env.WOOO_POLYMARKET_RELAYER_API_KEY;
+  const address = process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS;
 
   if (!key || !address) {
     throw new Error(
-      "Polymarket relayer auth is required. Set RELAYER_API_KEY and RELAYER_API_KEY_ADDRESS.",
+      "Polymarket relayer auth is required. Set WOOO_POLYMARKET_RELAYER_API_KEY and WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS.",
     );
   }
   return {
-    address: requireAddress(address, "RELAYER_API_KEY_ADDRESS"),
+    address: requireAddress(address, "WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS"),
     key,
   };
 }
@@ -475,19 +516,105 @@ export function getPolymarketDepositWalletAddress(owner: Address): Address {
   return deriveDepositWalletAddress(owner);
 }
 
+export function resolvePolymarketAccountBindingFromSigner(
+  signer: WalletPort,
+  input: PolymarketAccountBindingInput = {},
+): PolymarketAccountBinding {
+  const signerAddress = requireAddress(signer.address, "active signer");
+  const ownerFromInput = requireOptionalAddress(input.ownerAddress, "owner");
+  const ownerFromEnv = readOptionalAddressEnv(
+    "WOOO_POLYMARKET_OWNER",
+    "WOOO_POLYMARKET_OWNER",
+  );
+  const ownerAddress = combineOptionalAddresses(
+    ownerFromInput,
+    "owner",
+    ownerFromEnv,
+    "WOOO_POLYMARKET_OWNER",
+  );
+  const depositWalletFromInput = requireOptionalAddress(
+    input.depositWalletAddress,
+    "deposit wallet",
+  );
+  const depositWalletFromEnv = readOptionalAddressEnv(
+    "WOOO_POLYMARKET_DEPOSIT_WALLET",
+    "WOOO_POLYMARKET_DEPOSIT_WALLET",
+  );
+  const explicitDepositWallet = combineOptionalAddresses(
+    depositWalletFromInput,
+    "--deposit-wallet",
+    depositWalletFromEnv,
+    "WOOO_POLYMARKET_DEPOSIT_WALLET",
+  );
+
+  if (ownerAddress) {
+    const derivedDepositWallet = deriveDepositWalletAddress(ownerAddress);
+    if (
+      explicitDepositWallet &&
+      !addressesEqual(explicitDepositWallet, derivedDepositWallet)
+    ) {
+      throw new Error(
+        `Polymarket deposit wallet mismatch: ${explicitDepositWallet} does not match the deterministic deposit wallet ${derivedDepositWallet} for owner ${ownerAddress}.`,
+      );
+    }
+    return {
+      depositWalletAddress: derivedDepositWallet,
+      ownerAddress,
+      signer,
+      signerAddress,
+    };
+  }
+
+  if (explicitDepositWallet) {
+    return {
+      depositWalletAddress: explicitDepositWallet,
+      signer,
+      signerAddress,
+    };
+  }
+
+  return {
+    depositWalletAddress: deriveDepositWalletAddress(signerAddress),
+    ownerAddress: signerAddress,
+    signer,
+    signerAddress,
+  };
+}
+
+export async function resolvePolymarketAccountBinding(
+  input: PolymarketAccountBindingInput = {},
+): Promise<PolymarketAccountBinding> {
+  return resolvePolymarketAccountBindingFromSigner(
+    await getActiveWalletPort("evm"),
+    input,
+  );
+}
+
+export function resolvePolymarketDeploymentOwner(
+  binding: PolymarketAccountBinding,
+): Address {
+  if (binding.ownerAddress) {
+    return binding.ownerAddress;
+  }
+
+  const signerDepositWallet = deriveDepositWalletAddress(binding.signerAddress);
+  if (addressesEqual(signerDepositWallet, binding.depositWalletAddress)) {
+    return binding.signerAddress;
+  }
+
+  throw new Error(
+    "Polymarket owner is required for this operation. Set WOOO_POLYMARKET_OWNER to the owner that derives the target deposit wallet.",
+  );
+}
+
 export async function resolvePolymarketDepositWalletAddress(
   depositWalletAddress?: string,
 ): Promise<Address> {
-  const explicit = requireOptionalAddress(
-    depositWalletAddress,
-    "deposit wallet",
-  );
-  if (explicit) {
-    return explicit;
-  }
-
-  const signer = await getActiveWalletPort("evm");
-  return deriveDepositWalletAddress(requireAddress(signer.address, "owner"));
+  return (
+    await resolvePolymarketAccountBinding({
+      depositWalletAddress,
+    })
+  ).depositWalletAddress;
 }
 
 export async function resolvePolymarketAuthOptions(
@@ -632,14 +759,14 @@ export class PolymarketRelayerClient {
   async executeDepositWalletBatch(params: {
     calls: PolymarketDepositWalletCall[];
     deadline: string;
-    owner: Address;
     signer: WalletPort;
     walletAddress: Address;
   }) {
     if (params.calls.length === 0) {
       throw new Error("At least one deposit wallet call is required.");
     }
-    const { nonce } = await this.getNonce(params.owner, "WALLET");
+    const signerAddress = requireAddress(params.signer.address, "signer");
+    const { nonce } = await this.getNonce(signerAddress, "WALLET");
     const signature = await params.signer.signTypedData(
       resolveChainId("polygon"),
       {
@@ -687,7 +814,7 @@ export class PolymarketRelayerClient {
             deadline: params.deadline,
             depositWallet: params.walletAddress,
           },
-          from: params.owner,
+          from: signerAddress,
           nonce,
           signature,
           to: DEPOSIT_WALLET_FACTORY,
