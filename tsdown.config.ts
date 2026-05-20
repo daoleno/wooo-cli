@@ -10,6 +10,7 @@ export default defineConfig({
     neverBundle: [
       "ccxt",
       "@open-wallet-standard/core",
+      "@napi-rs/keyring",
     ],
     onlyAllowBundle: false,
   },

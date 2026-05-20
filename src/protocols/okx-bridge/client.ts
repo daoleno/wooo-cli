@@ -1,4 +1,10 @@
 import { createHmac } from "node:crypto";
+import { loadWoooConfig } from "../../core/config";
+import {
+  getCredentialField,
+  getCredentialService,
+  requireCredentialField,
+} from "../../core/credentials";
 import {
   type BridgeTokenMetadata,
   findTokenMatch,
@@ -39,24 +45,46 @@ export function createOkxSignatureHeaders(
   };
 }
 
-function resolveAuth(): OkxApiAuth {
-  const apiKey = process.env.WOOO_OKX_API_KEY;
-  const secretKey = process.env.WOOO_OKX_API_SECRET;
-  const passphrase = process.env.WOOO_OKX_PASSPHRASE;
-  const projectId = process.env.WOOO_OKX_PROJECT_ID;
-  if (!apiKey || !secretKey || !passphrase || !projectId) {
+async function resolveAuth(): Promise<OkxApiAuth> {
+  const config = await loadWoooConfig();
+  const credentials = getCredentialService("okx-onchain");
+  const projectId = config.okxOnchain?.projectId;
+  if (typeof projectId !== "string" || !projectId.trim()) {
     throw new Error(
-      "OKX Bridge requires WOOO_OKX_API_KEY, WOOO_OKX_API_SECRET, WOOO_OKX_PASSPHRASE, and WOOO_OKX_PROJECT_ID environment variables",
+      "OKX Bridge requires an OKX Onchain project ID. Run `wooo-cli auth set okx-onchain --project-id <id>` or set config okxOnchain.projectId.",
     );
   }
-  return { apiKey, secretKey, passphrase, projectId };
+  return {
+    apiKey: (
+      await requireCredentialField({
+        config,
+        field: getCredentialField(credentials, "apiKey"),
+        service: credentials,
+      })
+    ).reveal(),
+    secretKey: (
+      await requireCredentialField({
+        config,
+        field: getCredentialField(credentials, "secret"),
+        service: credentials,
+      })
+    ).reveal(),
+    passphrase: (
+      await requireCredentialField({
+        config,
+        field: getCredentialField(credentials, "passphrase"),
+        service: credentials,
+      })
+    ).reveal(),
+    projectId: projectId.trim(),
+  };
 }
 
 export class OkxBridgeClient {
-  private auth: OkxApiAuth;
+  private auth: OkxApiAuth | undefined;
 
   constructor(auth?: OkxApiAuth) {
-    this.auth = auth ?? resolveAuth();
+    this.auth = auth;
   }
 
   private async request<T>(
@@ -64,6 +92,7 @@ export class OkxBridgeClient {
     path: string,
     params?: Record<string, string>,
   ): Promise<T> {
+    this.auth ??= await resolveAuth();
     const queryString = params ? new URLSearchParams(params).toString() : "";
     const headers = createOkxSignatureHeaders({
       ...this.auth,

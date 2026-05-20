@@ -1,4 +1,10 @@
 import { loadWoooConfig } from "../../core/config";
+import {
+  getCredentialField,
+  getCredentialService,
+  requireCredentialField,
+  resolveOptionalCredentialField,
+} from "../../core/credentials";
 import { ExchangeGateway } from "../../core/exchange-gateway";
 import {
   createExecutionPlan,
@@ -246,26 +252,35 @@ export async function resolveExchangeAuthFromConfig(
   exchangeId: string,
 ): Promise<CexClientOptions> {
   const config = await loadWoooConfig();
-  const exchangeConfig = config[exchangeId] as
-    | Record<string, string>
-    | undefined;
+  const credentials = getCredentialService(exchangeId);
+  const apiKeyField = getCredentialField(credentials, "apiKey");
+  const secretField = getCredentialField(credentials, "apiSecret");
+  const passphraseField = credentials.fields.find(
+    (field) => field.key === "passphrase",
+  );
+  const passphrase = passphraseField
+    ? await resolveOptionalCredentialField({
+        config,
+        field: passphraseField,
+        service: credentials,
+      })
+    : undefined;
 
-  const prefix = `WOOO_${exchangeId.toUpperCase()}_`;
-  const apiKey = process.env[`${prefix}API_KEY`] || exchangeConfig?.apiKey;
-  const secret =
-    process.env[`${prefix}API_SECRET`] || exchangeConfig?.apiSecret;
-  const password =
-    process.env[`${prefix}PASSPHRASE`] || exchangeConfig?.passphrase;
-
-  if (!apiKey || !secret) {
-    console.error(
-      `Error: ${exchangeId.toUpperCase()} API credentials not configured.`,
-    );
-    console.error(
-      `Set ${prefix}API_KEY and ${prefix}API_SECRET env vars, or run: wooo-cli config set ${exchangeId}.apiKey <key>`,
-    );
-    process.exit(3);
-  }
-
-  return { apiKey, secret, password };
+  return {
+    apiKey: (
+      await requireCredentialField({
+        config,
+        field: apiKeyField,
+        service: credentials,
+      })
+    ).reveal(),
+    secret: (
+      await requireCredentialField({
+        config,
+        field: secretField,
+        service: credentials,
+      })
+    ).reveal(),
+    password: passphrase?.reveal(),
+  };
 }

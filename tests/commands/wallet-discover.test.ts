@@ -138,8 +138,8 @@ describe("wallet discover command", () => {
           "discover",
           "--signer",
           server.url.toString(),
-          "--auth-env",
-          "WOOO_SIGNER_AUTH_TOKEN",
+          "--auth-ref",
+          "env:WOOO_SIGNER_AUTH_TOKEN",
           "--json",
         ],
         cwd: process.cwd(),
@@ -163,7 +163,7 @@ describe("wallet discover command", () => {
       expect(capturedAuthHeader).toBe("Bearer signer-token-test");
 
       const output = JSON.parse(stdout) as {
-        authEnv?: string;
+        authRef?: string;
         kind: string;
         signerUrl: string;
         transport: string;
@@ -175,7 +175,7 @@ describe("wallet discover command", () => {
       };
 
       expect(output.kind).toBe("wooo-wallet-transport");
-      expect(output.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
+      expect(output.authRef).toBe("env:WOOO_SIGNER_AUTH_TOKEN");
       expect(output.transport).toBe("http-signer");
       expect(output.signerUrl).toBe(server.url.toString());
       expect(output.accounts).toEqual([

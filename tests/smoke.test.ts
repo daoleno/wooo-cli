@@ -9,6 +9,7 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("config");
     expect(result).toContain("upgrade");
     expect(result).toContain("wallet");
+    expect(result).toContain("auth");
     expect(result).toContain("market");
     expect(result).toContain("portfolio");
     // Protocol groups instead of individual protocols
@@ -162,6 +163,13 @@ describe("wooo-cli smoke tests", () => {
     expect(result).toContain("ethereum");
   });
 
+  test("auth help shows credential commands", async () => {
+    const result = await $`bun run src/index.ts auth --help`.text();
+    expect(result).toContain("set");
+    expect(result).toContain("status");
+    expect(result).toContain("delete");
+  });
+
   test("wallet help shows subcommands", async () => {
     const result = await $`bun run src/index.ts wallet --help`.text();
     expect(result).toContain("create");
@@ -182,14 +190,14 @@ describe("wooo-cli smoke tests", () => {
   test("wallet connect help shows remote account transport options", async () => {
     const result = await $`bun run src/index.ts wallet connect --help`.text();
     expect(result).toContain("signer");
-    expect(result).toContain("auth-env");
+    expect(result).toContain("auth-ref");
     expect(result).toContain("HTTP signer");
   });
 
   test("wallet discover help shows signer options", async () => {
     const result = await $`bun run src/index.ts wallet discover --help`.text();
     expect(result).toContain("signer");
-    expect(result).toContain("auth-env");
+    expect(result).toContain("auth-ref");
     expect(result).toContain("HTTP signer");
   });
 

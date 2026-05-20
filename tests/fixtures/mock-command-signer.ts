@@ -46,7 +46,6 @@ async function main(): Promise<void> {
         {
           env: {
             WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR ?? null,
-            WOOO_MASTER_PASSWORD: process.env.WOOO_MASTER_PASSWORD ?? null,
             WOOO_SIGNER_TEST_VALUE: process.env.WOOO_SIGNER_TEST_VALUE ?? null,
           },
           request: {

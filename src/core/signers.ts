@@ -10,8 +10,11 @@ import { signHyperliquidL1Action } from "./hyperliquid-signing";
 import {
   ensureHexPrefix,
   exportOwsPrivateKey,
-  resolveOwsPassphrase,
+  type OwsAuth,
+  resolveOwsAuth,
+  withOwsApiKey,
 } from "./ows";
+import { requireSecret, validateSecretRef } from "./secrets";
 import type {
   ApprovalPrompt,
   EvmTypedDataSignRequest,
@@ -48,7 +51,7 @@ export type ResolvedAccount =
     }
   | {
       address: string;
-      authEnv?: string;
+      authRef?: string;
       chainFamily: "evm" | "solana";
       chainId: string;
       custody: "remote";
@@ -188,7 +191,7 @@ export class OwsSigner implements WalletPort {
   readonly address: string;
   private readonly walletId: string;
   private readonly vaultPath: string;
-  private cachedPassphrase: string | undefined | null = null; // null = not yet resolved
+  private cachedAuth: OwsAuth | null = null;
 
   constructor(wallet: Extract<ResolvedAccount, { custody: "local" }>) {
     this.accountLabel = wallet.label;
@@ -197,12 +200,21 @@ export class OwsSigner implements WalletPort {
     this.vaultPath = wallet.vaultPath;
   }
 
-  private async getPassphrase(): Promise<string | undefined> {
-    if (this.cachedPassphrase !== null) {
-      return this.cachedPassphrase;
+  private async getAuth(): Promise<OwsAuth> {
+    if (this.cachedAuth !== null) {
+      return this.cachedAuth;
     }
-    this.cachedPassphrase = await resolveOwsPassphrase();
-    return this.cachedPassphrase;
+    this.cachedAuth = await resolveOwsAuth({ allowApiKey: true });
+    return this.cachedAuth;
+  }
+
+  private getPassphraseValue(auth: OwsAuth): string | undefined {
+    if (!auth.passphrase) {
+      return undefined;
+    }
+    return typeof auth.passphrase === "string"
+      ? auth.passphrase
+      : auth.passphrase.reveal();
   }
 
   async signTypedData(
@@ -211,16 +223,19 @@ export class OwsSigner implements WalletPort {
     _context?: WalletOperationContext,
     _prompt?: ApprovalPrompt,
   ): Promise<Hex> {
-    const passphrase = await this.getPassphrase();
+    const auth = await this.getAuth();
+    const passphrase = this.getPassphraseValue(auth);
     const family = getChainFamily(chainId);
     const typedDataJson = stringifyTypedData(request);
-    const result = owsSignTypedData(
-      this.walletId,
-      family,
-      typedDataJson,
-      passphrase,
-      undefined,
-      this.vaultPath,
+    const result = await withOwsApiKey(auth.apiKey, () =>
+      owsSignTypedData(
+        this.walletId,
+        family,
+        typedDataJson,
+        passphrase,
+        undefined,
+        this.vaultPath,
+      ),
     );
     return ensureHexPrefix(result.signature) as Hex;
   }
@@ -232,7 +247,8 @@ export class OwsSigner implements WalletPort {
     _prompt?: ApprovalPrompt,
     _intent?: TransactionIntent,
   ): Promise<Hash | string> {
-    const passphrase = await this.getPassphrase();
+    const auth = await this.getAuth();
+    const passphrase = this.getPassphraseValue(auth);
     const family = getChainFamily(chainId);
     if (family === "evm") {
       if (request.format !== "evm-transaction") {
@@ -246,14 +262,16 @@ export class OwsSigner implements WalletPort {
         request,
       );
       const chainName = getChainName(chainId);
-      const result = owsSignAndSend(
-        this.walletId,
-        family,
-        txHex,
-        passphrase,
-        undefined,
-        getRpcUrlForChain(chainName),
-        this.vaultPath,
+      const result = await withOwsApiKey(auth.apiKey, () =>
+        owsSignAndSend(
+          this.walletId,
+          family,
+          txHex,
+          passphrase,
+          undefined,
+          getRpcUrlForChain(chainName),
+          this.vaultPath,
+        ),
       );
       return result.txHash as Hash;
     }
@@ -266,14 +284,16 @@ export class OwsSigner implements WalletPort {
 
     const txBytes = Buffer.from(request.serializedTransactionBase64, "base64");
     const txHex = txBytes.toString("hex");
-    const result = owsSignAndSend(
-      this.walletId,
-      family,
-      txHex,
-      passphrase,
-      undefined,
-      undefined,
-      this.vaultPath,
+    const result = await withOwsApiKey(auth.apiKey, () =>
+      owsSignAndSend(
+        this.walletId,
+        family,
+        txHex,
+        passphrase,
+        undefined,
+        undefined,
+        this.vaultPath,
+      ),
     );
     return result.txHash;
   }
@@ -286,7 +306,13 @@ export class OwsSigner implements WalletPort {
       throw new Error(`Unsupported protocol payload: ${request.protocol}`);
     }
 
-    const passphrase = await this.getPassphrase();
+    const auth = await this.getAuth();
+    const passphrase = this.getPassphraseValue(auth);
+    if (!passphrase) {
+      throw new Error(
+        "OWS passphrase is required for raw private key export. Use keychain:ows/passphrase.",
+      );
+    }
     const privateKey = await exportOwsPrivateKey(
       this.accountLabel,
       "evm",
@@ -315,7 +341,6 @@ const SUPPORTED_SIGNER_OPERATIONS = new Set<SignerCommandRequest["operation"]>([
   "sign-protocol-payload",
   "sign-typed-data",
 ]);
-const SIGNER_AUTH_ENV_PATTERN = /^WOOO_SIGNER_AUTH_[A-Z0-9_]*$/;
 const DEFAULT_HTTP_SIGNER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_HTTP_SIGNER_TIMEOUT_MS = 5 * 60 * 1_000;
 const DEFAULT_HTTP_SIGNER_REQUEST_TIMEOUT_MS = 30_000;
@@ -387,40 +412,26 @@ function isHttpSignerMetadata(value: unknown): value is HttpSignerMetadata {
   );
 }
 
-export function validateSignerAuthEnv(authEnv?: string): string | undefined {
-  if (!authEnv) {
+export function validateSignerAuthRef(authRef?: string): string | undefined {
+  if (!authRef) {
     return undefined;
   }
-
-  if (!SIGNER_AUTH_ENV_PATTERN.test(authEnv)) {
-    throw new Error(
-      `Signer auth env "${authEnv}" is not allowed. Use a dedicated env name that matches ${SIGNER_AUTH_ENV_PATTERN.source}.`,
-    );
-  }
-
-  return authEnv;
+  return validateSecretRef(authRef, "signer auth");
 }
 
-function resolveAuthToken(authEnv?: string): string | null {
-  const validatedAuthEnv = validateSignerAuthEnv(authEnv);
-  if (!validatedAuthEnv) {
+async function resolveAuthToken(authRef?: string): Promise<string | null> {
+  const validatedAuthRef = validateSignerAuthRef(authRef);
+  if (!validatedAuthRef) {
     return null;
   }
 
-  const value = process.env[validatedAuthEnv];
-  if (!value?.trim()) {
-    throw new Error(
-      `Signer auth env "${validatedAuthEnv}" is not set or is empty.`,
-    );
-  }
-
-  return value.trim();
+  return (await requireSecret(validatedAuthRef, "signer auth")).reveal();
 }
 
-function createHttpSignerHeaders(options?: {
-  authEnv?: string;
+async function createHttpSignerHeaders(options?: {
+  authRef?: string;
   includeJsonContentType?: boolean;
-}): Record<string, string> {
+}): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     accept: "application/json",
   };
@@ -429,7 +440,7 @@ function createHttpSignerHeaders(options?: {
     headers["content-type"] = "application/json";
   }
 
-  const token = resolveAuthToken(options?.authEnv);
+  const token = await resolveAuthToken(options?.authRef);
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
@@ -439,12 +450,12 @@ function createHttpSignerHeaders(options?: {
 
 export async function fetchSignerMetadata(
   rawUrl: string,
-  authEnv?: string,
+  authRef?: string,
 ): Promise<HttpSignerMetadata> {
   const url = normalizeSignerUrl(rawUrl);
   const response = await fetchHttpSigner(url, {
     method: "GET",
-    headers: createHttpSignerHeaders({ authEnv }),
+    headers: await createHttpSignerHeaders({ authRef }),
   });
 
   const payload = await response.text();
@@ -622,7 +633,7 @@ async function pollHttpSignerResponse(
   endpointUrl: string,
   initialResponse: SignerCommandResponse,
   options?: {
-    authEnv?: string;
+    authRef?: string;
     transportLabel?: string;
   },
 ): Promise<SignerCommandTerminalResponse> {
@@ -661,8 +672,8 @@ async function pollHttpSignerResponse(
       statusUrl,
       {
         method: "GET",
-        headers: createHttpSignerHeaders({
-          authEnv: options?.authEnv,
+        headers: await createHttpSignerHeaders({
+          authRef: options?.authRef,
         }),
       },
       transportLabel,
@@ -693,7 +704,7 @@ async function pollHttpSignerResponse(
 
 async function invokeHttpSigner(
   signerUrl: string,
-  authEnv: string | undefined,
+  authRef: string | undefined,
   request: SignerCommandRequest,
 ): Promise<SignerCommandTerminalResponse> {
   const transportLabel = "HTTP signer";
@@ -707,8 +718,8 @@ async function invokeHttpSigner(
         signerUrl,
         {
           method: "POST",
-          headers: createHttpSignerHeaders({
-            authEnv,
+          headers: await createHttpSignerHeaders({
+            authRef,
             includeJsonContentType: true,
           }),
           body: serializeSignerPayload(request),
@@ -735,7 +746,7 @@ async function invokeHttpSigner(
       }
 
       return await pollHttpSignerResponse(signerUrl, parsed, {
-        authEnv,
+        authRef,
         transportLabel,
       });
     } catch (error) {
@@ -761,14 +772,14 @@ export class ExternalSigner implements WalletPort {
   readonly address: string;
   private readonly chainFamily: "evm" | "solana";
   private readonly signerUrl: string;
-  private readonly authEnv: string | undefined;
+  private readonly authRef: string | undefined;
 
   constructor(wallet: Extract<ResolvedAccount, { custody: "remote" }>) {
     this.accountLabel = wallet.label;
     this.address = wallet.address;
     this.chainFamily = wallet.chainFamily;
     this.signerUrl = normalizeSignerUrl(wallet.signerUrl);
-    this.authEnv = validateSignerAuthEnv(wallet.authEnv);
+    this.authRef = validateSignerAuthRef(wallet.authRef);
   }
 
   private toAccountRef() {
@@ -785,7 +796,7 @@ export class ExternalSigner implements WalletPort {
     context?: WalletOperationContext,
     prompt?: ApprovalPrompt,
   ): Promise<Hex> {
-    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+    const response = await invokeHttpSigner(this.signerUrl, this.authRef, {
       clientRequestId: randomUUID(),
       version: 1,
       operation: "sign-typed-data",
@@ -813,7 +824,7 @@ export class ExternalSigner implements WalletPort {
     prompt?: ApprovalPrompt,
     intent?: TransactionIntent,
   ): Promise<Hash | string> {
-    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+    const response = await invokeHttpSigner(this.signerUrl, this.authRef, {
       clientRequestId: randomUUID(),
       version: 1,
       operation: "sign-and-send-transaction",
@@ -837,7 +848,7 @@ export class ExternalSigner implements WalletPort {
     request: ProtocolPayloadRequest,
     context?: WalletOperationContext,
   ): Promise<ProtocolPayloadSignature> {
-    const response = await invokeHttpSigner(this.signerUrl, this.authEnv, {
+    const response = await invokeHttpSigner(this.signerUrl, this.authRef, {
       clientRequestId: randomUUID(),
       version: 1,
       operation: "sign-protocol-payload",

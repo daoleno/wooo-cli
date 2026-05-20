@@ -1,5 +1,10 @@
 import { defineCommand } from "citty";
 import { loadWoooConfig } from "../../core/config";
+import {
+  getCredentialField,
+  getCredentialService,
+  resolveOptionalCredentialField,
+} from "../../core/credentials";
 import { createOutput, resolveOutputOptions } from "../../core/output";
 import { CexClient } from "../../protocols/cex-base/client";
 
@@ -18,7 +23,7 @@ export default defineCommand({
     const out = createOutput(resolveOutputOptions(args));
     const config = await loadWoooConfig();
 
-    // Find configured exchanges (those with apiKey set)
+    // Find configured exchanges (those with both required secret refs set)
     const configured: Array<{
       id: string;
       apiKey: string;
@@ -26,25 +31,40 @@ export default defineCommand({
       password?: string;
     }> = [];
     for (const id of CEX_IDS) {
-      const prefix = `WOOO_${id.toUpperCase()}_`;
-      const exchangeConfig = config[id] as Record<string, string> | undefined;
-      const apiKey = process.env[`${prefix}API_KEY`] || exchangeConfig?.apiKey;
-      const secret =
-        process.env[`${prefix}API_SECRET`] || exchangeConfig?.apiSecret;
+      const credentials = getCredentialService(id);
+      const apiKey = await resolveOptionalCredentialField({
+        config,
+        field: getCredentialField(credentials, "apiKey"),
+        service: credentials,
+      });
+      const secret = await resolveOptionalCredentialField({
+        config,
+        field: getCredentialField(credentials, "apiSecret"),
+        service: credentials,
+      });
       if (apiKey && secret) {
+        const passphraseField = credentials.fields.find(
+          (field) => field.key === "passphrase",
+        );
+        const password = passphraseField
+          ? await resolveOptionalCredentialField({
+              config,
+              field: passphraseField,
+              service: credentials,
+            })
+          : undefined;
         configured.push({
           id,
-          apiKey,
-          secret,
-          password:
-            process.env[`${prefix}PASSPHRASE`] || exchangeConfig?.passphrase,
+          apiKey: apiKey.reveal(),
+          secret: secret.reveal(),
+          password: password?.reveal(),
         });
       }
     }
 
     if (configured.length === 0) {
       out.warn(
-        "No exchanges configured. Set API keys via env vars (WOOO_OKX_API_KEY, etc.) or wooo-cli config set.",
+        "No exchanges configured. Run `wooo-cli auth set okx`, `wooo-cli auth set binance`, or `wooo-cli auth set bybit`.",
       );
       return;
     }

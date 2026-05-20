@@ -4,6 +4,7 @@ import { HttpSignerHarness } from "../fixtures/http-signer-harness";
 import { HyperliquidHarness } from "../fixtures/hyperliquid-harness";
 
 const AUTH_ENV = "WOOO_SIGNER_AUTH_HYPERLIQUID_TEST";
+const AUTH_REF = `env:${AUTH_ENV}`;
 const AUTH_TOKEN = "hyperliquid-local-test-token";
 const PRIVATE_KEY = `0x${"11".repeat(32)}` as const;
 
@@ -59,8 +60,8 @@ describe("hyperliquid local e2e", () => {
           "remote-hyperliquid",
           "--signer",
           signer.url,
-          "--auth-env",
-          AUTH_ENV,
+          "--auth-ref",
+          AUTH_REF,
           "--json",
         ],
         { env },

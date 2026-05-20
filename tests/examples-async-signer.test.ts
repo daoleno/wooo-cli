@@ -117,6 +117,8 @@ async function startReferenceSigner(): Promise<ReferenceSignerHarness> {
       "ethereum",
       "--port",
       String(port),
+      "--auth-ref",
+      "env:WOOO_SIGNER_AUTH_TOKEN",
     ],
     cwd: process.cwd(),
     env: {
@@ -455,7 +457,7 @@ describe("reference async signer example", () => {
 
     try {
       const discoverResult = await runCliJson<{
-        authEnv: string;
+        authRef: string;
         kind: string;
         signerUrl: string;
         transport: string;
@@ -470,8 +472,8 @@ describe("reference async signer example", () => {
           "discover",
           "--signer",
           signer.baseUrl,
-          "--auth-env",
-          "WOOO_SIGNER_AUTH_TOKEN",
+          "--auth-ref",
+          "env:WOOO_SIGNER_AUTH_TOKEN",
         ],
         {
           env: {
@@ -481,7 +483,7 @@ describe("reference async signer example", () => {
       );
 
       expect(discoverResult.kind).toBe("wooo-wallet-transport");
-      expect(discoverResult.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
+      expect(discoverResult.authRef).toBe("env:WOOO_SIGNER_AUTH_TOKEN");
       expect(discoverResult.transport).toBe("http-signer");
       expect(discoverResult.accounts).toEqual([
         {
@@ -497,6 +499,7 @@ describe("reference async signer example", () => {
 
       const connectResult = await runCliJson<{
         address: string;
+        authRef: string;
         chainFamily: string;
         name: string;
         operations: string[];
@@ -508,8 +511,8 @@ describe("reference async signer example", () => {
           "signer-example",
           "--signer",
           signer.baseUrl,
-          "--auth-env",
-          "WOOO_SIGNER_AUTH_TOKEN",
+          "--auth-ref",
+          "env:WOOO_SIGNER_AUTH_TOKEN",
         ],
         {
           env: {
@@ -528,6 +531,7 @@ describe("reference async signer example", () => {
           "sign-protocol-payload",
         ],
         signerUrl: `${signer.baseUrl}/`,
+        authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
       });
     } finally {
       await signer.stop();
@@ -546,7 +550,7 @@ describe("reference async signer example", () => {
         chainFamily: "evm",
         chainId: "eip155:1",
         signerUrl: normalizeSignerUrl(transport.baseUrl),
-        authEnv: "WOOO_SIGNER_AUTH_TOKEN",
+        authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
       };
 
       const walletSigner = createWalletPort(wallet);

@@ -7,6 +7,7 @@ import {
 import { SolanaSignerHarness } from "../fixtures/solana-signer-harness";
 
 const AUTH_ENV = "WOOO_SIGNER_AUTH_JUPITER_TEST";
+const AUTH_REF = `env:${AUTH_ENV}`;
 const AUTH_TOKEN = "jupiter-local-test-token";
 const SOLANA_ADDRESS = "9xQeWvG816bUx9EPjHmaT23yvVMfQ4qZQ9fFZQ4T7j4A";
 
@@ -77,8 +78,8 @@ describe("jupiter local integration", () => {
         "remote-solana",
         "--signer",
         signer.url,
-        "--auth-env",
-        AUTH_ENV,
+        "--auth-ref",
+        AUTH_REF,
         "--json",
       ],
       { env },

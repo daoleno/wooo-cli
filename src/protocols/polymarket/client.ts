@@ -20,7 +20,13 @@ import {
   toHex,
 } from "viem";
 import { resolveChainId } from "../../core/chain-ids";
+import { loadWoooConfig, loadWoooConfigSync } from "../../core/config";
 import { getActiveWalletPort } from "../../core/context";
+import {
+  getCredentialField,
+  getCredentialService,
+  requireCredentialField,
+} from "../../core/credentials";
 import type {
   ApprovalPrompt,
   EvmTypedDataField,
@@ -253,17 +259,6 @@ function requireOptionalAddress(value: string | undefined, field: string) {
   return requireAddress(value, field);
 }
 
-function readOptionalAddressEnv(
-  envKey: string,
-  field: string,
-): Address | undefined {
-  const value = process.env[envKey]?.trim();
-  if (!value) {
-    return undefined;
-  }
-  return requireAddress(value, field);
-}
-
 function addressesEqual(a: Address, b: Address): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
@@ -282,23 +277,30 @@ function combineOptionalAddresses(
   return first ?? second;
 }
 
-function readRelayerApiCreds() {
-  const key = process.env.WOOO_POLYMARKET_RELAYER_API_KEY;
-  const address = process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS;
+async function readRelayerApiCreds() {
+  const config = await loadWoooConfig();
+  const credentials = getCredentialService("polymarket-relayer");
+  const address = config.polymarket?.relayerApiKeyAddress;
 
-  if (!key || !address) {
+  if (!address) {
     throw new Error(
-      "Polymarket relayer auth is required. Set WOOO_POLYMARKET_RELAYER_API_KEY and WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS.",
+      "Polymarket relayer auth is required. Run `wooo-cli auth set polymarket-relayer` and set config polymarket.relayerApiKeyAddress.",
     );
   }
   return {
-    address: requireAddress(address, "WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS"),
-    key,
+    address: requireAddress(address, "config polymarket.relayerApiKeyAddress"),
+    key: (
+      await requireCredentialField({
+        config,
+        field: getCredentialField(credentials, "apiKey"),
+        service: credentials,
+      })
+    ).reveal(),
   };
 }
 
-function createRelayerAuthHeaders(): Record<string, string> {
-  const creds = readRelayerApiCreds();
+async function createRelayerAuthHeaders(): Promise<Record<string, string>> {
+  const creds = await readRelayerApiCreds();
   return {
     RELAYER_API_KEY: creds.key,
     RELAYER_API_KEY_ADDRESS: creds.address,
@@ -327,7 +329,7 @@ async function fetchRelayerJson<T>(
     options?.body === undefined ? undefined : JSON.stringify(options.body);
   const headers: Record<string, string> = {
     ...DEFAULT_HEADERS,
-    ...createRelayerAuthHeaders(),
+    ...(await createRelayerAuthHeaders()),
   };
   if (body !== undefined) {
     headers["content-type"] = "application/json";
@@ -520,31 +522,32 @@ export function resolvePolymarketAccountBindingFromSigner(
   signer: WalletPort,
   input: PolymarketAccountBindingInput = {},
 ): PolymarketAccountBinding {
+  const config = loadWoooConfigSync();
   const signerAddress = requireAddress(signer.address, "active signer");
   const ownerFromInput = requireOptionalAddress(input.ownerAddress, "owner");
-  const ownerFromEnv = readOptionalAddressEnv(
-    "WOOO_POLYMARKET_OWNER",
-    "WOOO_POLYMARKET_OWNER",
+  const ownerFromConfig = requireOptionalAddress(
+    config.polymarket?.owner,
+    "config polymarket.owner",
   );
   const ownerAddress = combineOptionalAddresses(
     ownerFromInput,
     "owner",
-    ownerFromEnv,
-    "WOOO_POLYMARKET_OWNER",
+    ownerFromConfig,
+    "config polymarket.owner",
   );
   const depositWalletFromInput = requireOptionalAddress(
     input.depositWalletAddress,
     "deposit wallet",
   );
-  const depositWalletFromEnv = readOptionalAddressEnv(
-    "WOOO_POLYMARKET_DEPOSIT_WALLET",
-    "WOOO_POLYMARKET_DEPOSIT_WALLET",
+  const depositWalletFromConfig = requireOptionalAddress(
+    config.polymarket?.depositWallet,
+    "config polymarket.depositWallet",
   );
   const explicitDepositWallet = combineOptionalAddresses(
     depositWalletFromInput,
     "--deposit-wallet",
-    depositWalletFromEnv,
-    "WOOO_POLYMARKET_DEPOSIT_WALLET",
+    depositWalletFromConfig,
+    "config polymarket.depositWallet",
   );
 
   if (ownerAddress) {
@@ -603,7 +606,7 @@ export function resolvePolymarketDeploymentOwner(
   }
 
   throw new Error(
-    "Polymarket owner is required for this operation. Set WOOO_POLYMARKET_OWNER to the owner that derives the target deposit wallet.",
+    "Polymarket owner is required for this operation. Set config polymarket.owner to the owner that derives the target deposit wallet.",
   );
 }
 

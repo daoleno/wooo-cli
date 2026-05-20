@@ -14,7 +14,7 @@ import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   fetchSignerMetadata,
   normalizeSignerUrl,
-  validateSignerAuthEnv,
+  validateSignerAuthRef,
 } from "../../core/signers";
 
 /**
@@ -116,9 +116,9 @@ export default defineCommand({
       description: "HTTP signer URL, for example http://127.0.0.1:8787/",
       required: true,
     },
-    "auth-env": {
+    "auth-ref": {
       type: "string",
-      description: "Environment variable that holds the signer bearer token",
+      description: "Secret ref for the signer bearer token",
     },
     chain: {
       type: "string",
@@ -138,8 +138,8 @@ export default defineCommand({
     const out = createOutput(resolveOutputOptions(args));
 
     const url = normalizeSignerUrl(args.signer);
-    const authEnv = validateSignerAuthEnv(args["auth-env"]);
-    const metadata = await fetchSignerMetadata(url, authEnv);
+    const authRef = validateSignerAuthRef(args["auth-ref"]);
+    const metadata = await fetchSignerMetadata(url, authRef);
     const selected = selectAdvertisedAccount(
       metadata.accounts,
       args.address,
@@ -150,7 +150,7 @@ export default defineCommand({
       address: selected.address,
       chainFamily: selected.chainFamily,
       signerUrl: url,
-      ...(authEnv ? { authEnv } : {}),
+      ...(authRef ? { authRef } : {}),
     });
     bootstrapDefaultWallet(args.name);
     out.data({
@@ -159,6 +159,7 @@ export default defineCommand({
       chainFamily: selected.chainFamily,
       operations: selected.operations,
       signerUrl: url,
+      ...(authRef ? { authRef } : {}),
     });
   },
 });

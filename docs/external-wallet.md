@@ -57,9 +57,9 @@ Remote accounts connect via an HTTP signer transport. The signer endpoint:
 5. Enforces approval or policy before signing
 6. Returns a terminal JSON response
 
-Authentication is optional. When configured, `wooo-cli` reads a bearer token from an environment variable and sends it as `Authorization: Bearer <token>`.
+Authentication is optional. When configured, `wooo-cli` reads a bearer token from an explicit secret ref and sends it as `Authorization: Bearer <token>`.
 
-Use a dedicated env name that matches `WOOO_SIGNER_AUTH_*`, for example `WOOO_SIGNER_AUTH_TOKEN`.
+Use `keychain:<name>` for normal use. `env:<ENV_NAME>` is available for dev/CI.
 
 ## Fastest Path To A Working Integration
 
@@ -85,7 +85,7 @@ With authentication:
 ```bash
 wooo-cli wallet connect remote-signer \
   --signer https://signer.example.com/ \
-  --auth-env WOOO_SIGNER_AUTH_TOKEN
+  --auth-ref keychain:signer/auth-token
 ```
 
 If the signer advertises multiple accounts, specify one explicitly:
@@ -120,11 +120,9 @@ Point `wooo-cli` at the fork:
 Connect the signer:
 
 ```bash
-export WOOO_SIGNER_AUTH_TOKEN=...
-
 wooo-cli wallet connect external-fork-signer \
   --signer http://127.0.0.1:8787/ \
-  --auth-env WOOO_SIGNER_AUTH_TOKEN
+  --auth-ref keychain:signer/auth-token
 
 wooo-cli wallet switch external-fork-signer
 ```

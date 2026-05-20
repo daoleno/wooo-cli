@@ -152,4 +152,96 @@ describe("config commands", () => {
       config.signerPolicy["agent-wallet"].evm.approvals.denyUnlimited,
     ).toBe(true);
   });
+
+  test("config set rejects raw secret config keys", () => {
+    const configDir = join(tempDir, "secret-config");
+
+    for (const key of ["okx.apiSecret", "wallet.privateKey", "okx.APITOKEN"]) {
+      const result = Bun.spawnSync({
+        cmd: [
+          "bun",
+          "run",
+          "src/index.ts",
+          "config",
+          "set",
+          key,
+          "secret-value",
+        ],
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          WOOO_CONFIG_DIR: configDir,
+        },
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+
+      expect(result.exitCode).not.toBe(0);
+      expect(new TextDecoder().decode(result.stderr)).toContain(
+        "would store a secret value directly",
+      );
+    }
+  });
+
+  test("config set validates secret ref config keys", () => {
+    const configDir = join(tempDir, "secret-ref-config");
+
+    const result = Bun.spawnSync({
+      cmd: [
+        "bun",
+        "run",
+        "src/index.ts",
+        "config",
+        "set",
+        "okx.apiSecretRef",
+        "keychain:okx/api-secret",
+      ],
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        WOOO_CONFIG_DIR: configDir,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    expect(result.exitCode).toBe(0);
+    const config = JSON.parse(
+      readFileSync(join(configDir, "wooo.config.json"), "utf-8"),
+    ) as {
+      okx: { apiSecretRef: string };
+    };
+    expect(config.okx.apiSecretRef).toBe("keychain:okx/api-secret");
+  });
+
+  test("config set preserves known string identifiers", () => {
+    const configDir = join(tempDir, "string-id-config");
+
+    const result = Bun.spawnSync({
+      cmd: [
+        "bun",
+        "run",
+        "src/index.ts",
+        "config",
+        "set",
+        "okxOnchain.projectId",
+        "123456",
+      ],
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        WOOO_CONFIG_DIR: configDir,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    expect(result.exitCode).toBe(0);
+    const config = JSON.parse(
+      readFileSync(join(configDir, "wooo.config.json"), "utf-8"),
+    ) as {
+      okxOnchain: { projectId: string };
+    };
+    expect(config.okxOnchain.projectId).toBe("123456");
+  });
 });

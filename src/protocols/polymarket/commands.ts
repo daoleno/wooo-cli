@@ -57,7 +57,7 @@ const POLYMARKET_AUTH_ARGS = {
   "deposit-wallet": {
     type: "string" as const,
     description:
-      "Deposit wallet address to use as CLOB funder. Must match WOOO_POLYMARKET_OWNER when that owner is configured.",
+      "Deposit wallet address to use as CLOB funder. Must match config polymarket.owner when that owner is configured.",
     required: false,
   },
 };

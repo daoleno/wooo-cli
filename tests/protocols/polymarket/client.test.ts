@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { WalletPort } from "../../../src/core/signers";
 import {
   getPolymarketDepositWalletAddress,
@@ -12,15 +15,20 @@ const originalFetch = globalThis.fetch;
 const originalEnv = {
   RELAYER_API_KEY: process.env.RELAYER_API_KEY,
   RELAYER_API_KEY_ADDRESS: process.env.RELAYER_API_KEY_ADDRESS,
+  WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR,
   WOOO_POLYMARKET_DEPOSIT_WALLET: process.env.WOOO_POLYMARKET_DEPOSIT_WALLET,
   WOOO_POLYMARKET_OWNER: process.env.WOOO_POLYMARKET_OWNER,
-  WOOO_POLYMARKET_RELAYER_API_KEY: process.env.WOOO_POLYMARKET_RELAYER_API_KEY,
+  WOOO_POLYMARKET_RELAYER_API_KEY_REF:
+    process.env.WOOO_POLYMARKET_RELAYER_API_KEY_REF,
   WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS:
     process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS,
+  WOOO_TEST_POLYMARKET_RELAYER_API_KEY:
+    process.env.WOOO_TEST_POLYMARKET_RELAYER_API_KEY,
 };
 const OWNER = "0x1111111111111111111111111111111111111111";
 const AGENT_SIGNER = "0x2222222222222222222222222222222222222222";
 const EXPLICIT_DEPOSIT_WALLET = "0x3333333333333333333333333333333333333333";
+let tempConfigDir: string;
 
 interface CapturedRequest {
   body: string | null;
@@ -30,12 +38,15 @@ interface CapturedRequest {
 }
 
 beforeEach(() => {
+  tempConfigDir = mkdtempSync(join(tmpdir(), "wooo-polymarket-client-"));
+  process.env.WOOO_CONFIG_DIR = tempConfigDir;
   delete process.env.RELAYER_API_KEY;
   delete process.env.RELAYER_API_KEY_ADDRESS;
   delete process.env.WOOO_POLYMARKET_DEPOSIT_WALLET;
   delete process.env.WOOO_POLYMARKET_OWNER;
-  delete process.env.WOOO_POLYMARKET_RELAYER_API_KEY;
+  delete process.env.WOOO_POLYMARKET_RELAYER_API_KEY_REF;
   delete process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS;
+  delete process.env.WOOO_TEST_POLYMARKET_RELAYER_API_KEY;
 });
 
 function installFetchMock(handler: (request: CapturedRequest) => unknown) {
@@ -66,6 +77,7 @@ function installFetchMock(handler: (request: CapturedRequest) => unknown) {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  rmSync(tempConfigDir, { recursive: true, force: true });
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) {
       delete process.env[key];
@@ -74,6 +86,13 @@ afterEach(() => {
     }
   }
 });
+
+function writePolymarketConfig(polymarket: Record<string, string>): void {
+  writeFileSync(
+    join(tempConfigDir, "wooo.config.json"),
+    JSON.stringify({ polymarket }, null, 2),
+  );
+}
 
 function createSigner(address: string): WalletPort {
   return {
@@ -103,8 +122,8 @@ describe("Polymarket account binding", () => {
     );
   });
 
-  test("derives the deposit wallet from WOOO_POLYMARKET_OWNER", () => {
-    process.env.WOOO_POLYMARKET_OWNER = OWNER;
+  test("derives the deposit wallet from config polymarket.owner", () => {
+    writePolymarketConfig({ owner: OWNER });
 
     const binding = resolvePolymarketAccountBindingFromSigner(
       createSigner(AGENT_SIGNER),
@@ -118,7 +137,7 @@ describe("Polymarket account binding", () => {
   });
 
   test("rejects a deposit wallet that does not match the configured owner", () => {
-    process.env.WOOO_POLYMARKET_OWNER = OWNER;
+    writePolymarketConfig({ owner: OWNER });
 
     expect(() =>
       resolvePolymarketAccountBindingFromSigner(createSigner(AGENT_SIGNER), {
@@ -141,7 +160,7 @@ describe("Polymarket account binding", () => {
   });
 
   test("rejects mismatched deposit wallet sources", () => {
-    process.env.WOOO_POLYMARKET_DEPOSIT_WALLET = EXPLICIT_DEPOSIT_WALLET;
+    writePolymarketConfig({ depositWallet: EXPLICIT_DEPOSIT_WALLET });
 
     expect(() =>
       resolvePolymarketAccountBindingFromSigner(createSigner(AGENT_SIGNER), {
@@ -159,17 +178,31 @@ describe("Polymarket account binding", () => {
     );
 
     expect(() => resolvePolymarketDeploymentOwner(binding)).toThrow(
-      /WOOO_POLYMARKET_OWNER/,
+      /config polymarket.owner/,
     );
   });
 
   test("uses the configured owner for deployment", () => {
-    process.env.WOOO_POLYMARKET_OWNER = OWNER;
+    writePolymarketConfig({ owner: OWNER });
     const binding = resolvePolymarketAccountBindingFromSigner(
       createSigner(AGENT_SIGNER),
     );
 
     expect(resolvePolymarketDeploymentOwner(binding)).toBe(OWNER);
+  });
+
+  test("does not read owner or deposit wallet from env", () => {
+    process.env.WOOO_POLYMARKET_OWNER = OWNER;
+    process.env.WOOO_POLYMARKET_DEPOSIT_WALLET = EXPLICIT_DEPOSIT_WALLET;
+
+    const binding = resolvePolymarketAccountBindingFromSigner(
+      createSigner(AGENT_SIGNER),
+    );
+
+    expect(binding.ownerAddress).toBe(AGENT_SIGNER);
+    expect(binding.depositWalletAddress).toBe(
+      getPolymarketDepositWalletAddress(AGENT_SIGNER),
+    );
   });
 });
 
@@ -269,9 +302,11 @@ describe("PolymarketBridgeClient", () => {
 });
 
 describe("PolymarketRelayerClient", () => {
-  test("reads WOOO-prefixed env vars and sends official relayer headers", async () => {
-    process.env.WOOO_POLYMARKET_RELAYER_API_KEY = "relayer-key";
-    process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS = OWNER;
+  test("reads WOOO-prefixed secret ref and sends official relayer headers", async () => {
+    process.env.WOOO_POLYMARKET_RELAYER_API_KEY_REF =
+      "env:WOOO_TEST_POLYMARKET_RELAYER_API_KEY";
+    process.env.WOOO_TEST_POLYMARKET_RELAYER_API_KEY = "relayer-key";
+    writePolymarketConfig({ relayerApiKeyAddress: OWNER });
     const requests = installFetchMock(() => ({ nonce: "7" }));
 
     const client = new PolymarketRelayerClient({
@@ -304,10 +339,25 @@ describe("PolymarketRelayerClient", () => {
     });
 
     await expect(client.getNonce(AGENT_SIGNER, "WALLET")).rejects.toThrow(
-      /WOOO_POLYMARKET_RELAYER_API_KEY/,
+      /polymarket-relayer/,
     );
 
     delete process.env.RELAYER_API_KEY;
     delete process.env.RELAYER_API_KEY_ADDRESS;
+  });
+
+  test("does not read relayer key address from env", async () => {
+    process.env.WOOO_POLYMARKET_RELAYER_API_KEY_REF =
+      "env:WOOO_TEST_POLYMARKET_RELAYER_API_KEY";
+    process.env.WOOO_TEST_POLYMARKET_RELAYER_API_KEY = "relayer-key";
+    process.env.WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS = OWNER;
+
+    const client = new PolymarketRelayerClient({
+      relayerUrl: "https://relayer.example",
+    });
+
+    await expect(client.getNonce(AGENT_SIGNER, "WALLET")).rejects.toThrow(
+      /polymarket\.relayerApiKeyAddress/,
+    );
   });
 });

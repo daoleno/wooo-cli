@@ -3,7 +3,7 @@ import { createOutput, resolveOutputOptions } from "../../core/output";
 import {
   fetchSignerMetadata,
   normalizeSignerUrl,
-  validateSignerAuthEnv,
+  validateSignerAuthRef,
 } from "../../core/signers";
 
 export default defineCommand({
@@ -17,9 +17,9 @@ export default defineCommand({
       description: "HTTP signer URL, for example http://127.0.0.1:8787/",
       required: true,
     },
-    "auth-env": {
+    "auth-ref": {
       type: "string",
-      description: "Environment variable that holds the signer bearer token",
+      description: "Secret ref for the signer bearer token",
     },
     json: { type: "boolean", default: false },
     format: { type: "string", default: "table" },
@@ -30,23 +30,23 @@ export default defineCommand({
     }
 
     const url = normalizeSignerUrl(args.signer);
-    const authEnv = validateSignerAuthEnv(args["auth-env"]);
-    const metadata = await fetchSignerMetadata(url, authEnv);
+    const authRef = validateSignerAuthRef(args["auth-ref"]);
+    const metadata = await fetchSignerMetadata(url, authRef);
     const out = createOutput(resolveOutputOptions(args));
 
     if (args.json || args.format === "json") {
       out.data({
         signerUrl: url,
         ...metadata,
-        ...(authEnv ? { authEnv } : {}),
+        ...(authRef ? { authRef } : {}),
       });
       return;
     }
 
     if (args.format !== "csv") {
       out.data(`Signer: ${url}`);
-      if (authEnv) {
-        out.data(`Auth env: ${authEnv}`);
+      if (authRef) {
+        out.data(`Auth ref: ${authRef}`);
       }
     }
 

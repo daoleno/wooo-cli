@@ -8,7 +8,8 @@ import { getActiveWallet, getActiveWalletPort } from "../../src/core/context";
 
 describe("context wallet resolution", () => {
   const originalEnv = {
-    OWS_PASSPHRASE: process.env.OWS_PASSPHRASE,
+    WOOO_TEST_OWS_PASSPHRASE: process.env.WOOO_TEST_OWS_PASSPHRASE,
+    WOOO_OWS_PASSPHRASE_REF: process.env.WOOO_OWS_PASSPHRASE_REF,
     WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR,
     WOOO_WALLET_MODE: process.env.WOOO_WALLET_MODE,
   };
@@ -18,7 +19,8 @@ describe("context wallet resolution", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-context-test-"));
     process.env.WOOO_CONFIG_DIR = tempDir;
-    process.env.OWS_PASSPHRASE = "test-passphrase";
+    process.env.WOOO_OWS_PASSPHRASE_REF = "env:WOOO_TEST_OWS_PASSPHRASE";
+    process.env.WOOO_TEST_OWS_PASSPHRASE = "test-passphrase";
   });
 
   afterEach(() => {

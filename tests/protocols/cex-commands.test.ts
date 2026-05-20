@@ -105,18 +105,22 @@ describe("CEX order amount parsing", () => {
 });
 
 describe("CEX auth resolution", () => {
-  test("env var prefix construction", () => {
+  test("secret ref env var prefix construction", () => {
     const exchanges = ["okx", "binance", "bybit"];
     for (const ex of exchanges) {
       const prefix = `WOOO_${ex.toUpperCase()}_`;
-      expect(`${prefix}API_KEY`).toBe(`WOOO_${ex.toUpperCase()}_API_KEY`);
-      expect(`${prefix}API_SECRET`).toBe(`WOOO_${ex.toUpperCase()}_API_SECRET`);
+      expect(`${prefix}API_KEY_REF`).toBe(
+        `WOOO_${ex.toUpperCase()}_API_KEY_REF`,
+      );
+      expect(`${prefix}API_SECRET_REF`).toBe(
+        `WOOO_${ex.toUpperCase()}_API_SECRET_REF`,
+      );
     }
   });
 
-  test("OKX has passphrase env var", () => {
+  test("OKX has passphrase secret ref env var", () => {
     const prefix = "WOOO_OKX_";
-    expect(`${prefix}PASSPHRASE`).toBe("WOOO_OKX_PASSPHRASE");
+    expect(`${prefix}PASSPHRASE_REF`).toBe("WOOO_OKX_PASSPHRASE_REF");
   });
 });
 

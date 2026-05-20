@@ -38,7 +38,7 @@ describe("HTTP signer transport integration", () => {
       custody: "remote",
       label: "transport-test",
       address: account.address,
-      authEnv: "WOOO_SIGNER_AUTH_TOKEN",
+      authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
       chainFamily: "evm",
       chainId: "eip155:1",
       signerUrl: signerHarness.url,

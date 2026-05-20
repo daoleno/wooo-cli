@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Mock context
 const signAndSendTransaction = mock(async () => "0xtx");
@@ -21,11 +24,20 @@ mock.module("../../../src/core/chain-ids", () => ({
   }),
 }));
 
-// Set env vars for OKX auth
-process.env.WOOO_OKX_API_KEY = "test-key";
-process.env.WOOO_OKX_API_SECRET = "test-secret";
-process.env.WOOO_OKX_PASSPHRASE = "test-pass";
-process.env.WOOO_OKX_PROJECT_ID = "test-project";
+// Set explicit env-backed secret refs for OKX Onchain/Web3 auth
+const configDir = mkdtempSync(join(tmpdir(), "wooo-okx-bridge-ops-"));
+const originalConfigDir = process.env.WOOO_CONFIG_DIR;
+process.env.WOOO_CONFIG_DIR = configDir;
+writeFileSync(
+  join(configDir, "wooo.config.json"),
+  JSON.stringify({ okxOnchain: { projectId: "test-project" } }, null, 2),
+);
+process.env.WOOO_OKX_ONCHAIN_API_KEY_REF = "env:WOOO_TEST_OKX_API_KEY";
+process.env.WOOO_TEST_OKX_API_KEY = "test-key";
+process.env.WOOO_OKX_ONCHAIN_SECRET_REF = "env:WOOO_TEST_OKX_API_SECRET";
+process.env.WOOO_TEST_OKX_API_SECRET = "test-secret";
+process.env.WOOO_OKX_ONCHAIN_PASSPHRASE_REF = "env:WOOO_TEST_OKX_PASSPHRASE";
+process.env.WOOO_TEST_OKX_PASSPHRASE = "test-pass";
 
 // Mock fetch for OKX API
 globalThis.fetch = mock(async (input: RequestInfo | URL) => {
@@ -89,6 +101,15 @@ globalThis.fetch = mock(async (input: RequestInfo | URL) => {
 import { createOkxBridgeOperation } from "../../../src/protocols/okx-bridge/operations";
 
 describe("createOkxBridgeOperation", () => {
+  afterAll(() => {
+    rmSync(configDir, { recursive: true, force: true });
+    if (originalConfigDir === undefined) {
+      delete process.env.WOOO_CONFIG_DIR;
+    } else {
+      process.env.WOOO_CONFIG_DIR = originalConfigDir;
+    }
+  });
+
   beforeEach(() => {
     signAndSendTransaction.mockClear();
   });

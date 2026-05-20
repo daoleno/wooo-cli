@@ -5,6 +5,11 @@ import {
   type ServerResponse,
 } from "node:http";
 import {
+  readSecretRefEnv,
+  requireSecret,
+  validateSecretRef,
+} from "../core/secrets";
+import {
   deserializeSignerPayload,
   type HttpSignerMetadata,
   isSignerCommandPendingResponse,
@@ -69,13 +74,14 @@ function parseAdvertisedAccount(args: string[]): AdvertisedAccount {
   };
 }
 
-function resolveAuthToken(args: string[]): string | null {
-  const token =
-    getFlagValue(args, "--auth-token") || process.env.WOOO_SIGNER_AUTH_TOKEN;
-  if (!token?.trim()) {
+async function resolveAuthToken(args: string[]): Promise<string | null> {
+  const ref =
+    validateSecretRef(getFlagValue(args, "--auth-ref"), "signer auth") ||
+    readSecretRefEnv("WOOO_SIGNER_AUTH_REF", "signer auth");
+  if (!ref) {
     return null;
   }
-  return token.trim();
+  return (await requireSecret(ref, "signer auth")).reveal();
 }
 
 function createMetadata(account: AdvertisedAccount): HttpSignerMetadata {
@@ -189,7 +195,7 @@ async function main(): Promise<void> {
   const host = process.env.WOOO_SIGNER_HOST || "127.0.0.1";
   const port = parsePort(args);
   const account = parseAdvertisedAccount(args);
-  const authToken = resolveAuthToken(args);
+  const authToken = await resolveAuthToken(args);
   const metadata = createMetadata(account);
   const requestState = new Map<string, SignerRequestState>();
   const requestIdByClientRequestId = new Map<string, string>();

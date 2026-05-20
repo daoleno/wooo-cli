@@ -1,4 +1,9 @@
 import {
+  getCredentialField,
+  getCredentialService,
+  resolveOptionalCredentialField,
+} from "../../core/credentials";
+import {
   type BridgeTokenMetadata,
   findTokenMatch,
   getNativeTokenMetadata,
@@ -10,9 +15,14 @@ let sdkInitialized = false;
 async function ensureSdkInitialized() {
   if (sdkInitialized) return;
   const { createConfig } = await import("@lifi/sdk");
+  const credentials = getCredentialService("lifi");
+  const apiKey = await resolveOptionalCredentialField({
+    field: getCredentialField(credentials, "apiKey"),
+    service: credentials,
+  });
   createConfig({
     integrator: "wooo-cli",
-    apiKey: process.env.WOOO_LIFI_API_KEY,
+    apiKey: apiKey?.reveal(),
   });
   sdkInitialized = true;
 }

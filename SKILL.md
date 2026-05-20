@@ -135,44 +135,37 @@ wooo-cli wallet import from-file --file /path/to/keyfile
 For non-interactive / automation:
 
 ```bash
-export OWS_PASSPHRASE=your-vault-passphrase
-export OWS_API_KEY=your-api-key    # agent access with policy enforcement
+wooo-cli secret set ows/passphrase
+
+wooo-cli secret set ows/api-key
 ```
 
 ### CEX API Keys
 
-Required for any `wooo-cli cex` commands. Set via env vars or config:
+Required for any `wooo-cli cex` commands. Use `auth` for the normal flow:
 
 ```bash
-# OKX
-export WOOO_OKX_API_KEY=...
-export WOOO_OKX_API_SECRET=...
-export WOOO_OKX_PASSPHRASE=...
-
-# Binance
-export WOOO_BINANCE_API_KEY=...
-export WOOO_BINANCE_API_SECRET=...
-
-# Bybit
-export WOOO_BYBIT_API_KEY=...
-export WOOO_BYBIT_API_SECRET=...
+wooo-cli auth set okx
+wooo-cli auth set binance
+wooo-cli auth set bybit
 ```
 
-Or via config:
+Advanced secret-ref overrides:
+
 ```bash
-wooo-cli config set okx.apiKey ...
-wooo-cli config set okx.apiSecret ...
-wooo-cli config set okx.passphrase ...
+wooo-cli config set okx.apiKeyRef keychain:okx/api-key
+wooo-cli config set okx.apiSecretRef keychain:okx/api-secret
+wooo-cli config set okx.passphraseRef keychain:okx/passphrase
 ```
 
-### OKX Onchain Data API (separate credentials)
+### OKX Onchain / Web3 / DEX API (separate credentials)
 
-Required for `market okx`, `portfolio okx`, and `chain okx` commands:
+Required for `market okx`, `portfolio okx`, `chain okx`, and OKX bridge/DEX
+commands. These credentials come from the OKX Web3 Developer Portal and are
+separate from OKX Exchange keys:
 
 ```bash
-export WOOO_OKX_ONCHAIN_API_KEY=...
-export WOOO_OKX_ONCHAIN_SECRET=...
-export WOOO_OKX_ONCHAIN_PASSPHRASE=...
+wooo-cli auth set okx-onchain --project-id <project-id>
 ```
 
 ---
@@ -196,7 +189,7 @@ Remote / hardware wallets:
 
 ```bash
 wooo-cli wallet discover --signer http://127.0.0.1:8787/
-wooo-cli wallet connect <name> --signer <url> [--address <addr>] [--auth-env <var>]
+wooo-cli wallet connect <name> --signer <url> [--address <addr>] [--auth-ref <ref>]
 wooo-cli wallet disconnect <name>
 ```
 
@@ -388,14 +381,14 @@ wooo-cli prediction polymarket clob market-order --token <tokenId> --side buy --
 
 Polymarket trading uses deposit wallets and CLOB `POLY_1271` signatures. The
 active signer comes from `WOOO_WALLET_MODE`; the target deposit wallet resolves
-from `WOOO_POLYMARKET_OWNER`, `WOOO_POLYMARKET_DEPOSIT_WALLET`,
+from config `polymarket.owner`, config `polymarket.depositWallet`,
 `--deposit-wallet`, or, when no target is configured, the active signer as
 owner. If both owner and deposit wallet are provided, the deposit wallet must be
-the deterministic wallet for that owner. The CLI has no Polymarket session
-mode; owner/session authority belongs to the signer and Deposit Wallet
-contract. Deposit wallet deployment and approval writes go through the
-Polymarket relayer; set `WOOO_POLYMARKET_RELAYER_API_KEY` and
-`WOOO_POLYMARKET_RELAYER_API_KEY_ADDRESS` for relayer authentication.
+the deterministic wallet for that owner. The CLI has no Polymarket session mode;
+owner/session authority belongs to the signer and Deposit Wallet contract.
+Deposit wallet deployment and approval writes go through the Polymarket relayer;
+use `wooo-cli auth set polymarket-relayer` and config
+`polymarket.relayerApiKeyAddress` for relayer authentication.
 
 ### Cross-Chain Bridges
 
@@ -529,9 +522,9 @@ wooo-cli swap ETH USDC 1 --chain ethereum --dry-run --json
 wooo-cli swap ETH USDC 1 --chain ethereum --yes
 
 # Set passphrase for non-interactive wallet access
-export OWS_PASSPHRASE=...
+wooo-cli secret set ows/passphrase
 # Or use API key with policy enforcement
-export OWS_API_KEY=...
+wooo-cli secret set ows/api-key
 ```
 
 The `--dry-run --json` combination returns an `ExecutionPlan` object describing every step (approvals, transactions, estimated costs) without executing. This is the foundation for building approval workflows where a human or policy engine reviews before committing.

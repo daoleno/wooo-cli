@@ -136,7 +136,7 @@ export async function resolveAccount(
       }
       return {
         address: remoteAccount.address,
-        authEnv: remoteAccount.authEnv,
+        authRef: remoteAccount.authRef,
         chainFamily,
         chainId,
         custody: "remote",

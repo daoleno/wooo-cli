@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChainFamily } from "./chain-ids";
-import { normalizeSignerUrl, validateSignerAuthEnv } from "./signers";
+import { normalizeSignerUrl, validateSignerAuthRef } from "./signers";
 
 export interface RemoteAccountRecord {
   address: string;
-  authEnv?: string;
+  authRef?: string;
   chainFamily: ChainFamily;
   label: string;
   signerUrl: string;
@@ -45,8 +45,8 @@ export class RemoteAccountRegistry {
     return {
       ...account,
       signerUrl: normalizeSignerUrl(account.signerUrl),
-      ...(account.authEnv
-        ? { authEnv: validateSignerAuthEnv(account.authEnv) }
+      ...(account.authRef
+        ? { authRef: validateSignerAuthRef(account.authRef) }
         : {}),
     };
   }

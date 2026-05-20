@@ -1,7 +1,11 @@
-import { readFileSync } from "node:fs";
+import {
+  readSecretRefEnv,
+  requireSecret,
+  validateSecretRef,
+} from "../core/secrets";
 
 export interface SignerSecretOptions {
-  secretFile?: string;
+  secretRef?: string;
 }
 
 export function getFlagValue(args: string[], flag: string): string | undefined {
@@ -20,7 +24,7 @@ export function getFlagValue(args: string[], flag: string): string | undefined {
 export async function promptForSecret(): Promise<string> {
   if (!process.stdin.isTTY) {
     throw new Error(
-      "Set --secret-file, WOOO_SIGNER_SECRET_FILE, or WOOO_SIGNER_SECRET for reference signer usage",
+      "Set --secret-ref or WOOO_SIGNER_SECRET_REF for reference signer usage",
     );
   }
 
@@ -37,14 +41,11 @@ export async function promptForSecret(): Promise<string> {
 export async function resolveSignerSecret(
   options: SignerSecretOptions = {},
 ): Promise<string> {
-  const candidatePath =
-    options.secretFile || process.env.WOOO_SIGNER_SECRET_FILE;
-  if (candidatePath) {
-    return readFileSync(candidatePath, "utf-8").trim();
-  }
-
-  if (process.env.WOOO_SIGNER_SECRET) {
-    return process.env.WOOO_SIGNER_SECRET;
+  const ref =
+    validateSecretRef(options.secretRef, "signer secret") ||
+    readSecretRefEnv("WOOO_SIGNER_SECRET_REF", "signer secret");
+  if (ref) {
+    return (await requireSecret(ref, "signer secret")).reveal();
   }
 
   return await promptForSecret();

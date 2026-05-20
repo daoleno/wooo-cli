@@ -50,7 +50,7 @@ describe("RemoteAccountRegistry", () => {
       address: SOL_ADDRESS,
       chainFamily: "solana",
       signerUrl: "http://localhost:9090/",
-      authEnv: "WOOO_SIGNER_AUTH_TOKEN",
+      authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
     };
 
     registry.add(evmWallet);
@@ -112,16 +112,16 @@ describe("RemoteAccountRegistry", () => {
     expect(() => registry.remove("ghost")).toThrow(/not found/i);
   });
 
-  test("rejects non-signer auth env names", () => {
+  test("rejects raw auth env names", () => {
     expect(() =>
       registry.add({
-        label: "invalid-auth-env",
+        label: "invalid-auth-ref",
         address: EVM_ADDRESS,
         chainFamily: "evm",
         signerUrl: "http://127.0.0.1:8787/",
-        authEnv: "OPENAI_API_KEY",
+        authRef: "OPENAI_API_KEY",
       }),
-    ).toThrow(/WOOO_SIGNER_AUTH_/);
+    ).toThrow(/secret ref/);
   });
 
   test("creates the config directory on first save", () => {

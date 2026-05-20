@@ -62,7 +62,7 @@ Register a remote account backed by an HTTP signer:
 
 ```bash
 wooo-cli wallet connect my-signer --signer http://127.0.0.1:8787/
-wooo-cli wallet connect remote --signer https://signer.example.com/ --auth-env WOOO_SIGNER_AUTH_TOKEN
+wooo-cli wallet connect remote --signer https://signer.example.com/ --auth-ref keychain:signer/auth-token
 ```
 
 Inspect the signer before connecting:
@@ -81,12 +81,12 @@ URL requirements:
 
 - supported URL schemes are `http://` and `https://`
 - non-local signer URLs must use `https://`
-- auth token is resolved from an env var name stored on the connected account record, not persisted in config
+- auth token is resolved from an explicit secret ref stored on the connected account record
 
 Request requirements:
 
-- if `authEnv` is configured, it must match `WOOO_SIGNER_AUTH_*`
-- if `authEnv` is configured, `wooo-cli` sends `Authorization: Bearer <token>` with every request
+- if `authRef` is configured, it must be `keychain:<name>` or `env:<ENV_NAME>`
+- if `authRef` is configured, `wooo-cli` sends `Authorization: Bearer <token>` with every request
 - the signer should authenticate the caller before accepting a request
 
 ## 5. Metadata Discovery

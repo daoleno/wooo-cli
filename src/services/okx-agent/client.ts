@@ -1,5 +1,11 @@
 import { createHmac } from "node:crypto";
 import { loadWoooConfig } from "../../core/config";
+import {
+  getCredentialField,
+  getCredentialService,
+  requireCredentialField,
+  resolveOptionalCredentialField,
+} from "../../core/credentials";
 
 const DEFAULT_OKX_AGENT_BASE_URL = "https://www.okx.com";
 const DEFAULT_HEADERS = {
@@ -184,34 +190,40 @@ export async function resolveOkxAgentClientOptionsFromConfig(options?: {
 }): Promise<OkxAgentClientOptions> {
   const config = await loadWoooConfig();
   const section = config.okx;
-
-  const apiKey = process.env.WOOO_OKX_API_KEY || section?.apiKey || undefined;
-  const secret =
-    process.env.WOOO_OKX_API_SECRET || section?.apiSecret || undefined;
-  const passphrase =
-    process.env.WOOO_OKX_PASSPHRASE || section?.passphrase || undefined;
+  const credentials = getCredentialService("okx");
+  const apiKeyField = getCredentialField(credentials, "apiKey");
+  const secretField = getCredentialField(credentials, "apiSecret");
+  const passphraseField = getCredentialField(credentials, "passphrase");
   const baseUrl =
     process.env.WOOO_OKX_BASE_URL ||
     process.env.WOOO_OKX_API_BASE_URL ||
     section?.baseUrl ||
     DEFAULT_OKX_AGENT_BASE_URL;
 
-  if (options?.requireAuth && (!apiKey || !secret || !passphrase)) {
-    console.error("Error: OKX API credentials are not configured.");
-    console.error(
-      "Set WOOO_OKX_API_KEY, WOOO_OKX_API_SECRET, and WOOO_OKX_PASSPHRASE, or run:",
-    );
-    console.error("  wooo-cli config set okx.apiKey <key>");
-    console.error("  wooo-cli config set okx.apiSecret <secret>");
-    console.error("  wooo-cli config set okx.passphrase <passphrase>");
-    process.exit(3);
-  }
+  const resolveField = options?.requireAuth
+    ? requireCredentialField
+    : resolveOptionalCredentialField;
+  const apiKey = await resolveField({
+    config,
+    field: apiKeyField,
+    service: credentials,
+  });
+  const secret = await resolveField({
+    config,
+    field: secretField,
+    service: credentials,
+  });
+  const passphrase = await resolveField({
+    config,
+    field: passphraseField,
+    service: credentials,
+  });
 
   return {
-    apiKey,
+    apiKey: apiKey?.reveal(),
     baseUrl,
-    passphrase,
-    secret,
+    passphrase: passphrase?.reveal(),
+    secret: secret?.reveal(),
   };
 }
 
@@ -499,7 +511,7 @@ export class OkxAgentClient {
     if (params.auth) {
       if (!this.apiKey || !this.secret || !this.passphrase) {
         throw new Error(
-          "OKX private API credentials are not configured. Set WOOO_OKX_API_KEY, WOOO_OKX_API_SECRET, and WOOO_OKX_PASSPHRASE.",
+          "OKX private API credentials are not configured. Run `wooo-cli auth set okx`.",
         );
       }
 

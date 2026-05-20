@@ -287,7 +287,8 @@ import type { LifiQuote, LifiStatus } from "./types";
 // Initialize SDK once
 createConfig({
   integrator: "wooo-cli",
-  apiKey: process.env.WOOO_LIFI_API_KEY,
+  // Resolve the default lifi/api-key keychain slot or an explicit LI.FI secret-ref override.
+  apiKey,
 });
 
 export interface LifiQuoteParams {
@@ -1053,16 +1054,36 @@ export function createOkxSignatureHeaders(params: SignatureParams): Record<strin
   };
 }
 
-function resolveAuth(): OkxApiAuth {
-  const apiKey = process.env.WOOO_OKX_API_KEY;
-  const secretKey = process.env.WOOO_OKX_API_SECRET;
-  const passphrase = process.env.WOOO_OKX_PASSPHRASE;
-  const projectId = process.env.WOOO_OKX_PROJECT_ID;
-  if (!apiKey || !secretKey || !passphrase || !projectId) {
+async function resolveAuth(): Promise<OkxApiAuth> {
+  const config = await loadWoooConfig();
+  const credentials = getCredentialService("okx-onchain");
+  const projectId = config.okxOnchain?.projectId;
+  if (!projectId) {
     throw new Error(
-      "OKX Bridge requires WOOO_OKX_API_KEY, WOOO_OKX_API_SECRET, WOOO_OKX_PASSPHRASE, and WOOO_OKX_PROJECT_ID environment variables",
+      "OKX Bridge requires OKX Onchain/Web3 credentials and an OKX Onchain project ID",
     );
   }
+  const apiKey = (
+    await requireCredentialField({
+      config,
+      field: getCredentialField(credentials, "apiKey"),
+      service: credentials,
+    })
+  ).reveal();
+  const secretKey = (
+    await requireCredentialField({
+      config,
+      field: getCredentialField(credentials, "secret"),
+      service: credentials,
+    })
+  ).reveal();
+  const passphrase = (
+    await requireCredentialField({
+      config,
+      field: getCredentialField(credentials, "passphrase"),
+      service: credentials,
+    })
+  ).reveal();
   return { apiKey, secretKey, passphrase, projectId };
 }
 

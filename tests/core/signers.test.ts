@@ -73,9 +73,9 @@ function createRemoteAccount(
 
 describe("signers", () => {
   const originalEnv = {
-    OWS_PASSPHRASE: process.env.OWS_PASSPHRASE,
+    WOOO_TEST_OWS_PASSPHRASE: process.env.WOOO_TEST_OWS_PASSPHRASE,
+    WOOO_OWS_PASSPHRASE_REF: process.env.WOOO_OWS_PASSPHRASE_REF,
     WOOO_CONFIG_DIR: process.env.WOOO_CONFIG_DIR,
-    WOOO_MASTER_PASSWORD: process.env.WOOO_MASTER_PASSWORD,
     WOOO_HTTP_SIGNER_POLL_INTERVAL_MS:
       process.env.WOOO_HTTP_SIGNER_POLL_INTERVAL_MS,
     WOOO_HTTP_SIGNER_REQUEST_TIMEOUT_MS:
@@ -89,8 +89,8 @@ describe("signers", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "wooo-signers-test-"));
     process.env.WOOO_CONFIG_DIR = tempDir;
-    process.env.OWS_PASSPHRASE = "top-secret";
-    process.env.WOOO_MASTER_PASSWORD = "top-secret";
+    process.env.WOOO_OWS_PASSPHRASE_REF = "env:WOOO_TEST_OWS_PASSPHRASE";
+    process.env.WOOO_TEST_OWS_PASSPHRASE = "top-secret";
     process.env.WOOO_SIGNER_AUTH_TOKEN = "signer-token-test";
   });
 
@@ -614,7 +614,7 @@ describe("signers", () => {
           address: ZERO_ADDRESS,
           chainId: "eip155:1",
           signerUrl: normalizeSignerUrl(server.url.toString()),
-          authEnv: "WOOO_SIGNER_AUTH_TOKEN",
+          authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
         }),
       );
 
@@ -700,7 +700,7 @@ describe("signers", () => {
     try {
       const metadata = await fetchSignerMetadata(
         server.url.toString(),
-        "WOOO_SIGNER_AUTH_TOKEN",
+        "env:WOOO_SIGNER_AUTH_TOKEN",
       );
       expect(capturedAuthHeader).toBe("Bearer signer-token-test");
       expect(metadata.accounts[0]?.address).toBe(ZERO_ADDRESS);
@@ -710,10 +710,10 @@ describe("signers", () => {
     }
   });
 
-  test("fetchSignerMetadata rejects non-signer auth env names", async () => {
+  test("fetchSignerMetadata rejects raw auth env names", async () => {
     await expect(
       fetchSignerMetadata("http://127.0.0.1:8787/", "OPENAI_API_KEY"),
-    ).rejects.toThrow(/WOOO_SIGNER_AUTH_/);
+    ).rejects.toThrow(/secret ref/);
   });
 
   test("fetchSignerMetadata times out when the signer does not respond", async () => {

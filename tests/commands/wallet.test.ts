@@ -40,13 +40,13 @@ describe("RemoteAccountRegistry (via wallet commands)", () => {
       address: "0x000000000000000000000000000000000000dEaD",
       chainFamily: "evm",
       signerUrl: "https://signer.example.com/",
-      authEnv: "WOOO_SIGNER_AUTH_TOKEN",
+      authRef: "env:WOOO_SIGNER_AUTH_TOKEN",
     });
     const wallets = registry.list();
     expect(wallets).toHaveLength(1);
     expect(wallets[0]?.label).toBe("auth-wallet");
     expect(wallets[0]?.signerUrl).toBe("https://signer.example.com/");
-    expect(wallets[0]?.authEnv).toBe("WOOO_SIGNER_AUTH_TOKEN");
+    expect(wallets[0]?.authRef).toBe("env:WOOO_SIGNER_AUTH_TOKEN");
   });
 
   test("retrieves a wallet by name", () => {

@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createOkxSignatureHeaders,
   OkxBridgeClient,
@@ -182,24 +185,32 @@ describe("OkxBridgeClient", () => {
     expect(token.decimals).toBe(6);
   });
 
-  test("throws on missing credentials", () => {
+  test("throws on missing credential refs", async () => {
     const saved = {
-      key: process.env.WOOO_OKX_API_KEY,
-      secret: process.env.WOOO_OKX_API_SECRET,
-      pass: process.env.WOOO_OKX_PASSPHRASE,
-      proj: process.env.WOOO_OKX_PROJECT_ID,
+      configDir: process.env.WOOO_CONFIG_DIR,
+      key: process.env.WOOO_OKX_ONCHAIN_API_KEY_REF,
+      secret: process.env.WOOO_OKX_ONCHAIN_SECRET_REF,
+      pass: process.env.WOOO_OKX_ONCHAIN_PASSPHRASE_REF,
     };
-    delete process.env.WOOO_OKX_API_KEY;
-    delete process.env.WOOO_OKX_API_SECRET;
-    delete process.env.WOOO_OKX_PASSPHRASE;
-    delete process.env.WOOO_OKX_PROJECT_ID;
+    const configDir = mkdtempSync(join(tmpdir(), "wooo-okx-bridge-client-"));
+    process.env.WOOO_CONFIG_DIR = configDir;
+    delete process.env.WOOO_OKX_ONCHAIN_API_KEY_REF;
+    delete process.env.WOOO_OKX_ONCHAIN_SECRET_REF;
+    delete process.env.WOOO_OKX_ONCHAIN_PASSPHRASE_REF;
     try {
-      expect(() => new OkxBridgeClient()).toThrow("WOOO_OKX_API_KEY");
+      await expect(new OkxBridgeClient().getSupportedChains()).rejects.toThrow(
+        /OKX Onchain/,
+      );
     } finally {
-      if (saved.key) process.env.WOOO_OKX_API_KEY = saved.key;
-      if (saved.secret) process.env.WOOO_OKX_API_SECRET = saved.secret;
-      if (saved.pass) process.env.WOOO_OKX_PASSPHRASE = saved.pass;
-      if (saved.proj) process.env.WOOO_OKX_PROJECT_ID = saved.proj;
+      rmSync(configDir, { recursive: true, force: true });
+      if (saved.configDir) {
+        process.env.WOOO_CONFIG_DIR = saved.configDir;
+      } else {
+        delete process.env.WOOO_CONFIG_DIR;
+      }
+      if (saved.key) process.env.WOOO_OKX_ONCHAIN_API_KEY_REF = saved.key;
+      if (saved.secret) process.env.WOOO_OKX_ONCHAIN_SECRET_REF = saved.secret;
+      if (saved.pass) process.env.WOOO_OKX_ONCHAIN_PASSPHRASE_REF = saved.pass;
     }
   });
 

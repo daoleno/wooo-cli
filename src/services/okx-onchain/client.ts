@@ -1,6 +1,11 @@
 import { createHmac } from "node:crypto";
 import { normalizeChainName } from "../../core/chain-ids";
 import { loadWoooConfig } from "../../core/config";
+import {
+  getCredentialField,
+  getCredentialService,
+  requireCredentialField,
+} from "../../core/credentials";
 
 const DEFAULT_OKX_ONCHAIN_BASE_URL = "https://web3.okx.com";
 const DEFAULT_HEADERS = {
@@ -507,33 +512,37 @@ export function createOkxOnchainSignature(
 export async function resolveOkxOnchainClientOptionsFromConfig(): Promise<OkxOnchainClientOptions> {
   const config = await loadWoooConfig();
   const section = config.okxOnchain;
-
-  const apiKey =
-    process.env.WOOO_OKX_ONCHAIN_API_KEY || section?.apiKey || undefined;
-  const secret =
-    process.env.WOOO_OKX_ONCHAIN_SECRET || section?.secret || undefined;
-  const passphrase =
-    process.env.WOOO_OKX_ONCHAIN_PASSPHRASE || section?.passphrase || undefined;
+  const credentials = getCredentialService("okx-onchain");
+  const apiKeyField = getCredentialField(credentials, "apiKey");
+  const secretField = getCredentialField(credentials, "secret");
+  const passphraseField = getCredentialField(credentials, "passphrase");
   const baseUrl =
     process.env.WOOO_OKX_ONCHAIN_BASE_URL ||
     section?.baseUrl ||
     DEFAULT_OKX_ONCHAIN_BASE_URL;
 
-  if (!apiKey || !secret || !passphrase) {
-    console.error("Error: OKX Onchain API credentials are not configured.");
-    console.error(
-      "Set WOOO_OKX_ONCHAIN_API_KEY, WOOO_OKX_ONCHAIN_SECRET, and WOOO_OKX_ONCHAIN_PASSPHRASE, or run:",
-    );
-    console.error("  wooo-cli config set okxOnchain.apiKey <key>");
-    console.error("  wooo-cli config set okxOnchain.secret <secret>");
-    console.error("  wooo-cli config set okxOnchain.passphrase <passphrase>");
-    process.exit(3);
-  }
-
   return {
-    apiKey,
-    secret,
-    passphrase,
+    apiKey: (
+      await requireCredentialField({
+        config,
+        field: apiKeyField,
+        service: credentials,
+      })
+    ).reveal(),
+    secret: (
+      await requireCredentialField({
+        config,
+        field: secretField,
+        service: credentials,
+      })
+    ).reveal(),
+    passphrase: (
+      await requireCredentialField({
+        config,
+        field: passphraseField,
+        service: credentials,
+      })
+    ).reveal(),
     baseUrl,
   };
 }

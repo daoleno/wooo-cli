@@ -10,16 +10,26 @@ export interface WoooConfig {
   };
   chains?: Record<string, { rpc?: string }>;
   okx?: {
-    apiKey?: string;
-    apiSecret?: string;
-    passphrase?: string;
+    apiKeyRef?: string;
+    apiSecretRef?: string;
+    passphraseRef?: string;
     baseUrl?: string;
   };
   okxOnchain?: {
-    apiKey?: string;
-    secret?: string;
-    passphrase?: string;
+    apiKeyRef?: string;
+    secretRef?: string;
+    passphraseRef?: string;
+    projectId?: string;
     baseUrl?: string;
+  };
+  lifi?: {
+    apiKeyRef?: string;
+  };
+  polymarket?: {
+    depositWallet?: string;
+    owner?: string;
+    relayerApiKeyAddress?: string;
+    relayerApiKeyRef?: string;
   };
   [protocol: string]: unknown;
 }

@@ -383,8 +383,8 @@ class EvmAnvilHarness {
       env: {
         ...process.env,
         WOOO_CONFIG_DIR: this.configDir,
-        WOOO_MASTER_PASSWORD: MASTER_PASSWORD,
-        OWS_PASSPHRASE: MASTER_PASSWORD,
+        WOOO_OWS_PASSPHRASE_REF: "env:WOOO_TEST_OWS_PASSPHRASE",
+        WOOO_TEST_OWS_PASSPHRASE: MASTER_PASSWORD,
         WOOO_SIGNER_AUTO_APPROVE: "1",
         ...(options?.env ?? {}),
       },

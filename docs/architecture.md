@@ -171,18 +171,18 @@ Local wallets are managed by the Open Wallet Standard (OWS) SDK:
 - CAIP-2 chain identifiers used throughout (`eip155:1`, `solana:...`)
 - Policy enforcement via OWS policy engine (`wooo wallet policy`)
 - Audit log at `~/.ows/logs/audit.jsonl`
-- Authentication: passphrase (interactive or `OWS_PASSPHRASE`) or API key (`OWS_API_KEY`) for agent access
+- Authentication: passphrase (interactive or default `keychain:ows/passphrase`) or API key (`keychain:ows/api-key`) for agent access
 
 ### Remote Accounts (HTTP Signer)
 
 Remote accounts connect via an HTTP signer:
 
-- Registered with `wooo wallet connect <name> --signer <url> [--auth-env VAR]`
+- Registered with `wooo wallet connect <name> --signer <url> [--auth-ref REF]`
 - Stored in `~/.config/wooo/remote-accounts.json` (address + signer URL only, no keys)
 - Discovery is account-scoped: the signer advertises accounts and supported operations
 - Execution happens via HTTP `POST /`, which returns a tx hash, hex signature, or structured signature
 - Async support uses the pending/polling pattern for browser-wallet or app-wallet approval flows
-- Auth token is resolved from an environment variable and is never persisted in config
+- Auth token is resolved from a secret ref. The token value is never persisted in config.
 
 ### Unified Wallet Port
 

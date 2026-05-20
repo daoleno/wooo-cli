@@ -40,11 +40,13 @@ const main = defineCommand({
   },
   args: globalArgs,
   subCommands: {
+    auth: () => import("./commands/auth/index").then((m) => m.default),
     config: () => import("./commands/config/index").then((m) => m.default),
     wallet: () => import("./commands/wallet/index").then((m) => m.default),
     market: () => import("./commands/market/index").then((m) => m.default),
     portfolio: () =>
       import("./commands/portfolio/index").then((m) => m.default),
+    secret: () => import("./commands/secret/index").then((m) => m.default),
     chain: () => import("./commands/chain/index").then((m) => m.default),
     news: () => import("./commands/news/index").then((m) => m.default),
     swap: () => import("./commands/swap/index").then((m) => m.default),

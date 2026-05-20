@@ -39,7 +39,8 @@ describe("wallet create command", () => {
       env: {
         ...process.env,
         WOOO_CONFIG_DIR: tempDir,
-        OWS_PASSPHRASE: "test-passphrase",
+        WOOO_OWS_PASSPHRASE_REF: "env:WOOO_TEST_OWS_PASSPHRASE",
+        WOOO_TEST_OWS_PASSPHRASE: "test-passphrase",
       },
       stderr: "pipe",
       stdout: "pipe",

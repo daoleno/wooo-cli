@@ -94,7 +94,7 @@ Note: `formatResult` is not a WriteOperation method. It is passed via `WriteOper
 
 ### Authentication
 
-- `WOOO_LIFI_API_KEY` env var (optional). Passed via `createConfig({ integrator: 'wooo-cli', apiKey: process.env.WOOO_LIFI_API_KEY })`.
+- The default `lifi/api-key` keychain slot or an explicit LI.FI secret-ref override is passed to `createConfig({ integrator: 'wooo-cli', apiKey })` when configured.
 - Without API key: works with default rate limits (200 req/min).
 
 ## OKX Bridge Protocol
@@ -132,11 +132,10 @@ Note: `formatResult` is passed via `WriteOperationRuntimeOptions`. Shows tx hash
 
 ### Authentication
 
-Required env vars:
-- `WOOO_OKX_API_KEY` (reuse existing)
-- `WOOO_OKX_API_SECRET` (reuse existing)
-- `WOOO_OKX_PASSPHRASE` (reuse existing)
-- `WOOO_OKX_PROJECT_ID` (new — required for DEX API)
+Required credential sources:
+- OKX bridge uses the OKX Onchain/Web3 credential domain, not OKX Exchange credentials.
+- Default keychain slots: `okx-onchain/api-key`, `okx-onchain/secret`, `okx-onchain/passphrase`
+- `okxOnchain.projectId` is required for DEX API project scoping.
 
 HMAC-SHA256 signing: `sign = Base64(HMAC-SHA256(timestamp + method + requestPath + queryString, secretKey))`.
 
@@ -149,15 +148,15 @@ In `src/protocols/registry.ts`:
 
 No changes to `index.ts` — the group routing automatically places `type: "bridge"` protocols under `wooo bridge`.
 
-## Environment Variables
+## Credential And Config Sources
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `WOOO_LIFI_API_KEY` | No | LI.FI API key (optional, for higher rate limits) |
-| `WOOO_OKX_PROJECT_ID` | Yes (for OKX Bridge) | OKX DEX API project ID |
-| `WOOO_OKX_API_KEY` | Yes (for OKX Bridge) | Reuse existing |
-| `WOOO_OKX_API_SECRET` | Yes (for OKX Bridge) | Reuse existing |
-| `WOOO_OKX_PASSPHRASE` | Yes (for OKX Bridge) | Reuse existing |
+| `lifi/api-key` keychain slot | No | LI.FI API key (optional, for higher rate limits) |
+| `okxOnchain.projectId` | Yes (for OKX Bridge) | OKX DEX API project ID |
+| `okx-onchain/api-key` keychain slot | Yes (for OKX Bridge) | OKX Onchain API key |
+| `okx-onchain/secret` keychain slot | Yes (for OKX Bridge) | OKX Onchain secret |
+| `okx-onchain/passphrase` keychain slot | Yes (for OKX Bridge) | OKX Onchain passphrase |
 
 ## Dependencies
 
@@ -173,7 +172,7 @@ Each protocol gets tests mirroring src structure:
 
 ## Error Handling
 
-- **Missing credentials**: OKX Bridge commands fail early with a clear error if `WOOO_OKX_API_KEY`, `WOOO_OKX_API_SECRET`, `WOOO_OKX_PASSPHRASE`, or `WOOO_OKX_PROJECT_ID` are not set. LI.FI works without API key.
+- **Missing credentials**: OKX Bridge commands fail early with a clear error if OKX Onchain/Web3 credentials or project ID are not configured. LI.FI works without API key.
 - **Rate limiting**: On 429 responses, surface the error to the user with a message suggesting they set an API key (LI.FI) or retry later.
 - **Quote expiry**: Quotes are fetched in `prepare()` and used immediately in `execute()`. If the user takes too long to confirm and execution fails due to stale calldata, the error is surfaced and the user is prompted to retry.
 - **Non-EVM chains**: Both protocols validate `--from-chain` and `--to-chain` are EVM chains. Non-EVM chains produce a clear error: "Only EVM chains are supported for bridging in this version."

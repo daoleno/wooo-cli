@@ -10,12 +10,13 @@ import {
 
 const AAVE_ETHEREUM_MARKET = "AaveV3Ethereum";
 const AUTH_ENV = "WOOO_SIGNER_AUTH_TOKEN";
+const AUTH_REF = `env:${AUTH_ENV}`;
 const AUTH_TOKEN = "anvil-remote-signer-token";
 const MORPHO_ETHEREUM_WSTETH_USDC_MARKET =
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc";
 
 interface WalletDiscoverOutput extends HttpSignerMetadata {
-  authEnv?: string;
+  authRef?: string;
   signerUrl: string;
 }
 
@@ -117,14 +118,14 @@ describe("remote signer anvil e2e", () => {
             "discover",
             "--signer",
             signer.url,
-            "--auth-env",
-            AUTH_ENV,
+            "--auth-ref",
+            AUTH_REF,
           ],
           { env },
         );
         expect(discover.kind).toBe("wooo-wallet-transport");
         expect(discover.transport).toBe("http-signer");
-        expect(discover.authEnv).toBe(AUTH_ENV);
+        expect(discover.authRef).toBe(AUTH_REF);
         expect(discover.accounts).toEqual([
           {
             address: anvil.address,
@@ -144,8 +145,8 @@ describe("remote signer anvil e2e", () => {
             "remote-anvil",
             "--signer",
             signer.url,
-            "--auth-env",
-            AUTH_ENV,
+            "--auth-ref",
+            AUTH_REF,
           ],
           { env },
         );
@@ -423,8 +424,8 @@ describe("remote signer anvil e2e", () => {
             "remote-polygon-anvil",
             "--signer",
             signer.url,
-            "--auth-env",
-            AUTH_ENV,
+            "--auth-ref",
+            AUTH_REF,
           ],
           { env },
         );
