@@ -1,0 +1,35 @@
+---
+title: CLI
+description: How the wooo-cli app is organized inside the monorepo and how to run it.
+---
+
+The CLI app lives in `apps/cli`. It remains the publishable npm package named
+`wooo-cli`, with its binary exposed as `wooo-cli`.
+
+## Run locally
+
+From the monorepo root:
+
+```bash
+bun run dev:cli -- --help
+bun run dev:cli -- market price BTC
+```
+
+From the app directory:
+
+```bash
+cd apps/cli
+bun run dev -- --help
+```
+
+## Build and verify
+
+```bash
+bun run build:cli
+bun run type-check:cli
+bun run test
+bun run package:check
+```
+
+The package dry run is executed from `apps/cli`, so the generated npm tarball
+contains the CLI README, skill guide, license, `bin/`, and `dist/` output.

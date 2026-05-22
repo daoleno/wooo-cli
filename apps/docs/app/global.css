@@ -1,0 +1,466 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@source "../node_modules/.bun/fumadocs-ui@*/node_modules/fumadocs-ui/dist/**/*.js";
+
+:root {
+  --site-bg: #dfe2c2;
+  --site-ink: #121410;
+  --site-muted: #5e6358;
+  --site-line: rgba(18, 20, 16, 0.18);
+  --site-panel: #eef0d2;
+  --site-panel-strong: #171a17;
+  --site-accent: #167f73;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+
+html {
+  background: var(--site-bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--site-bg);
+  color: var(--site-ink);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+button,
+a {
+  letter-spacing: 0;
+}
+
+.site-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 78px;
+  border-inline: 1px dotted var(--site-line);
+}
+
+.brand-mark {
+  color: var(--site-ink);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  line-height: 0.8;
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 0.92rem;
+}
+
+.site-header nav a {
+  color: var(--site-muted);
+  text-decoration: none;
+}
+
+.site-header nav a:hover {
+  color: var(--site-ink);
+}
+
+.hero-section {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 0.85fr);
+  gap: clamp(28px, 4vw, 56px);
+  align-items: start;
+  padding: clamp(28px, 3.6vw, 48px) 0 32px;
+  border-inline: 1px dotted var(--site-line);
+}
+
+.hero-copy {
+  max-width: 700px;
+}
+
+.eyebrow,
+.section-kicker,
+.command-label {
+  margin: 0 0 18px;
+  color: var(--site-muted);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hero-copy h1 {
+  max-width: 720px;
+  margin: 0;
+  color: var(--site-ink);
+  font-family: var(--font-serif);
+  font-size: clamp(3.6rem, 6.4vw, 6rem);
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.hero-emphasis {
+  display: block;
+  font-style: italic;
+}
+
+.hero-lede {
+  max-width: 560px;
+  margin: 20px 0 0;
+  color: var(--site-ink);
+  font-size: clamp(1.02rem, 1.45vw, 1.22rem);
+  line-height: 1.45;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.primary-action,
+.secondary-action,
+.docs-links a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid var(--site-ink);
+  border-radius: 7px;
+  padding: 0 17px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-action {
+  background: var(--site-ink);
+  color: var(--site-bg);
+}
+
+.primary-action svg,
+.secondary-action svg,
+.docs-links svg {
+  width: 17px;
+  height: 17px;
+}
+
+.secondary-action {
+  color: var(--site-ink);
+}
+
+.terminal-panel {
+  overflow: hidden;
+  border: 1px solid rgba(18, 20, 16, 0.3);
+  border-radius: 8px;
+  background: var(--site-panel-strong);
+  color: #e7ead1;
+  box-shadow: 0 28px 80px rgba(18, 20, 16, 0.25);
+}
+
+.terminal-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(231, 234, 209, 0.22);
+  padding: 11px 14px;
+}
+
+.chrome-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d64d38;
+}
+
+.chrome-dot:nth-child(2) {
+  background: #e0c552;
+}
+
+.chrome-dot:nth-child(3) {
+  background: #46a66e;
+}
+
+.terminal-chrome p {
+  margin: 0 0 0 auto;
+  color: rgba(231, 234, 209, 0.58);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.terminal-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 22px;
+  align-items: center;
+  min-height: 286px;
+  padding: 24px;
+}
+
+.terminal-grid img {
+  width: 100%;
+  height: auto;
+}
+
+.terminal-copy p:last-child {
+  margin: 18px 0 0;
+  color: rgba(231, 234, 209, 0.72);
+  line-height: 1.55;
+}
+
+.install-command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(231, 234, 209, 0.26);
+  border-radius: 6px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.install-command code,
+.command-list code {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+.install-command svg {
+  width: 17px;
+  min-width: 17px;
+}
+
+.command-strip,
+.capabilities-section,
+.surface-section,
+.docs-band {
+  border-top: 1px solid var(--site-line);
+  border-inline: 1px dotted var(--site-line);
+  padding: clamp(42px, 7vw, 78px) 0;
+}
+
+.command-strip {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.command-strip h2,
+.section-heading h2,
+.surface-section h2,
+.docs-band h2 {
+  max-width: 720px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(2.25rem, 5vw, 4.8rem);
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.command-list {
+  display: grid;
+  gap: 10px;
+}
+
+.command-list code {
+  display: block;
+  overflow-x: auto;
+  border: 1px solid var(--site-line);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--site-ink);
+  white-space: nowrap;
+}
+
+.section-heading {
+  max-width: 740px;
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 34px;
+  background: var(--site-line);
+  border: 1px solid var(--site-line);
+}
+
+.capability-grid article {
+  min-height: 260px;
+  background: var(--site-bg);
+  padding: 26px;
+}
+
+.capability-grid svg {
+  width: 26px;
+  height: 26px;
+  color: var(--site-accent);
+}
+
+.capability-grid h3 {
+  margin: 42px 0 12px;
+  font-size: 1.18rem;
+}
+
+.capability-grid p,
+.surface-list p {
+  margin: 0;
+  color: var(--site-muted);
+  line-height: 1.55;
+}
+
+.surface-section {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+  gap: 34px;
+}
+
+.surface-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--site-line);
+}
+
+.surface-list div {
+  border-bottom: 1px solid var(--site-line);
+  padding: 18px 0;
+}
+
+.surface-title {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 750;
+}
+
+.docs-band {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-bottom: 96px;
+}
+
+.docs-band > div:first-child > svg {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 18px;
+  color: var(--site-accent);
+}
+
+.docs-links {
+  display: grid;
+  min-width: 240px;
+  gap: 10px;
+}
+
+.docs-links a {
+  justify-content: flex-start;
+  border-color: var(--site-line);
+  color: var(--site-ink);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 900px) {
+  .site-header nav {
+    gap: 14px;
+  }
+
+  .hero-section,
+  .command-strip,
+  .surface-section {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-grid img {
+    max-width: 180px;
+  }
+
+  .capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .docs-band {
+    display: grid;
+  }
+}
+
+@media (max-width: 620px) {
+  .site-shell {
+    width: min(100% - 28px, 1180px);
+  }
+
+  .site-header {
+    align-items: flex-start;
+    padding-top: 18px;
+  }
+
+  .site-header nav {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3rem, 14vw, 4.4rem);
+  }
+
+  .hero-actions {
+    display: grid;
+  }
+
+  .primary-action,
+  .secondary-action {
+    width: 100%;
+  }
+
+  .capability-grid,
+  .surface-list {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-grid {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .terminal-grid img {
+    max-width: 72px;
+  }
+
+  .terminal-chrome {
+    padding: 8px 10px;
+  }
+
+  .install-command {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .install-command code {
+    font-size: 0.75rem;
+  }
+
+  .terminal-copy p:last-child {
+    display: none;
+  }
+}

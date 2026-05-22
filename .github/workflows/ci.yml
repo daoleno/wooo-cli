@@ -47,7 +47,7 @@ jobs:
         run: bun run ci:check
 
       - name: Package dry run
-        run: npm run package:check
+        run: bun run package:check
 
   anvil-fork-e2e:
     name: Anvil Fork E2E

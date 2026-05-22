@@ -4,24 +4,33 @@
 
 - `bun run dev` - Run CLI in development mode
 - `bun run dev -- <command>` - Run specific command (e.g. `bun run dev -- cex okx balance`)
-- `bun test` - Run all tests
+- `bun run dev:docs` - Run the Fumadocs documentation and landing app
+- `bun test` - Run CLI tests
 - `bun run type-check` - TypeScript type checking
 - `bun run lint` - Biome linting
 - `bun run lint:fix` - Auto-fix lint issues
-- `bun run build` - Build with tsdown
+- `bun run build` - Build all apps
 
 ## Architecture
 
-Crypto all-in-one CLI using Citty (unjs). Protocols are grouped by type under `src/protocols/` and exposed as `wooo <group> <protocol> <action>` (e.g. `wooo cex okx buy`, `wooo perps hyperliquid long`). Wallets are stored and managed via OWS (Open Wallet Standard) vault at `~/.ows/`.
+This is a Bun-managed monorepo. The publishable CLI package is under
+`apps/cli`, and the user-facing docs plus landing page are under `apps/docs`.
+
+The CLI is a crypto all-in-one command app using Citty (unjs). Protocols are
+grouped by type under `apps/cli/src/protocols/` and exposed as
+`wooo <group> <protocol> <action>` (e.g. `wooo cex okx buy`,
+`wooo perps hyperliquid long`). Wallets are stored and managed via OWS (Open
+Wallet Standard) vault at `~/.ows/`.
 
 ### Key Directories
-- `src/core/` - Config (c12), output engine, OWS wallet integration, signer protocol/adapters, EVM/Solana clients, logger
-- `src/core/chain-ids.ts` - CAIP-2 chain identifiers and aliases
-- `src/core/external-wallets.ts` - External wallet registry
-- `src/protocols/` - Each protocol has commands.ts + client.ts + types.ts + constants.ts
-- `src/protocols/cex-base/` - Shared CEX base client and command templates (CCXT)
-- `src/commands/` - Universal commands (wallet, config, market, portfolio, chain, swap)
-- `tests/` - Mirrors src structure
+- `apps/cli/src/core/` - Config (c12), output engine, OWS wallet integration, signer protocol/adapters, EVM/Solana clients, logger
+- `apps/cli/src/core/chain-ids.ts` - CAIP-2 chain identifiers and aliases
+- `apps/cli/src/core/external-wallets.ts` - External wallet registry
+- `apps/cli/src/protocols/` - Each protocol has commands.ts + client.ts + types.ts + constants.ts
+- `apps/cli/src/protocols/cex-base/` - Shared CEX base client and command templates (CCXT)
+- `apps/cli/src/commands/` - Universal commands (wallet, config, market, portfolio, chain, swap)
+- `apps/cli/tests/` - Mirrors src structure
+- `apps/docs/` - Fumadocs/Next.js documentation app and landing page
 - `~/.ows/` - OWS vault directory (wallet keys, policy, audit logs)
 
 ### Command Structure
@@ -43,20 +52,20 @@ wooo
 ├── perps <protocol>      # Perps DEX: hyperliquid, gmx
 └── bridge <protocol>     # Bridges: stargate
 ```
-Grouping is automatic via `ProtocolDefinition.type` → `PROTOCOL_TYPE_TO_GROUP` mapping in `src/protocols/types.ts`.
+Grouping is automatic via `ProtocolDefinition.type` → `PROTOCOL_TYPE_TO_GROUP` mapping in `apps/cli/src/protocols/types.ts`.
 
 ### Adding a Protocol
-1. Create `src/protocols/<name>/types.ts` (protocol-specific types)
-2. Create `src/protocols/<name>/client.ts` (API wrapper or contract interaction)
-3. Create `src/protocols/<name>/constants.ts` (addresses, ABIs)
-4. Create `src/protocols/<name>/commands.ts` (define ProtocolDefinition with correct `type`)
-5. Add to `src/protocols/registry.ts`
+1. Create `apps/cli/src/protocols/<name>/types.ts` (protocol-specific types)
+2. Create `apps/cli/src/protocols/<name>/client.ts` (API wrapper or contract interaction)
+3. Create `apps/cli/src/protocols/<name>/constants.ts` (addresses, ABIs)
+4. Create `apps/cli/src/protocols/<name>/commands.ts` (define ProtocolDefinition with correct `type`)
+5. Add to `apps/cli/src/protocols/registry.ts`
 Protocol auto-appears under its group (cex/dex/defi/perps/bridge) — no changes to index.ts needed.
 
 ### Adding a CEX Exchange
 For CCXT-supported exchanges, even simpler:
-1. Create `src/protocols/<name>/commands.ts` using `createCexCommands()` from cex-base
-2. Add to `src/protocols/registry.ts`
+1. Create `apps/cli/src/protocols/<name>/commands.ts` using `createCexCommands()` from cex-base
+2. Add to `apps/cli/src/protocols/registry.ts`
 (OKX, Binance, Bybit already use this pattern)
 
 ### Global Flags

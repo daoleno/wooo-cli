@@ -1,0 +1,52 @@
+---
+title: Quick Start
+description: Install wooo-cli, initialize configuration, and run the first safe commands.
+---
+
+## Install
+
+```bash
+npm install -g wooo-cli
+```
+
+Upgrade later from the CLI:
+
+```bash
+wooo-cli upgrade
+```
+
+## Initialize
+
+Create the config directory and default chain settings:
+
+```bash
+wooo-cli config init
+```
+
+Create a local wallet. The command prompts for a passphrase unless
+`keychain:ows/passphrase` has already been stored.
+
+```bash
+wooo-cli wallet create my-wallet
+```
+
+## Run read-only checks
+
+```bash
+wooo-cli market price BTC
+wooo-cli market search DOGE
+wooo-cli wallet balance
+```
+
+## Preview writes
+
+Start with `--dry-run` for any action that can move funds:
+
+```bash
+wooo-cli swap USDC ETH 100 --chain arbitrum --dry-run
+wooo-cli lend aave rates USDC --chain ethereum --market AaveV3Ethereum
+wooo-cli lend morpho markets --chain ethereum
+```
+
+Only add `--yes` after reviewing the plan and confirming the chain, asset,
+amount, route, and active wallet.

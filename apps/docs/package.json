@@ -1,0 +1,33 @@
+{
+  "name": "@wooo/docs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "prebuild": "fumadocs-mdx",
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "pretype-check": "fumadocs-mdx",
+    "type-check": "tsc --noEmit",
+    "lint": "biome check app components content lib next.config.mjs source.config.ts tsconfig.json",
+    "lint:fix": "biome check --write app components content lib next.config.mjs source.config.ts tsconfig.json"
+  },
+  "dependencies": {
+    "fumadocs-core": "^16.9.0",
+    "fumadocs-mdx": "^15.0.7",
+    "fumadocs-ui": "^16.9.0",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/mdx": "^2.0.13",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.3.0"
+  }
+}

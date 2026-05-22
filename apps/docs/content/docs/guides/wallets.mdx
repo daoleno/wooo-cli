@@ -1,0 +1,51 @@
+---
+title: Wallets
+description: Local wallets, external signers, and explicit custody modes.
+---
+
+## Local wallets
+
+```bash
+wooo-cli wallet create trading-wallet
+wooo-cli wallet import my-key 0xprivatekey...
+wooo-cli wallet import my-mnemonic --mnemonic
+wooo-cli wallet list
+wooo-cli wallet switch trading-wallet
+wooo-cli wallet balance
+```
+
+`wallet export` requires an explicit confirmation flag:
+
+```bash
+wooo-cli wallet export trading-wallet --confirm
+```
+
+## Remote signers
+
+Remote signer integrations advertise accounts over HTTP. Connect one with:
+
+```bash
+wooo-cli wallet discover --signer http://127.0.0.1:8787/ --json
+wooo-cli wallet connect ledger --signer http://127.0.0.1:8787/
+wooo-cli wallet connect remote-signer \
+  --signer https://signer.example.com \
+  --auth-ref keychain:signer/auth-token
+```
+
+Use `wallet disconnect` to remove a remote account:
+
+```bash
+wooo-cli wallet disconnect ledger
+```
+
+## Custody mode
+
+Wallet custody mode is explicit and does not silently fall back between local
+and remote custody.
+
+```bash
+WOOO_WALLET_MODE=remote wooo-cli wallet balance
+WOOO_WALLET_MODE=local wooo-cli wallet balance
+```
+
+Leaving the variable unset uses local custody.

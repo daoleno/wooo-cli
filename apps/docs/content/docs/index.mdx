@@ -1,0 +1,40 @@
+---
+title: wooo-cli
+description: Terminal-native crypto execution for users and agents.
+---
+
+wooo-cli unifies CEX trading, DEX swaps, DeFi lending, staking, perps,
+prediction markets, machine payments, bridges, and on-chain utilities behind a
+single command surface.
+
+```bash
+npm install -g wooo-cli
+wooo-cli config init
+wooo-cli market price BTC
+wooo-cli swap ETH USDC 1 --chain arbitrum --dry-run
+```
+
+## What it covers
+
+| Area | Commands |
+| --- | --- |
+| Market data | `market price`, `market search`, `market okx`, `news okx` |
+| Wallets | `wallet create`, `wallet import`, `wallet connect`, `wallet policy`, `wallet key` |
+| Swaps | `swap`, `dex uniswap`, `dex curve`, `dex jupiter` |
+| Lending | `lend aave`, `lend morpho` |
+| Perps | `perps hyperliquid` |
+| Bridges | `bridge lifi`, `bridge okx` |
+| Payments | `pay mpp`, `pay x402` |
+
+## Safety model
+
+Read-only commands can be run directly. Commands that move funds should be
+previewed first:
+
+```bash
+wooo-cli swap ETH USDC 1 --chain ethereum --dry-run
+```
+
+Use `--yes` only after reviewing the generated plan. Signer-side authorization
+is separate from CLI confirmation, so hardware and remote signers can keep
+their own approval flow.

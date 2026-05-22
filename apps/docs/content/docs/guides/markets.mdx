@@ -1,0 +1,38 @@
+---
+title: Markets
+description: Price lookup, OKX on-chain data, portfolio views, and news.
+---
+
+## Aggregated prices
+
+```bash
+wooo-cli market price BTC
+wooo-cli market price ETH/USDT
+wooo-cli market search DOGE
+```
+
+## OKX on-chain data
+
+```bash
+wooo-cli market okx chains
+wooo-cli market okx search weth --chains ethereum,optimism
+wooo-cli market okx token ethereum 0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2
+wooo-cli market okx metrics base 0x4200000000000000000000000000000000000006
+wooo-cli market okx ranking --chains solana,base --sort volume --window 24h
+```
+
+## Portfolio
+
+```bash
+wooo-cli portfolio okx overview 0xabc... ethereum --window 7d
+wooo-cli portfolio okx value 0xabc... --chains ethereum,base
+wooo-cli portfolio okx balances 0xabc... --chains ethereum,base
+```
+
+## News and sentiment
+
+```bash
+wooo-cli news okx latest --lang zh-CN --limit 10
+wooo-cli news okx by-coin --coins BTC,ETH --importance high
+wooo-cli news okx sentiment-rank --sortBy bullish --limit 20
+```

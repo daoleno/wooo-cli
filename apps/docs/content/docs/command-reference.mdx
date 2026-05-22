@@ -1,0 +1,43 @@
+---
+title: Command Reference
+description: The main command groups exposed by wooo-cli.
+---
+
+## Universal commands
+
+| Command | Purpose |
+| --- | --- |
+| `config` | Initialize, list, get, and set configuration values. |
+| `wallet` | Manage local wallets, remote signers, policies, and API keys. |
+| `auth` | Store exchange and on-chain API credentials through secret references. |
+| `market` | Query aggregated prices, exchange markets, and OKX on-chain data. |
+| `news` | Query OKX news and sentiment feeds. |
+| `portfolio` | View portfolio data and OKX wallet analytics. |
+| `chain` | Transfer, approve, read contracts, resolve ENS, and inspect transactions. |
+| `swap` | Use the aggregated swap router. |
+
+## Protocol groups
+
+| Group | Protocols |
+| --- | --- |
+| `cex` | OKX, Binance, Bybit |
+| `dex` | Uniswap, Curve, Jupiter |
+| `lend` | Aave, Morpho |
+| `stake` | Lido |
+| `perps` | Hyperliquid |
+| `prediction` | Polymarket |
+| `bridge` | LI.FI, OKX Bridge |
+| `pay` | MPP, x402 |
+
+## Global flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--json` | Force JSON output for scripts and agents. |
+| `--format table|json|csv` | Choose the output renderer. |
+| `--chain <name>` | Select the target chain. |
+| `--wallet <name>` | Use a named wallet instead of the active wallet. |
+| `--dry-run` | Preview execution without submitting a transaction. |
+| `--yes` | Skip CLI confirmation prompts. |
+| `--verbose` | Show debug output. |
+| `--quiet` | Suppress non-essential output. |

@@ -1,0 +1,11 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "cli",
+    "quick-start",
+    "command-reference",
+    "guides/wallets",
+    "guides/markets"
+  ]
+}
